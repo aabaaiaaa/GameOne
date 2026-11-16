@@ -735,6 +735,13 @@ internal static class Scene
     /// <summary>How long (real seconds) the BRUTAL credits panel stays on the screen once play first begins, then gives its room back: as long as the licence asks (legible before play), and no longer. Every menu shows it again.</summary>
     public const double CreditsSeconds = 5;
 
+    /// <summary>
+    /// How long (real seconds) the word of a run that ended while another was flown (<see cref="Flight.Notice"/>)
+    /// stays on the screen, the last <see cref="NoticeFadeSeconds"/> of it fading: real time, so a
+    /// warp doesn't hurry it past. The world log keeps it.
+    /// </summary>
+    public const double NoticeSeconds = 6, NoticeFadeSeconds = 1.5;
+
     // The drone ship: a barge riding the Sunrise Sea ~2.4 km east round the planet, where a booster
     // dropped at its landing-fuel mark on the way to orbit would fall if left alone (that far round,
     // up is 14° from the launch pad's), its length running east. Its centre is where its

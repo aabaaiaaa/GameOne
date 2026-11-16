@@ -20,7 +20,6 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
     // Until a world is picked from the list, an empty one that isn't saved sits behind it, at the
     // launch site the player last picked.
     using var flight = new Flight(worlds, Mission.LaunchAndLand, site: LaunchSites.Named(settings.LaunchSite));
-    var lastChosen = Mission.LaunchAndLand; // the mission chosen last: what a world picked from the list starts on, behind the missions menu
     view.Follow(flight);
     var hud = view.Hud;
     hud.Worlds = store.List();
@@ -29,16 +28,18 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
     // What the HUD shows, written out for the GameDriver, when it asks.
     var readout = Readout.On ? new Readout() : null;
 
-    // The world is saved whenever a flight starts in it (a new one, again, or on picking it),
-    // every so often while it is played, before another is picked, and when the game closes.
+    // The world is saved whenever a flight starts in it (a new one, again, or a rewind), once
+    // something is chosen to fly in a world just picked, every so often while it is played, before
+    // another is picked, and when the game closes. Not while a world just picked has nothing chosen
+    // in it yet: it is still as it was saved, and the placeholder put on its pad isn't to be kept.
     const double saveEverySeconds = 30;
     var saveNow = false;
     var lastSave = Glfw.Time;
     flight.Restarted += () => saveNow = true;
     void Save()
     {
-        if (flight.WorldId.Length == 0)
-            return; // not a saved world
+        if (flight.WorldId.Length == 0 || !flight.Chosen)
+            return; // not a saved world, or nothing chosen in it yet (see above)
         try
         {
             store.Save(flight.Capture());
@@ -50,7 +51,8 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
         lastSave = Glfw.Time;
     }
 
-    // What the player asked of the world list.
+    // What the player asked of the world list. A world picked (or made, or reset) comes back as it
+    // was saved, and the player chooses what to fly in it: something to carry on, or a new mission.
     void DoWorldRequest(WorldRequest request)
     {
         try
@@ -59,13 +61,13 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
             {
                 case WorldRequestKind.Play:
                     Save();
-                    flight.Load(store.Load(request.Id), lastChosen, LaunchSites.Named(hud.Settings.LaunchSite));
-                    hud.OpenMissions();
+                    flight.Restore(store.Load(request.Id));
+                    hud.OpenCarryOn(flight);
                     break;
                 case WorldRequestKind.New:
                     Save();
-                    flight.Load(store.Create(request.Id), lastChosen, LaunchSites.Named(hud.Settings.LaunchSite));
-                    hud.OpenMissions();
+                    flight.Restore(store.Create(request.Id));
+                    hud.OpenCarryOn(flight);
                     break;
                 case WorldRequestKind.Rename when request.Id == flight.WorldId:
                     flight.Rename(request.Text);
@@ -75,7 +77,8 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
                     store.Rename(request.Id, request.Text);
                     break;
                 case WorldRequestKind.Reset when request.Id == flight.WorldId:
-                    flight.Load(store.Reset(request.Id), lastChosen, LaunchSites.Named(hud.Settings.LaunchSite));
+                    flight.Restore(store.Reset(request.Id));
+                    hud.OpenCarryOn(flight);
                     break;
                 case WorldRequestKind.Reset:
                     store.Reset(request.Id);
@@ -83,7 +86,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
                 case WorldRequestKind.Delete:
                     store.Delete(request.Id);
                     if (request.Id == flight.WorldId)
-                        flight.Load(WorldPresets.Empty(), lastChosen, LaunchSites.Named(hud.Settings.LaunchSite)); // gone: back to an unsaved one, until another is picked
+                        flight.Restore(WorldPresets.Empty()); // gone: back to an unsaved one (the world list stays up), until another is picked
                     break;
             }
         }
@@ -121,7 +124,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
         view.Navigation.KeysHeld = controls.Steering;
         var input = controls.Read(flight.Controlled) with { Hold = view.Navigation.Hold };
         if (controls.Take(ControlAction.GameMenu))
-            hud.PressEsc(haveWorld: flight.WorldId.Length > 0);
+            hud.PressEsc(haveWorld: flight.WorldId.Length > 0 && flight.Chosen); // (one with nothing chosen in it is picked again, not flown)
         if (controls.Take(ControlAction.ToggleControlsList))
             hud.ToggleControls();
         if (controls.Take(ControlAction.ToggleZoomOut))
@@ -163,11 +166,12 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
             var action = hud.TakeAction();
             var switching = swap is not null || input.SwitchVessel;
             var choice = hud.TakeChoice();
-            if (choice is not null)
-                lastChosen = choice;
+            var wasChosen = flight.Chosen;
             var given = VesselActions.Into(input, switching ? null : action) with
             {
-                Choose = choice, From = LaunchSites.Named(hud.Settings.LaunchSite), StartAgain = hud.TakeRestart(), SwitchTo = swap, SetTarget = target, ClearTarget = clearTarget,
+                Choose = choice, From = LaunchSites.Named(hud.Settings.LaunchSite), CarryOn = hud.TakeCarryOn(),
+                StartAgain = hud.TakeStartAgain(), Rewind = hud.TakeRewind(), CompleteRun = hud.TakeCompleteRun(), AbandonRun = hud.TakeAbandonRun(),
+                SwitchTo = swap, SetTarget = target, ClearTarget = clearTarget,
                 Plan = hud.TakePlan(), ChooseFrame = hud.TakeFrameChoice(),
                 Slower = controls.Take(ControlAction.Slower), Faster = controls.Take(ControlAction.Faster), Watched = watched,
                 Camera = view.Camera.Position, // last frame's: what the main view showed
@@ -175,6 +179,8 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
             };
             // In warp, as many normal steps as fit in the budget, and however fast that turned out to be.
             dt = flight.RunFrame(real, given, Flight.WarpBudgetSeconds);
+            if (flight.Chosen && !wasChosen)
+                saveNow = true; // something carried on in a world just picked: saved as it now is
             if (flight.TimeScale > 1f)
                 hud.RunningScale = real > 0f ? dt / real : flight.TimeScale;
         }

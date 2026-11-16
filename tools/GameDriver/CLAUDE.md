@@ -40,7 +40,7 @@ makes no readout at all). It reads the flight and the HUD's state (the menu up, 
 new the HUD shows that a script might fly by (a node's delta-v, say) is added there, not in the
 HUD's drawing.
 
-Its readings: `Menu` (`Worlds`, `Missions`, `Game`, `Settings`, `Log` or `None`), `Controls` (the
+Its readings: `Menu` (`Worlds`, `Missions`, `Game`, `Settings`, `Log`, `CarryOn`, `TryAgain` or `None`), `Must choose` (`yes` while a world just picked has nothing chosen in it: Esc and Close leave neither the carry-on screen nor the missions), `Carry on 1`, `Carry on 2`... (the carry-on screen's choices in its order, each its button's text and its line, `Carry on: LAUNCH AND LAND · flight 1 · 1 of 4 / Booster: 412 m, rising 31 m/s, fuel 70%, at the planet (last flown)`), `Notice` (a mission ended while another vessel was flown, while its word shows: `REACH ORBIT (flight 5) complete: 1,800 pts`), `Run` (the flown vessel's run by the log's name, `LAUNCH AND LAND (flight 1)`, with `, complete`, `, failed` or `, abandoned` once ended, until another vessel is flown; `none` for a vessel of none), `Runs in progress` (how many) and `Run <name>` for each (`1 of 4 steps, 0 pts`), `Can rewind` (how far back the rewind goes, in whole seconds of the world's time, or `no`), `Controls` (the
 controls list: `folded` or `open`), `HUD` (`hidden`, only while F2 has hidden it: no other HUD reading is then on the screen), `Time` (in slow motion or warp), `World time` (`Day 3,
 07:42`) and `Local time` (`09:15`, where the flown vessel is; the driver reads a clock as one
 number of seconds, so `until "Local time" >= 09:00` waits for 09:00), `Pad lights` (how far the
@@ -53,7 +53,7 @@ that body's: on the moon its own), and for each body by its name, `Moon`, `Plane
 from the flown vessel to that body's datum, the zero of its heights, straight to its centre:
 `31250 m`; the body it is at reads its own altitude) and `Moon height`, `Planet height` (its
 centre's angle above the flown vessel's horizon, as `Tilt` is given, `23 °`, negative below it:
-the body it is at is `-90 °`; from the moon the planet rises and sets), `Vessel`, `Altitude`,
+the body it is at is `-90 °`; from the moon the planet rises and sets), `Vessel`, `Vessel id` (its id, as the log names it), `Position` (where it is in its body's frame, `x y z` in metres, to the centimetre), `Altitude`,
 `Vertical`, `Horizontal`, `Tilt`, `Air`, `Ground` (the height over what is under it; `Altitude`
 is above the sea, or on a body with none its datum), `Target` (the picked target, by its
 marker's name, a body's its own (`Moon`), or `none`; `vessel <id>` for a vessel gone from the world since the flight last
@@ -91,7 +91,7 @@ list is drawn while a menu is up), and while the "Add view" list
 is open each entry by its vessel's name, `Marker Add view: Satellite` (the first listed of two with
 one name), so a script gives a view with `click marker "Add view"` then `click marker "Add view:
 Upper stage"`, wherever they are. The mission menu's buttons read out so too (`Marker Mission:
-FREE PLAY`, `Marker Site: Home`, `Marker Change world`), and the world list's (`Marker New: Empty
+FREE PLAY`, `Marker Site: Home`, `Marker Change world`, and in a world just picked with something to carry on, `Marker Back`), the carry-on screen's (`Marker Carry on: <mission>` for a run, the first listed of two of one mission; `Marker Carry on: <vessel>` by the log's name, `Carry on: Booster 0`, for a vessel of no run; `Marker New mission`, `Marker Back to worlds`), the game menu's, by their labels without dots (`Marker Resume`, `Marker Restart flight`, `Marker Abandon mission`, `Marker Missions`, `Marker World log`, `Marker Change world`, `Marker Settings`, `Marker Quit game`), the try-again window's (`Marker Start again`, `Marker Rewind`, then `Marker Confirm rewind`, `Marker Cancel`) and the mission panel's `Marker Complete mission`, and the world list's (`Marker New: Empty
 world`, `Marker Play: <a world's name>`, `Marker Delete: <a world's name>`, `Marker Yes, delete
 it`): see "Where things are on the screen".
 The flown vessel's actions: `Marker Flown vessel` (its centre of
@@ -136,9 +136,15 @@ centred on the smaller height):
   Home"`, `"Site: Polar"`, `"Site: Highcrest"`, `"Site: Desert"`, `"Site: Coral Isle"`, `"Site:
   Northreach"`, `"Site: Sentinel"`), and "Change world" is `Marker Change world`. Every example
   script clicks it so, after `until Menu = Missions`.
-- **The game menu** (with a world): Resume `0 -100`, Restart flight `0 -65`, "Missions..."
-  `0 -31`, "World log..." `0 3`, "Change world..." `0 37`, Settings `0 71`, Quit game `0 109`
-  (the menu is centred on its height, so a button added to it moves the others).
+- **The game menu** (with a world): Resume `0 -100`, Restart flight `0 -65` (the left half of
+  that row while the flown vessel's mission is in progress, "Abandon mission" the right half: click
+  either by its marker), "Missions..." `0 -31`, "World log..." `0 3`, "Change world..." `0 37`,
+  Settings `0 71`, Quit game `0 109` (the menu is centred on its height, so a button added to it
+  moves the others). Restart flight opens the try-again window (`Menu = TryAgain`): click its
+  buttons by their markers.
+- **The carry-on screen** (`Menu = CarryOn`, after a world with something to carry on is picked):
+  clicked by its markers, never by a place; its choices sit in a region that scrolls, as the
+  world list's rows do.
 - **The world log** (`Menu = Log`): its entries from the top, newest first, one a line; Close at
   its foot, `0 170` (within a few pixels: 168 with an entry, 177 with none).
 - **The settings screen:** the "Show timings" checkbox `-160 -16`, "Cap frames at the screen's

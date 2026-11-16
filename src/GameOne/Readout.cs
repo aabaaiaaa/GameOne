@@ -87,6 +87,20 @@ internal sealed class Readout
         // The predicted collisions' crosses the map drew (see Paths): how many, as a script can't read the map's lines.
         Show("Collisions", $"{hud.CollisionsDrawn}");
 
+        // The carry-on screen's choices, in its order, each its button's text and its line (its
+        // button is among the markers above, as "Carry on: <mission>" for a run, "Carry on: <vessel>"
+        // by the log's name for one of no run); and the word of a run ended unflown, while it shows.
+        if (hud.Screen == MenuScreen.CarryOn)
+        {
+            var rows = hud.CarryOnRows;
+            for (var i = 0; i < rows.Count; i++)
+                Show($"Carry on {i + 1}", $"{rows[i].Label} / {rows[i].Line}");
+        }
+        if (hud.MustChoose)
+            Show("Must choose", "yes"); // a world just picked: Esc and Close leave neither the carry-on screen nor the missions
+        if (hud.NoticeShown is { } notice)
+            Show("Notice", notice);
+
         var (title, lines) = hud.LastMessage;
         if (title is not null)
             Show("Message", title);
@@ -154,6 +168,8 @@ internal sealed class Readout
         Show("Pad lights", $"{flight.Lights.Lit[nearest]:0.00}, {PadLights.All[nearest].Name}");
         Show("Landing lights", $"{flight.Controlled.LandingLights:0.00}");
         Show("Vessel", flight.Controlled.Name);
+        Show("Vessel id", $"{flight.Controlled.Id}"); // which one it is, as the log names it (a world carried on flies the same one)
+        Show("Position", $"{flight.Position.X:0.00} {flight.Position.Y:0.00} {flight.Position.Z:0.00}"); // in metres, in its body's frame: where it is to the centimetre
         Show("Body", flight.Body.Name); // where the flown vessel is: the body its readings below are of
         if (flight.LinkUp.Reading is { } link)
             Show("Link", link); // the link-up over the main view, switching to a vessel at a body with no physics yet: connecting, then connected
@@ -235,6 +251,23 @@ internal sealed class Readout
         Show("Best altitude", $"{flight.MaxAltitude:0} m");
         if (flight.Run?.Score is { } score)
             Show("Score", $"{score}");
+        // The flown vessel's run, by the log's name ("LAUNCH AND LAND (flight 1)", with how it ended
+        // once it has: shown until another vessel is flown), or none; and every run in progress, by
+        // that name, with its steps done and points so far, whichever vessel is flown.
+        Show("Run", flight.Run is { } flown
+            ? WorldLog.Named(flown) + flown.End switch { RunEnd.Completed => ", complete", RunEnd.Failed => ", failed", RunEnd.Abandoned => ", abandoned", _ => "" }
+            : "none");
+        var runs = flight.Runs;
+        Show("Runs in progress", $"{runs.Count}");
+        foreach (var r in runs)
+        {
+            var done = 0;
+            for (var i = 0; i < r.Mission.Steps.Length; i++)
+                if (r.Progress.IsDone(i))
+                    done++;
+            Show($"Run {WorldLog.Named(r)}", $"{done} of {r.Mission.Steps.Length} steps, {r.Progress.Points} pts");
+        }
+        Show("Can rewind", flight.CanRewind ? $"{flight.RewindSeconds:0} s" : "no"); // how far back the try-again window's rewind goes, in the world's seconds
     }
 
     /// <summary>

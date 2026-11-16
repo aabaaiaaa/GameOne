@@ -1,6 +1,6 @@
 # GameOne: make a world, pick the landing mission, launch, lean right, deploy the legs, throttle
-# back, look round with the right button, pause in the game menu mid-flight, restart the flight
-# from it, then quit from it.
+# back, look round with the right button, pause in the game menu mid-flight, start the mission
+# again from it ("Restart flight", then "Start the mission again"), then quit from it.
 # Run with GAMEONE_WORLDS set to a new, empty folder, so the world made has its preset's name (a
 # new world's is made unique among those saved) and the driver's worlds stay out of yours. The
 # world list's buttons are clicked by their markers, wherever they are.
@@ -25,7 +25,11 @@
 15.5 shot looked
 16   tap escape         # the game menu: the game is paused
 17   shot paused
-18   click 0 -65        # Restart flight: back on the pad
-19.5 shot restarted
-20   tap escape         # the game menu again ...
-21   click 0 109        # ... and Quit game (it saves the world first)
+18   click marker "Restart flight"     # how to try again ...
+0    until Menu = TryAgain
+0.5  shot try-again
+1    click marker "Start again"        # ... the mission again: back on the pad
+0    until Menu = None
+1.5  shot restarted
+3    tap escape         # the game menu again ...
+4    click 0 109        # ... and Quit game (it saves the world first)

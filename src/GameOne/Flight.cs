@@ -311,21 +311,26 @@ internal sealed class Flight : IDisposable
     public IReadOnlyList<CarryOnChoice> CarryOnChoices()
     {
         var choices = new List<CarryOnChoice>();
+        var inRuns = new HashSet<Vessel>(); // the vessels of runs in progress, as RunOf has them
+        var inWorld = new HashSet<Vessel>(_world);
         foreach (var run in Runs)
         {
             if (run.Failed)
                 continue;
-            var vessel = run.Vessels.FirstOrDefault(v => v.Id == run.LastFlownId && Resumable(v)) ?? run.Vessels.FirstOrDefault(Resumable);
+            foreach (var v in run.Vessels)
+                if (v.Flight == run.Number)
+                    inRuns.Add(v);
+            var vessel = run.Vessels.FirstOrDefault(v => v.Id == run.LastFlownId && Resumable(v) && inWorld.Contains(v))
+                ?? run.Vessels.FirstOrDefault(v => Resumable(v) && inWorld.Contains(v));
             if (vessel is not null)
                 choices.Add(new CarryOnChoice(vessel, run));
         }
         // (OrderBy is stable: within a flight, in the order they came to be.)
-        foreach (var vessel in _world.Where(v => Resumable(v) && !InRunInProgress(v)).OrderByDescending(v => v == Controlled).ThenByDescending(v => v.Flight))
+        foreach (var vessel in _world.Where(v => Resumable(v) && !inRuns.Contains(v)).OrderByDescending(v => v == Controlled).ThenByDescending(v => v.Flight))
             choices.Add(new CarryOnChoice(vessel, null));
         return choices;
 
-        bool Resumable(Vessel v) => v != _placeholder && CanFly(v) && _world.Contains(v);
-        bool InRunInProgress(Vessel v) => RunOf(v) is not null;
+        bool Resumable(Vessel v) => v != _placeholder && CanFly(v);
     }
 
     /// <summary>

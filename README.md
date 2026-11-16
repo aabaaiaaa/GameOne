@@ -39,8 +39,9 @@ To test:
   for checking how it looks (see its README).
 
 An arcade rocket game in the third person, on a tiny planet. It starts on the world list: pick a
-world (or make one), then a mission. Esc pauses the game at any time, in the game menu: resume,
-restart the flight, pick another mission (which puts a fresh rocket on the pad), change world,
+world (or make one), then carry on something in it or pick a new mission. Esc pauses the game at
+any time, in the game menu: resume, restart the flight (start the mission again, or rewind),
+abandon the mission, pick another mission (which puts a fresh rocket on the pad), change world,
 settings, or quit. The keys are for flying; everything about the game rather than the flight is in
 that menu.
 
@@ -139,7 +140,9 @@ first (the last 300): when, which vessel (or the two that collided), how (hit an
 ground, the tower...), how fast, where (a site's name within 5 km, else its height, in the sea or
 on the ground), and whether anyone saw it. One removed to make room, or cleared from the launch pad
 for the new rocket, is listed too (with no speed: nothing hit it). It is saved with
-the world; "Restart flight" starting the mission again logs its run as abandoned, to start it again.
+the world, with each mission begun, each step done (with its points) and how each ended (completed
+with its score, failed and why, or abandoned; starting the mission again logs its run as abandoned
+to start it again); a rewind takes the log back with the rest of the world.
 
 - **Empty world:** nothing but the launch pad, the landing zones and the tower.
 - **Satellites in orbit:** four satellites already in circular orbits 9 to 10 km up, each of which
@@ -149,9 +152,30 @@ the world; "Restart flight" starting the mission again logs its run as abandoned
   hours, as they drift slowly back into line). The other two are in planes of their own.
 
 Earlier flights' vessels are listed under "Also in this world" on the mission panel, and in Add
-view; Tab only goes round the flown vessel's flight's. "Restart flight" (in the game menu) starts the flown
-vessel's mission again: a new run of it at its site, with a fresh rocket on its pad, its old vessels
-left where they are (in no run) and nothing else in the world changed.
+view; Tab only goes round the flown vessel's flight's.
+
+**Carrying on.** A world picked from the list comes back exactly as it was saved, and before
+anything can be flown in it, a screen titled with its name offers what can be carried on there:
+each mission in progress ("Carry on: LAND ON THE MOON · flight 7 · 3 of 6", green, with
+what its vessel is doing), then every vessel that can be flown and belongs to no mission (in free
+play), then "New mission..." (the mission menu) and "Back to worlds". Carrying one on flies that
+vessel where it is: nothing is added, moved or cleared. A world with nothing to carry on goes
+straight to the mission menu. Until something is chosen, Esc and Close leave neither screen.
+The mission panel shows the flown vessel's own mission (Tab to a vessel of another and it shows
+that one's; a vessel of none shows no mission), and once every needed step is done with a bonus
+still open, a "Complete mission" button there ends it (a bonus not done is lost). A mission that
+ends while another vessel is flown says so for a few seconds at the top of the screen.
+
+**Trying again.** "Restart flight" (in the game menu) offers two choices, each saying what it
+does: "Start the mission again" begins a new run of the flown vessel's mission at its site, with a
+fresh rocket on its pad (the run being flown is abandoned; its old vessels stay where they are, in
+no run, and nothing else in the world changes but what is cleared off that pad); and "Rewind 12
+min 40 s, to when this mission began" (or "was resumed"), which brings the whole world back as it
+was at the last choice made from the menu this session (a mission begun, started again or carried
+on), never further back than the world was picked. It asks to be confirmed first: everything since
+then is undone, other vessels, other missions and the world log. "Abandon mission" (beside it,
+while the flown vessel's mission is in progress) gives the mission up, its vessels left where they
+are.
 
 **Errors.** If anything goes wrong (a world that can't be saved, say), a red warning sign shows in
 the middle of the screen with the number of errors in the last 5 seconds. The details are on the
@@ -261,7 +285,7 @@ The controls are the same for every mission:
 | F2 | Hide the whole HUD, for a screenshot of the world alone: the instruments, markers, paths, small views, controls and credits all go; F2 again brings it back. Esc still opens the game menu over it. Each run starts with it shown. |
 | Click a marker | Make it your target (see Markers and targets above); click it again, or elsewhere, to let it go. |
 | Click the path | Zoomed out: place a manoeuvre node there. Pull its handles to plan the burn, drag it along the path to move it, right-click it (or its x) to delete it (see Planning burns above). |
-| Esc | Pause, in the game menu: resume, restart flight (start the mission again), missions, the world log, change world, settings, quit. Esc again resumes; from the missions or the world list, Esc goes to the game menu and their Close button back to flying. |
+| Esc | Pause, in the game menu: resume, restart flight (start the mission again, or rewind), abandon mission, missions, the world log, change world, settings, quit. Esc again resumes; from the missions or the world list, Esc goes to the game menu and their Close button back to flying (but in a world just picked, nothing leaves the carry-on screen or the missions until something is chosen). |
 
 **Steering.** Hover the pointer over the rocket and two rings appear round its centre of mass: a
 flat blue one marked N E S W (the heading: which compass direction to point the nose) and an
@@ -678,7 +702,7 @@ Rendering is Vulkan 1.3. Everything is in metres, with the launch pad at the ori
 | `SceneInput.cs` | What is drawn of every vessel each frame, for the renderer: each stage's model, every engine, plume and lit landing light, changed into the scene's frame by its body's change, the stages and the moon placed from the main view's camera (worked out in double first, so a vessel on the moon holds still to the millimetre), and the sun's disc as that camera sees it (`SunDisc`, `SunFrom`). Allocates nothing. |
 | `Program.cs` | The game loop: input, the menus and world list (carrying out what is asked of it), the flight, saving the world, and drawing. |
 | `Views.cs` | Which vessels are on the screen: the flown one in the main view, others in small views, each with its own camera. Opens a view for each new part that can be flown, a view at a body whose physics isn't made behind its link-up (`Flight.OpenView`), swaps when the flight flies another vessel, and asks the flight to (`FlightInput.SwitchTo`) when a view is clicked. Each view keeps what it held across the middle between two lit places (the main view's too), and a swap hands it on with its vessel. Each small view's camera is in its vessel's body's frame, rebased as the vessel crosses a sphere's edge. The HUD lays the views out. |
-| `Hud.cs` | The overlay, drawn with Dear ImGui (`Brutal.ImGui`): the game menu (Esc), the mission menu, world list, settings and world log screen, the error sign, instruments (with the air, and the orbit with its period; all of the body the flown vessel is at, its air or that it has none, its orbit floor, its north on the compass), the compass, mission, controls, and messages, and with "Show timings" on, the timings panel (where each frame's time goes: the flight's physics parts, the frame's own, and the GPU's passes, a one-second average, bottom left over the folded controls, or else where it fits without covering the other panels or the credits). Its bottom-right panel shows the official BRUTAL logo and the text of `NOTICE.txt`, for the licence (below), in every menu and for the first 5 s of play. Over the main view, while a vessel at a body with no physics yet is switched to, the communications link-up (`Flight.LinkUp`: static, "ESTABLISHING LINK" and the vessel's name, clearing as it connects), and the same over a small view given to one (`Flight.ViewLink`). The strip (the small views along the bottom left, with the Add view and Controls buttons over them) keeps its buttons below the instruments' panel however many lines it has, the views made smaller to fit under them (`StripPlace`). |
+| `Hud.cs` | The overlay, drawn with Dear ImGui (`Brutal.ImGui`): the game menu (Esc), the mission menu, world list, carry-on screen (what a world just picked has to carry on), try-again window (start the mission again, or rewind), settings and world log screen, the word of a mission ended while another vessel was flown, the error sign, instruments (with the air, and the orbit with its period; all of the body the flown vessel is at, its air or that it has none, its orbit floor, its north on the compass), the compass, mission, controls, and messages, and with "Show timings" on, the timings panel (where each frame's time goes: the flight's physics parts, the frame's own, and the GPU's passes, a one-second average, bottom left over the folded controls, or else where it fits without covering the other panels or the credits). Its bottom-right panel shows the official BRUTAL logo and the text of `NOTICE.txt`, for the licence (below), in every menu and for the first 5 s of play. Over the main view, while a vessel at a body with no physics yet is switched to, the communications link-up (`Flight.LinkUp`: static, "ESTABLISHING LINK" and the vessel's name, clearing as it connects), and the same over a small view given to one (`Flight.ViewLink`). The strip (the small views along the bottom left, with the Add view and Controls buttons over them) keeps its buttons below the instruments' panel however many lines it has, the views made smaller to fit under them (`StripPlace`). |
 | `Timings.cs` | The game's own timings, in one place: each physics step's parts (rules, Jolt, the ground's tiles, the water, contact and nearness, the rest), each frame's (the flight, preparing, the HUD, waiting, recording the shadow pass and the rest, submitting) and the GPU's passes, kept in ring buffers that allocate nothing, and a one-second average for the panel. Recorded only while on ("Show timings", or a test): off, each lap is a bool read. The short performance tests read it. Each frame also counts the world: the crafts awake, frozen and afloat in the physics, the ground's tiles, and the vessels out of the physics, under formula. |
 | `Readout.cs` | GameOne's whole side of the GameDriver's interface: the HUD's readings as text (`hud Altitude=4120 m` lines on stdout, as they change), only when the GameDriver asks (`GAMEDRIVER_READOUT=1`), so its scripts can wait on what the HUD shows (including `State`, the flown vessel's state: flying, landed, floating, crashed, and `Link`, the link-up's: connecting, connected; `Link <vessel>`, a small view's link-up's; `Body`, where the flown vessel is, every reading after it that body's; and each body's distance and height in the sky, by its name). |
 | `Audio/AudioSystem.cs` | The OpenAL device and context shared by all sounds, and the listener at the camera. |

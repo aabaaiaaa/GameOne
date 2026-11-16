@@ -47,8 +47,9 @@
 2.5  shot far-ship      # ... at the drone ship in the sea, ~2.4 km east of the pad (only a speck from this high up)
 8.5  tap escape         # the game menu ...
 0    until Menu = Game
-0.5  move 0 -65
-1    click 0 -65        # ... Restart flight: back on the pad, to fly out over the sea
+1    click marker "Restart flight"
+0    until Menu = TryAgain
+1    click marker "Start again"  # ... the mission again: back on the pad, to fly out over the sea
 0    until Menu = None
 1    rdrag 0 -130       # level again (the camera keeps its turn: looking east, past the booster)
 1.5  tap space          # light the engine ...

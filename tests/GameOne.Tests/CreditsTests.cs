@@ -28,6 +28,7 @@ public sealed class CreditsTests
         {
             (Hud.GameMenuWidth, Hud.GameMenuWidth, 0f), (Hud.LogWidth, Hud.LogWidth, 0f), (Hud.SettingsWidth, Hud.SettingsWidth, 0f),
             (Hud.WorldListWidth, Hud.WorldListWidth, 0f), (Hud.MenuWidest, Hud.MenuNarrowest, scrollbar),
+            (Hud.CarryOnWidth, Hud.CarryOnWidth, scrollbar), (Hud.TryAgainWidth, Hud.TryAgainWidth, 0f),
         };
         foreach (var displayWidth in (ReadOnlySpan<float>)[800f, 1024f, 1280f, 1920f])
             foreach (var (widest, narrowest, extra) in screens)
