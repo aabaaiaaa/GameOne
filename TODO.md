@@ -287,10 +287,20 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   launches, landings and the like could
   be entries too, as could fairing halves (left out as debris that would flood its 300). To
   discuss before building.
+- **A showcase script for the main features** (the user, 2026-11-16, after resuming missions was
+  built). A GameDriver script (`tools/GameDriver/examples`) that plays the real game through its
+  main features in a window the user watches live, with a scratch `GAMEONE_WORLDS`: the flight
+  tests can be watched (`GAMEONE_WATCH`), but they make the menu's choices through `FlightInput`,
+  so the carry-on screen, the try-again window and the like never show in them. To discuss
+  before building: which features it covers (missions and carrying them on, trying again, sites,
+  time warp, the map and nodes, small views, the moon), how long it runs, whether it pauses at
+  each screen, and which parts need a prepared world because a script can't fly there (orbit,
+  the moon), as the Satellites and moon-trip worlds do for their scripts.
 - **Vessels left on the pads, flown when the player likes** (the user, 2026-11-02). Today a new
-  flight clears its pad by itself (`Flight.StartFlight`): it removes every vessel still Ready in
-  the world, and anything within the pad and 3 m round it (up to 58 m high), before putting the
-  fresh rocket there. Instead, nothing is removed without asking: if something is in the way on
+  flight clears its own pad by itself (`Flight.StartFlight`): it removes anything within the pad
+  and 3 m round it (up to 58 m high), abandoning a mission whose waiting rocket that was, before
+  putting the fresh rocket there (a waiting rocket on another site's pad is left). Instead,
+  nothing is removed without asking: if something is in the way on
   the pad the player is starting from, the game says so and asks before removing it. That lets
   the player prepare several vessels on the pads (Home's and the far sites') and fly any of them
   later by switching to it, rather than each new flight sweeping the last one away. To discuss
