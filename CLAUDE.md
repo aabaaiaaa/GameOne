@@ -9,7 +9,8 @@ booster and upper stage; or carry a lander to the moon and land it as near its l
 can be, then open its bay doors; and free play, the satellite launcher with no objectives. A rocket that
 comes apart becomes several vessels, flown one at a time (Tab). Missions are flown in saved worlds
 that keep everything left in them from one flight to the next (picked from a world list at
-start-up). It uses Jolt physics, Vulkan rendering (sun shadows, planet, sky, smoke, fire, lens
+start-up). A mission belongs to its vessels, several in progress in a world at once, saved with
+it and carried on after a load from the carry-on screen. It uses Jolt physics, Vulkan rendering (sun shadows, planet, sky, smoke, fire, lens
 flare), OpenAL positional audio, and an ImGui HUD crediting BRUTAL. See `README.md` for what each
 file does, the controls, and the planet's and rockets' numbers.
 
@@ -403,7 +404,17 @@ dotnet run --project src/GameOne
   saved by its body (`VesselState.Body`, by name), its place, attitude and velocity in that body's
   frame, and comes back into that body's physics, or under formula there. Anything new about a vessel that should survive a save goes in `VesselState`, in
   `Vessel.Capture` and in the `Vessel` constructor that restores one (the store tests check every
-  field round-trips). Missions and vehicles are saved by name: renaming one makes old saves
+  field round-trips). The missions in progress are saved too (`RunState`, `WorldState.Runs`: each
+  run's mission, site, flight number, start time, steps done with their points, and the vessel
+  flown last of it; its vessels are saved among the world's, a run ended is not kept), with the vessel flown (`WorldState.Flown`). `Flight.Restore`
+  brings a world back as saved and starts no flight (`Flight.Load` is `Restore` and then a mission
+  chosen): `Flight.Chosen` is false until the player picks what to fly (a new mission or one carried
+  on, `Flight.CarryOnChoices`), and a world saved before then is saved as it was, without the
+  rocket of free play put behind the menu meanwhile (the placeholder: never saved, taken away
+  unlogged once a choice is made). The rewind point (`Flight.CanRewind`, `FlightInput.Rewind`) is
+  the world captured at the last menu choice this session (a mission begun, begun again or carried
+  on): never saved, none after a `Restore` until a choice is made, so never earlier than the load.
+  Missions and vehicles are saved by name: renaming one makes old saves
   unreadable, which is fine (see below). A world holds `Flight.Capacity` vessels (1,000, under the
   physics' 4,096 bodies (`RocketPhysics.MaxBodies`)): past it debris (nothing guided) goes first, then
   vessels of no run in progress, then runs' vessels, the oldest first in each and never the flown

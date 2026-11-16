@@ -283,7 +283,8 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   its body's sphere and then to it (or down by it): a transfer onto another body's orbit, which
   `Encounters.Transfer` doesn't do. To discuss before building.
 - **More in the world log** (a future feature, from collisions part 3's design, 2026-11-07): the
-  log has only losses (and those removed to make room); launches, landings and the like could
+  log has losses (and those removed to make room) and the missions' (begun, steps done, ended);
+  launches, landings and the like could
   be entries too, as could fairing halves (left out as debris that would flood its 300). To
   discuss before building.
 - **Vessels left on the pads, flown when the player likes** (the user, 2026-11-02). Today a new
@@ -723,10 +724,3 @@ can be picked up again if they start to matter.
     (`JPH_DOUBLE_PRECISION`, which is BRUTAL's build, not the game's), with the game's own
     positions in double beside it. Moving the world's origin wouldn't help, as orbits are about
     20 km across wherever it sits.
-
-## To discuss before building: resuming a mission after quitting
-
-A world loaded mid-mission starts a new flight, so a long mission (LAND ON THE MOON, about 20
-minutes of flight) can't be carried on from where it was left: the lander is still in the world,
-but it is no longer this flight's mission, and a fresh rocket stands on the pad. Should a saved
-world keep its mission and its progress, and how?
