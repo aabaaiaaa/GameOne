@@ -405,8 +405,9 @@ dotnet run --project src/GameOne
   `Vessel.Capture` and in the `Vessel` constructor that restores one (the store tests check every
   field round-trips). Missions and vehicles are saved by name: renaming one makes old saves
   unreadable, which is fine (see below). A world holds `Flight.Capacity` vessels (1,000, under the
-  physics' 4,096 bodies (`RocketPhysics.MaxBodies`)): past it the oldest go, whenever vessels are
-  added. The player's `Settings` (the same in every world) are saved beside the worlds, in
+  physics' 4,096 bodies (`RocketPhysics.MaxBodies`)): past it debris (nothing guided) goes first, then
+  vessels of no run in progress, then runs' vessels, the oldest first in each and never the flown
+  one, whenever vessels are added or a world loads. The player's `Settings` (the same in every world) are saved beside the worlds, in
   `player.settings`; a new one goes in `Settings` and the settings screen.
 - **No backwards compatibility (yet):** the game is early in development and features are expected
   to need game-wide refactoring. Don't keep old code paths, shims or migrations alive for

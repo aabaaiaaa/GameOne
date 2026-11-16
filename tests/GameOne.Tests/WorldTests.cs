@@ -394,6 +394,82 @@ public sealed class WorldTests(ITestOutputHelper output)
         output.WriteLine($"{flight.WorldVessels.Count} vessels, {sim.Physics.BodyCount} bodies, in {sim.WallTime.TotalSeconds:0.0} s");
     }
 
+    /// <summary>A mission whose one step is never done nor lost, so a run of it stays in progress for as long as it has a vessel.</summary>
+    private static readonly Mission Holding = new() { Name = "Holding", Briefing = "", Vehicle = Vehicle.Booster, Steps = [new("Held", _ => false)] };
+
+    /// <summary>A world of <paramref name="vessels"/> satellites (the first of flight 1, the rest of flight <paramref name="others"/>), with runs in progress for flights 1 and 2.</summary>
+    private static WorldState WithRuns(int vessels, int others)
+    {
+        var many = ManySatellites(Flight.Capacity / 4);
+        Assert.True(many.Vessels.Count >= vessels);
+        var steps = Holding.Steps.Length;
+        RunState Run(int number, int flown) => new()
+        {
+            Mission = Holding, Site = LaunchSites.Home.Name, Number = number, LastFlown = flown,
+            Done = new bool[steps], Points = new int[steps],
+        };
+        return many with
+        {
+            Vessels = [.. many.Vessels.Take(vessels).Select(v => v with { Flight = v.Id == 0 ? 1 : others })],
+            NextVesselId = vessels, Flights = 2, Runs = [Run(1, 0), Run(2, 1)],
+        };
+    }
+
+    [Fact]
+    public void Making_room_takes_debris_before_vessels()
+    {
+        // Old satellites, then newer fairing halves, up to one short of the cap (the new rocket
+        // makes it): staging adds one more, and a half goes, not the oldest satellite.
+        var sats = ManySatellites(Flight.Capacity / 4).Vessels.Take(Flight.Capacity - 4).ToList();
+        var halves = Enumerable.Range(0, 3).Select(i => sats[i] with
+        {
+            Id = sats.Count + i, Vehicle = Vehicle.FairingHalf, First = 0, Last = 0, Fuel = [0f],
+            LegDeploy = 0f, LegsWanted = false, FairingOn = false,
+        });
+        var world = ManySatellites(1) with { Vessels = [.. sats, .. halves], NextVesselId = Flight.Capacity - 1 };
+        using var sim = new Simulation(Mission.ReachOrbit, world: world);
+        var flight = sim.Flight;
+        Assert.Equal(Flight.Capacity, flight.WorldVessels.Count);
+        Assert.True(sim.Run(Climb, f => f.Ground > 2f, maxSeconds: 60), "the rocket should lift off");
+        var (oldest, removed) = (flight.WorldVessels[0], flight.RemovedForRoom);
+        sim.Step(new FlightInput(Stage: true));
+        Assert.Equal(Flight.Capacity, flight.WorldVessels.Count);
+        Assert.Contains(oldest, flight.WorldVessels);
+        Assert.Equal(removed + 1, flight.RemovedForRoom);
+        Assert.Equal(2, flight.WorldVessels.Count(v => v.Vehicle == Vehicle.FairingHalf));
+    }
+
+    [Fact]
+    public void Making_room_takes_a_runs_vessels_last()
+    {
+        // Run 1's one vessel is the oldest in the world. While vessels of no run remain, they go
+        // and it stays; when every other is another run's, it goes first, and run 1 has none left.
+        var count = Flight.Capacity - 1;
+        using (var sim = new Simulation(Mission.ReachOrbit, world: WithRuns(count, others: 0)))
+        {
+            var flight = sim.Flight;
+            Assert.True(sim.Run(Climb, f => f.Ground > 2f, maxSeconds: 60), "the rocket should lift off");
+            var kept = flight.WorldVessels.Single(v => v.Id == 0);
+            var next = flight.WorldVessels.Single(v => v.Id == 1);
+            sim.Step(new FlightInput(Stage: true));
+            Assert.Contains(kept, flight.WorldVessels);
+            Assert.DoesNotContain(next, flight.WorldVessels);
+            sim.Step(default);
+            Assert.Equal(RunEnd.InProgress, flight.Runs.Single(r => r.Number == 1).End);
+        }
+        using (var sim = new Simulation(Mission.ReachOrbit, world: WithRuns(count, others: 2)))
+        {
+            var flight = sim.Flight;
+            var run = flight.Runs.Single(r => r.Number == 1);
+            Assert.True(sim.Run(Climb, f => f.Ground > 2f, maxSeconds: 60), "the rocket should lift off");
+            var oldest = flight.WorldVessels.Single(v => v.Id == 0);
+            sim.Step(new FlightInput(Stage: true));
+            Assert.DoesNotContain(oldest, flight.WorldVessels);
+            sim.Step(default);
+            Assert.Equal(RunEnd.Failed, run.End);
+        }
+    }
+
     [Fact]
     public void A_captured_world_comes_back_exactly_and_carries_on_the_same()
     {

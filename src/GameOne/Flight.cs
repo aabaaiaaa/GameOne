@@ -756,7 +756,11 @@ internal sealed class Flight : IDisposable
         Unwatched.Reset(); // nor are the formula's collisions, or who was chosen for the physics, this one's
         _askedAheadAt = double.NaN;
         _coming.Clear(); // nor is anything coming at that world's vessels
-        RemovedForRoom = Math.Max(0, world.Vessels.Count - Capacity);
+        // A world saved with more than it holds loses debris first, then vessels of no run in
+        // progress, then runs' vessels, the oldest first in each (they are saved oldest first), never
+        // the one to be flown.
+        var goes = Excess(world);
+        RemovedForRoom = goes.Count;
         _info = world with { Vessels = [], Log = [], Runs = [], Flown = null };
         // (Wrecks are never saved, so none loaded is waiting to be logged.)
         _log.Clear();
@@ -764,12 +768,10 @@ internal sealed class Flight : IDisposable
         LogChanges++;
         WorldTime = world.Time;
         Lights.Reset(WorldTime); // each place starts as its own time of day has it
-        // A world saved with more than it holds keeps its newest (they are saved oldest first): the
-        // oldest go, each written to the log as any removed for room is, never seen (nothing has
+        // Each that goes is written to the log as any removed for room is, never seen (nothing has
         // been chosen for the physics in this world yet).
-        for (var i = 0; i < RemovedForRoom; i++)
+        foreach (var dropped in world.Vessels.Where(goes.Contains))
         {
-            var dropped = world.Vessels[i];
             if (dropped.State != FlightState.Crashed && dropped.Vehicle.Stages[dropped.First].Kind != StageKind.Fairing)
                 AddToLog(new LogEntry(WorldTime, WorldLog.Named(dropped), WorldLog.RemovedForRoom, null, WorldLog.Where(Bodies.Named(dropped.Body), dropped.CentreOfMass), false));
         }
@@ -788,7 +790,7 @@ internal sealed class Flight : IDisposable
         // Unwatched.MayLoadOnFormula). The vessel to fly is always brought back into the physics.
         _flights = world.Flights;
         _nextId = world.NextVesselId;
-        var kept = world.Vessels.TakeLast(Capacity).ToArray();
+        var kept = world.Vessels.Where(s => !goes.Contains(s)).ToArray();
         var flown = kept.FirstOrDefault(s => s.Id == world.Flown && CanFly(s)) ?? kept.LastOrDefault(CanFly);
         var (focusBody, focus) = flightStarts || flown is null ? (SitesBody, Site.Pad) : (Bodies.Named(flown.Body), flown.CentreOfMass);
         var partedFrom = world.Vessels.Where(s => s.PartingFrom is not null).Select(s => s.PartingFrom!.Value).ToHashSet();
@@ -798,7 +800,7 @@ internal sealed class Flight : IDisposable
         _worldChanges++;
         // Parts saved still parting from each other go on parting, once both are back (in the one
         // physics: parts still parting are never loaded under formula, and are at one body).
-        foreach (var state in world.Vessels.TakeLast(Capacity))
+        foreach (var state in kept)
             if (state.PartingFrom is { } from && _world.FirstOrDefault(v => v.Id == from) is { Physics: { } physics } other
                 && _world.First(v => v.Id == state.Id) is { } part && part.Physics == physics)
                 physics.Part(part.Craft, other.Craft);
@@ -2339,6 +2341,32 @@ internal sealed class Flight : IDisposable
         Restarted?.Invoke();
     }
 
+    /// <summary>
+    /// How soon a vessel goes to make room: debris (nothing guided) first, then a vessel of no run
+    /// in progress, then a run's.
+    /// </summary>
+    private static int RoomRank(bool debris, bool inRun) => debris ? 0 : inRun ? 2 : 1;
+
+    /// <summary>
+    /// The vessels of a saved <paramref name="world"/> that go to bring it within its
+    /// <see cref="Capacity"/>: debris first, then those of no run in progress, then runs' vessels,
+    /// the oldest first within each, never the one to be flown.
+    /// </summary>
+    private static HashSet<VesselState> Excess(WorldState world)
+    {
+        var goes = new HashSet<VesselState>(ReferenceEqualityComparer.Instance);
+        var excess = world.Vessels.Count - Capacity;
+        if (excess <= 0)
+            return goes;
+        var runNumbers = world.Runs.Select(r => r.Number).ToHashSet();
+        foreach (var state in world.Vessels
+            .Where(s => s.Id != world.Flown)
+            .OrderBy(s => RoomRank(!Enumerable.Range(s.First, s.Last - s.First + 1).Any(i => s.Vehicle.Stages[i].Guided), runNumbers.Contains(s.Flight)))
+            .Take(excess))
+            goes.Add(state);
+        return goes;
+    }
+
     /// <summary>Takes the vessel at <paramref name="i"/> out of the world's list, and out of its run (its body is the caller's to see to).</summary>
     private void TakeOut(int i)
     {
@@ -2350,17 +2378,27 @@ internal sealed class Flight : IDisposable
     /// <summary>How many vessels have been removed to keep the world within its <see cref="Capacity"/>, since it was loaded.</summary>
     public int RemovedForRoom { get; private set; }
 
-    /// <summary>Takes the world back down to its <see cref="Capacity"/>, removing the oldest vessels first, but never the one being flown.</summary>
+    /// <summary>
+    /// Takes the world back down to its <see cref="Capacity"/>, removing debris first, then vessels
+    /// of no run in progress, then runs' vessels, the oldest first within each, but never the one
+    /// being flown.
+    /// </summary>
     private void MakeRoom()
     {
-        for (var i = 0; _world.Count > Capacity && i < _world.Count; )
+        while (_world.Count > Capacity)
         {
-            var vessel = _world[i];
-            if (vessel == Controlled)
+            var (i, rank) = (-1, int.MaxValue);
+            for (var j = 0; j < _world.Count && rank > 0; j++)
             {
-                i++;
-                continue;
+                if (_world[j] == Controlled)
+                    continue;
+                var r = RoomRank(!_world[j].Guided, RunOf(_world[j]) is not null);
+                if (r < rank)
+                    (i, rank) = (j, r);
             }
+            if (i < 0)
+                break;
+            var vessel = _world[i];
             if (vessel.State != FlightState.Crashed) // a wreck's body is gone, or going by itself
             {
                 LogRemoved(vessel, WorldLog.RemovedForRoom);
