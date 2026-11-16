@@ -106,8 +106,15 @@ internal sealed class Mission
     /// this run that has it is still in one piece. (Only the rocket's own parts: a fairing half
     /// is a vehicle of its own.)
     /// </summary>
-    private static bool Gone(MissionRun run, int stage) =>
-        !run.Vessels.Any(v => v.Vehicle == run.Mission.Vehicle && v.State != FlightState.Crashed && v.Stage <= stage && v.TopStage >= stage);
+    private static bool Gone(MissionRun run, int stage)
+    {
+        // A loop, without allocating: a run's failure is asked several times a frame (MissionRun.Failed).
+        var vessels = run.Vessels;
+        for (var i = 0; i < vessels.Count; i++)
+            if (vessels[i] is var v && v.Vehicle == run.Mission.Vehicle && v.State != FlightState.Crashed && v.Stage <= stage && v.TopStage >= stage)
+                return false;
+        return true;
+    }
 
     /// <summary>Whether it has come down safely anywhere: landed, or floating in the sea.</summary>
     private static bool Landed([NotNullWhen(true)] Vessel? vessel) => vessel is { State: FlightState.Landed or FlightState.Floating };

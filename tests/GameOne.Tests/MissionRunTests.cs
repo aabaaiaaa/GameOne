@@ -562,4 +562,184 @@ public sealed class MissionRunTests
         Assert.True(flight.WorldTime > time);
         Assert.False(flight.CanRewind);
     }
+
+    /// <summary>A booster of <paramref name="flight"/> standing near the landing zone, <paramref name="k"/> lots of 40 m east of it.</summary>
+    private static VesselState Standing(int id, int flight, int k, Vehicle? vehicle = null)
+    {
+        var zone = Scene.LandingZoneCentre;
+        return Drops.Placed(zone + 40f * k * Planet.East(zone), Planet.East(zone), 0f, vehicle ?? Vehicle.Booster, mission: Mission.FreePlay, flight: flight,
+            legsOut: vehicle is null, clearance: 0.5f, id: id);
+    }
+
+    /// <summary>A run of <paramref name="mission"/> (two steps: its launch done) of flight <paramref name="number"/>, saved.</summary>
+    private static RunState SavedRun(Mission mission, int number, int lastFlown) =>
+        new() { Mission = mission, Site = "Home", Number = number, Done = [true, false], Points = [0, 0], LastFlown = lastFlown, BegunAt = 0 };
+
+    [Fact]
+    public void A_saved_flown_vessel_that_is_debris_or_missing_falls_back_to_the_newest_to_fly()
+    {
+        var world = new WorldState
+        {
+            Vessels = [Standing(0, 0, 0), Standing(1, 0, 1), Standing(2, 0, 2, Vehicle.FairingHalf)],
+            NextVesselId = 3,
+            Flown = 2, // the fairing half: debris, never flown
+        };
+        using var sim = new Simulation(Mission.FreePlay, world: world);
+        var flight = sim.Flight;
+        foreach (var saved in (ReadOnlySpan<int?>)[2, 99, null])
+        {
+            flight.Restore(world with { Flown = saved });
+            Assert.Equal(1, flight.Controlled.Id);
+            Assert.Equal(saved, flight.SavedFlown);
+            // No choice is marked flown last when the world wasn't saved flying it.
+            Assert.All(flight.CarryOnChoices(), c => Assert.DoesNotContain("(last flown)", CarryOnRow.Of(c, flight.SavedFlown).Line));
+        }
+        flight.Restore(world with { Flown = 0 });
+        Assert.Equal(0, flight.Controlled.Id);
+        var rows = flight.CarryOnChoices().Select(c => CarryOnRow.Of(c, flight.SavedFlown)).ToArray();
+        Assert.Contains("(last flown)", rows.Single(r => r.VesselId == 0).Line);
+        Assert.DoesNotContain("(last flown)", rows.Single(r => r.VesselId == 1).Line);
+    }
+
+    [Fact]
+    public void A_runs_points_survive_a_restore()
+    {
+        var step = new Switch();
+        using var sim = new Simulation(Test("A", step, bonus: true));
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(Launch: true, FullThrottle: true));
+        step.On = true;
+        sim.Step(default);
+        Assert.Equal(1800, flight.Run!.Progress.Points);
+
+        flight.Restore(flight.Capture());
+        var run = Assert.Single(flight.Runs);
+        Assert.Equal(1800, run.Progress.PointsFor(1));
+        Assert.Equal(1800, run.Progress.Points);
+        Assert.True(run.Progress.IsDone(1));
+    }
+
+    [Fact]
+    public void The_placeholders_body_goes_with_it_once_a_choice_is_made()
+    {
+        using var sim = new Simulation(Mission.FreePlay);
+        var flight = sim.Flight;
+        flight.Restore(new WorldState());
+        var placeholder = flight.Controlled;
+        var physics = placeholder.Physics!;
+        Assert.Contains(placeholder.Craft, physics.Crafts);
+        sim.Step(new FlightInput(Choose: Mission.LaunchAndLand));
+        Assert.DoesNotContain(placeholder, flight.WorldVessels);
+        Assert.DoesNotContain(placeholder.Craft, physics.Crafts);
+    }
+
+    [Fact]
+    public void The_choices_are_runs_oldest_first_then_the_last_flown_then_flights_newest_first()
+    {
+        var (a, b, c, d) = (new Switch(), new Switch(), new Switch(), new Switch { Lost = true });
+        var world = new WorldState
+        {
+            Vessels =
+            [
+                Standing(0, 1, 0), Standing(1, 2, 1), Standing(2, 3, 2), Standing(3, 4, 3), Standing(4, 5, 4),
+                Standing(5, 6, 5, Vehicle.FairingHalf), // run 6's only vessel: nothing in it to fly
+                Standing(6, 7, 6), // run 7's, which has failed
+            ],
+            NextVesselId = 7,
+            Flights = 7,
+            Flown = 4,
+            Runs = [SavedRun(Test("A", a), 1, 0), SavedRun(Test("B", b), 2, 1), SavedRun(Test("C", c), 6, 5), SavedRun(Test("D", d), 7, 6)],
+        };
+        using var sim = new Simulation(Mission.FreePlay, world: world);
+        var flight = sim.Flight;
+        flight.Restore(world);
+        var choices = flight.CarryOnChoices();
+        Assert.Equal([(0, "A"), (1, "B"), (4, null), (6, null), (3, null), (2, null)],
+            choices.Select(ch => (ch.Vessel.Id, ch.Run?.Mission.Name)));
+    }
+
+    [Fact]
+    public void Carrying_on_the_vessel_flown_lets_its_ended_runs_result_go()
+    {
+        var (sim, a, _) = TwoRuns();
+        using var _ = sim;
+        var flight = sim.Flight;
+        var runA = flight.Runs[0];
+        var rocket = runA.Vessels[0];
+        sim.Step(new FlightInput(SwitchTo: rocket));
+        a.On = true;
+        sim.Step(default);
+        Assert.Same(runA, flight.Run); // ended, its result shown
+        sim.Step(new FlightInput(CarryOn: rocket.Id));
+        Assert.Same(rocket, flight.Controlled);
+        Assert.Null(flight.Run);
+    }
+
+    [Fact]
+    public void A_rewind_to_a_mission_begun_comes_back_as_it_was_chosen_each_time()
+    {
+        using var sim = new Simulation(Test("A", new Switch()), site: Highcrest);
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(Launch: true, FullThrottle: true));
+        sim.Step(new FlightInput(Choose: Test("B", new Switch()), From: LaunchSites.Home));
+        var (time, id, logged) = (flight.WorldTime, flight.Controlled.Id, flight.Log.Count);
+        Assert.False(flight.RewindResumed);
+        for (var rewind = 0; rewind < 2; rewind++)
+        {
+            sim.Step(new FlightInput(Launch: true, FullThrottle: true));
+            sim.Run((_, _) => new FlightInput(Throttle: 1f), _ => false, maxSeconds: 3);
+            sim.Step(new FlightInput(Rewind: true));
+            Assert.Equal(time, flight.WorldTime, 1e-6);
+            Assert.Equal(logged, flight.Log.Count); // the log as it was, its run begun again
+            Assert.Equal((id, FlightState.Ready), (flight.Controlled.Id, flight.Controlled.State));
+            Assert.Equal("B", flight.Run!.Mission.Name);
+            Assert.True(flight.CanRewind);
+        }
+    }
+
+    [Fact]
+    public void A_world_loaded_over_its_capacity_loses_debris_then_no_runs_vessels_then_runs_never_the_one_flown()
+    {
+        // Its flown vessel the oldest of run 1's; then the next oldest of run 1, two of no run and a
+        // fairing half; then the rest of run 1, enough to be four over.
+        var pad = Scene.TestPads[0].Centre;
+        var landed = Drops.Placed(pad, Planet.East(pad), 0f, flight: 1) with { State = FlightState.Landed };
+        List<VesselState> vessels =
+        [
+            landed with { Id = 0 }, landed with { Id = 1 }, landed with { Id = 2, Flight = 2 }, landed with { Id = 3, Flight = 2 },
+            Standing(4, 0, 0, Vehicle.FairingHalf),
+            .. Enumerable.Range(5, Flight.Capacity - 1).Select(i => landed with { Id = i }),
+        ];
+        var world = new WorldState { Vessels = vessels, NextVesselId = vessels.Count, Flights = 2, Flown = 0, Runs = [SavedRun(Test("A", new Switch()), 1, 0)] };
+        using var sim = new Simulation(Mission.FreePlay);
+        var flight = sim.Flight;
+        flight.Restore(world);
+        Assert.Equal(Flight.Capacity, flight.WorldVessels.Count);
+        Assert.Equal(4, flight.RemovedForRoom);
+        Assert.Equal(0, flight.Controlled.Id);
+        Assert.Equal([0, .. Enumerable.Range(5, Flight.Capacity - 1)], flight.WorldVessels.Select(v => v.Id));
+        Assert.Equal(["Booster 1", "Booster 2", "Booster 3"], flight.Log.Where(e => e.How == WorldLog.RemovedForRoom).Select(e => e.What).Order()); // (a fairing half isn't logged)
+    }
+
+    [Fact]
+    public void The_readout_reads_the_runs_and_the_vessel_flown()
+    {
+        var (sim, a, b) = TwoRunsRestored();
+        using var _ = sim;
+        var flight = sim.Flight;
+        var readings = Readout.FlightReadings(flight);
+        Assert.Equal("2", readings["Runs in progress"]);
+        Assert.Equal("no", readings["Can rewind"]);
+        Assert.Equal(WorldLog.Named(flight.Run!), readings["Run"]);
+        Assert.Contains($"Run {WorldLog.Named(flight.Runs[0])}", readings.Keys);
+
+        sim.Step(new FlightInput(CarryOn: a.Id));
+        sim.Run((_, _) => default, _ => false, maxSeconds: 2);
+        readings = Readout.FlightReadings(flight);
+        Assert.Equal($"{a.Id}", readings["Vessel id"]);
+        Assert.Equal("A (flight 1)", readings["Run"]);
+        Assert.Equal("2 s", readings["Can rewind"]);
+        var p = flight.Position;
+        Assert.Equal($"{p.X:0.00} {p.Y:0.00} {p.Z:0.00}", readings["Position"]);
+    }
 }

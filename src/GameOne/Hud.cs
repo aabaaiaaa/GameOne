@@ -35,15 +35,15 @@ internal sealed record CarryOnRow(int VesselId, string Label, string Line, strin
     /// <summary>
     /// <paramref name="choice"/>'s row: a run's by its mission, flight, steps done and points, and
     /// its vessel; a vessel's of no run by its name and flight. <paramref name="flown"/> is the
-    /// vessel the world was saved flying.
+    /// id of the vessel the world was saved flying (<see cref="Flight.SavedFlown"/>), if any.
     /// </summary>
-    public static CarryOnRow Of(CarryOnChoice choice, Vessel flown)
+    public static CarryOnRow Of(CarryOnChoice choice, int? flown)
     {
         var vessel = choice.Vessel;
         var at = $"{Hud.Status(vessel, brief: false).Text}, at the {vessel.Body.Name.ToLowerInvariant()}";
         if (choice.Run is not { } run)
             return new(vessel.Id, $"Carry on: {vessel.Name} · flight {vessel.Flight}",
-                $"{vessel.Name}: {at}{(vessel == flown ? " (last flown)" : "")} · free play", $"Carry on: {WorldLog.Named(vessel)}", false);
+                $"{vessel.Name}: {at}{(vessel.Id == flown ? " (last flown)" : "")} · free play", $"Carry on: {WorldLog.Named(vessel)}", false);
         var steps = run.Mission.Steps.Length;
         var done = 0;
         for (var i = 0; i < steps; i++)
@@ -251,7 +251,21 @@ internal sealed class Hud : IDisposable
     /// game starts, and picking a world goes on to the missions; after that, Esc opens the game
     /// menu, and the missions and the world list are reached from there.
     /// </summary>
-    public MenuScreen Screen { get; private set; } = MenuScreen.Worlds;
+    public MenuScreen Screen
+    {
+        get => _screen;
+        private set
+        {
+            if (value != _screen)
+                _confirmAbandon = false; // asked again each time the game menu is up
+            _screen = value;
+        }
+    }
+
+    private MenuScreen _screen = MenuScreen.Worlds;
+
+    /// <summary>Whether the game menu's "Abandon mission" is being asked to be confirmed.</summary>
+    private bool _confirmAbandon;
 
     /// <summary>Whether any menu is up, pausing the game.</summary>
     public bool MenuOpen => Screen != MenuScreen.None;
@@ -291,7 +305,7 @@ internal sealed class Hud : IDisposable
         var runs = 0;
         foreach (var choice in flight.CarryOnChoices())
         {
-            _carryOnRows.Add(CarryOnRow.Of(choice, flight.Controlled));
+            _carryOnRows.Add(CarryOnRow.Of(choice, flight.SavedFlown));
             if (choice.Run is not null)
                 runs++;
         }
@@ -597,6 +611,13 @@ internal sealed class Hud : IDisposable
         if (_window.GetAttribute(GlfwWindowAttribute.Focused) != 0)
             PointerToImGui();
         ImGui.NewFrame();
+
+        // A carry-on picked is the choice made once the flight has made it (the frame after the
+        // click); one it couldn't make leaves the choice still to make, on its screen again.
+        if (MustChoose && flight.Chosen)
+            MustChoose = false;
+        else if (MustChoose && Screen == MenuScreen.None && _carryOnChosen is null)
+            Screen = _carryOnRows.Count > 0 ? MenuScreen.CarryOn : MenuScreen.Missions;
 
         // Flying another vessel isn't news in itself: its stage, height and orbit are where it was
         // left, so nothing is announced as though it just happened.
@@ -940,14 +961,13 @@ internal sealed class Hud : IDisposable
         var world = flight.WorldId.Length > 0 && flight.Chosen ? flight.WorldName : null;
         var vessel = flight.Controlled;
         var run = flight.RunOf(vessel);
-        switch (GameMenuWindow(display, _font, world, flight.Mission.Name, canAbandon: run is not null, _buttons))
+        switch (GameMenuWindow(display, _font, world, flight.Mission.Name, canAbandon: run is not null, _confirmAbandon, _buttons))
         {
             case GameMenuChoice.Resume:
                 CloseMenu();
                 break;
             case GameMenuChoice.Restart:
-                // The run started again is the one shown (an ended one too), else the vessel's own mission's.
-                var (mission, site) = flight.Run is { } shown ? (shown.Mission, shown.Site) : (vessel.Mission, vessel.Site);
+                var (mission, site) = flight.StartAgainOf;
                 _tryAgainStart = $"{mission.Name} from the start: a fresh rocket on {site.Name}'s pad, as a new run. "
                     + (run is not null ? "This run is abandoned; its vessels stay in the world, in no run." : "Everything already in the world stays where it is.");
                 _tryAgainRewind = flight.CanRewind ? RewindLabel(flight.RewindSeconds, flight.RewindResumed) : null;
@@ -955,6 +975,9 @@ internal sealed class Hud : IDisposable
                 Screen = MenuScreen.TryAgain;
                 break;
             case GameMenuChoice.Abandon:
+                _confirmAbandon = true;
+                break;
+            case GameMenuChoice.ConfirmAbandon:
                 _abandonRun = true;
                 CloseMenu();
                 break;
@@ -977,17 +1000,19 @@ internal sealed class Hud : IDisposable
     }
 
     /// <summary>What was clicked in the game menu this frame, if anything.</summary>
-    internal enum GameMenuChoice { None, Resume, Restart, Abandon, Missions, Log, Worlds, Settings, Quit }
+    internal enum GameMenuChoice { None, Resume, Restart, Abandon, ConfirmAbandon, Missions, Log, Worlds, Settings, Quit }
 
     /// <summary>
     /// The game menu's window (see <see cref="GameMenu"/>) on a screen <paramref name="display"/> in
     /// size, its title in <paramref name="font"/>: the world being played (<paramref name="world"/>,
     /// none before one is picked) and its <paramref name="mission"/>, wrapped to the menu's width so
     /// a long name never widens it over the credits; "Abandon mission" beside "Restart flight" while
-    /// the flown vessel's run is in progress (<paramref name="canAbandon"/>). Each button is added to
-    /// <paramref name="buttons"/> for the readout, by its label. Returns what was clicked.
+    /// the flown vessel's run is in progress (<paramref name="canAbandon"/>), which asks to be
+    /// confirmed (<paramref name="confirmingAbandon"/>: "Confirm abandon" under that row, saying what
+    /// becomes of the run). Each button is added to <paramref name="buttons"/> for the readout, by
+    /// its label. Returns what was clicked.
     /// </summary>
-    internal static GameMenuChoice GameMenuWindow(float2 display, ImFontPtr font, string? world, string mission, bool canAbandon = false, List<(string Name, Vector2 At)>? buttons = null)
+    internal static GameMenuChoice GameMenuWindow(float2 display, ImFontPtr font, string? world, string mission, bool canAbandon = false, bool confirmingAbandon = false, List<(string Name, Vector2 At)>? buttons = null)
     {
         bool Button(ReadOnlySpan<byte> label, string name, float width)
         {
@@ -1024,6 +1049,14 @@ internal sealed class Hud : IDisposable
                     ImGui.SameLine();
                     if (Button("Abandon mission"u8, "Abandon mission", width - half - ImGui.GetStyle().ItemSpacing.X))
                         choice = GameMenuChoice.Abandon;
+                    if (confirmingAbandon)
+                    {
+                        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + width);
+                        ImGui.TextColored(Warning, "The mission ends here, abandoned: its vessels stay in the world, in no run."u8);
+                        ImGui.PopTextWrapPos();
+                        if (Button("Confirm abandon"u8, "Confirm abandon", width))
+                            choice = GameMenuChoice.ConfirmAbandon;
+                    }
                 }
                 if (Button("Missions..."u8, "Missions", width))
                     choice = GameMenuChoice.Missions;
@@ -1302,7 +1335,7 @@ internal sealed class Hud : IDisposable
                 for (var i = 0; i < GameOne.Mission.All.Length; i++)
                 {
                     var mission = GameOne.Mission.All[i];
-                    var current = mission == flight.Mission ? "   (current)" : "";
+                    var current = !MustChoose && mission == flight.Mission ? "   (current)" : ""; // (none in a world just picked: nothing is being flown in it yet)
                     if (ImGui.Button($"{mission.Name}{current}###mission{i}", new float2(width, MissionHeight)))
                         ChooseMission(mission);
                     // Read out while its middle, where a script clicks it, is in the region's view.
@@ -1697,8 +1730,7 @@ internal sealed class Hud : IDisposable
         switch (click)
         {
             case CarryOnClick.Row:
-                _carryOnChosen = _carryOnRows[row].VesselId;
-                MustChoose = false;
+                _carryOnChosen = _carryOnRows[row].VesselId; // (MustChoose holds until the flight has carried it on: see Build)
                 CloseMenu();
                 break;
             case CarryOnClick.NewMission:
@@ -1900,7 +1932,7 @@ internal sealed class Hud : IDisposable
     }
 
     // The word of a run ended unflown (Flight.Notice) last seen, when it was first seen, and as shown.
-    private (string Text, double RealTime)? _noticeSeen;
+    private RunNotice? _noticeSeen;
     private long _noticeSince;
     private string _noticeShown = "";
 
@@ -1914,7 +1946,7 @@ internal sealed class Hud : IDisposable
     /// </summary>
     private void NoticeLine(Flight flight, float2 display)
     {
-        if (flight.Notice != _noticeSeen)
+        if (!ReferenceEquals(flight.Notice, _noticeSeen))
         {
             _noticeSeen = flight.Notice;
             _noticeSince = Stopwatch.GetTimestamp();

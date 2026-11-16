@@ -228,8 +228,14 @@ public sealed class WorldLogTests
         Assert.Equal($"{v.Name} {v.Id}", sim.Flight.Log[^1].What);
     }
 
-    /// <summary>The log's entries of vessels lost or removed, leaving out the missions' (a run begun, a step done, a run ended), which name a flight.</summary>
-    internal static IReadOnlyList<LogEntry> Losses(Flight flight) => [.. flight.Log.Where(e => !e.What.EndsWith(')'))];
+    /// <summary>The log's entries of vessels lost or removed, leaving out the missions' (a run begun, a step done, a run ended), by how each says it happened.</summary>
+    internal static IReadOnlyList<LogEntry> Losses(Flight flight) => [.. flight.Log.Where(e => !OfARun(e.How))];
+
+    /// <summary>Whether <paramref name="how"/> is a run's entry's (see <see cref="WorldLog"/>): begun, a step done, completed, failed or abandoned.</summary>
+    private static bool OfARun(string how) =>
+        how is WorldLog.Begun or WorldLog.Abandoned or WorldLog.StartedAgain
+        || how.StartsWith('"') && how.Contains("\" done") // WorldLog.StepDone
+        || how.StartsWith("completed, ") || how.StartsWith("failed: ");
 
     [Fact]
     public void Missions_are_logged()

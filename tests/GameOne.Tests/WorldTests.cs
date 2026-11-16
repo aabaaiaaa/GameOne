@@ -193,8 +193,12 @@ public sealed class WorldTests(ITestOutputHelper output)
         Assert.Same(upper, flight.Controlled); // a click on its view
         Assert.All(flight.Vessels, v => Assert.Equal(upper.Flight, v.Flight)); // its own flight's now
         Assert.DoesNotContain(rocket, flight.Vessels);
+        var vessels = flight.Vessels.ToArray();
+        var at = Array.IndexOf(vessels, upper);
+        var next = Enumerable.Range(1, vessels.Length).Select(step => vessels[(at + step) % vessels.Length]).First(v => v != upper && Flight.CanFly(v));
+        Assert.True(flight.CanSwitch);
         sim.Step(new FlightInput(SwitchVessel: true));
-        Assert.NotSame(rocket, flight.Controlled); // Tab stays in its flight
+        Assert.Same(next, flight.Controlled); // Tab stays in its flight, flying the next of it
         Assert.Equal(upper.Flight, flight.Controlled.Flight);
     }
 

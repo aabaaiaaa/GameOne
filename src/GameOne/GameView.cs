@@ -107,8 +107,8 @@ internal sealed class GameView : IDisposable
             _smokeStirs.Reset();
             _effects.Clear();
             _trail.Clear();
-            Views.Reset();
         };
+        Views.Follow(flight); // the small views reset with the flight, and as something is carried on
         flight.Switched += Camera.Snap; // straight to the vessel now being flown, which may be far off
         flight.ViewRebased += Hud.Rebase; // what the HUD keeps from frame to frame in the flown vessel's frame (the paths' window), dropped
     }

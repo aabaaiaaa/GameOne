@@ -57,12 +57,34 @@ internal sealed class Views
     private int? _seenOf; // which flight's those are (Vessel.Flight): none since a reset
     private int _removedForRoom; // the flight's count of vessels removed to make room, when last looked at
     private Vessel? _swapTo;
+    private Vessel? _carryingOn; // the vessel carried on, until it is flown (see CarryOn)
 
     /// <summary>The small views, in the strip's order (left to right).</summary>
     public IReadOnlyList<SmallView> Small => _small;
 
     /// <summary>Whether another small view can be opened.</summary>
     public bool Full => _small.Count >= Scene.MaxSmallViews;
+
+    /// <summary>
+    /// Follows <paramref name="flight"/>: back to the main view alone whenever a flight starts or a
+    /// world is brought back, and whenever something is carried on (<see cref="CarryOn"/>).
+    /// </summary>
+    public void Follow(Flight flight)
+    {
+        flight.Restarted += Reset;
+        flight.CarriedOn += CarryOn;
+    }
+
+    /// <summary>
+    /// <paramref name="vessel"/> carried on (<see cref="Flight.CarriedOn"/>): the main view alone, the
+    /// vessel in it once it is flown (after its link-up, if it has one), with nothing swapped into
+    /// the strip. The small views are opened again by hand.
+    /// </summary>
+    public void CarryOn(Vessel vessel)
+    {
+        Reset();
+        _carryingOn = vessel;
+    }
 
     /// <summary>Back to the main view alone, for a fresh flight.</summary>
     public void Reset()
@@ -73,6 +95,7 @@ internal sealed class Views
         _seen = 0;
         _seenOf = null;
         _swapTo = null;
+        _carryingOn = null;
     }
 
     /// <summary>
@@ -85,7 +108,13 @@ internal sealed class Views
     public void Update(float dt, Flight flight, ChaseCamera mainCamera, float? realDt = null)
     {
         var flown = flight.Controlled;
-        if (_main is { } previous && previous != flown)
+        if (_carryingOn is { } carried)
+        {
+            // Flown now, or the switch to it let go: either way, no swap.
+            if (flown == carried || flight.LinkUp.Vessel != carried)
+                _carryingOn = null;
+        }
+        else if (_main is { } previous && previous != flown)
         {
             // The vessel now flown leaves the strip, and the one that was takes its place there.
             // Each takes what its view held across the middle between two places with it: the
@@ -112,11 +141,12 @@ internal sealed class Views
             _seen = Math.Min(_seen, flight.Vessels.Count);
         }
 
-        // Flying a vessel of another flight, that flight's vessels are there already: only parts
-        // coming off from now on are new.
+        // Flying a vessel of another flight, or after a reset, the flight's vessels are there
+        // already: only parts coming off from now on are new. (A new flight's only vessel is its
+        // rocket, flown; a world brought back, or something carried on, opens no views by itself.)
         if (_seenOf != flown.Flight)
         {
-            _seen = _seenOf is null ? 0 : flight.Vessels.Count;
+            _seen = flight.Vessels.Count;
             _seenOf = flown.Flight;
         }
         for (; _seen < flight.Vessels.Count; _seen++)

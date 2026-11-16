@@ -141,8 +141,8 @@ ground, the tower...), how fast, where (a site's name within 5 km, else its heig
 on the ground), and whether anyone saw it. One removed to make room, or cleared from the launch pad
 for the new rocket, is listed too (with no speed: nothing hit it). It is saved with
 the world, with each mission begun, each step done (with its points) and how each ended (completed
-with its score, failed and why, or abandoned; starting the mission again logs its run as abandoned
-to start it again); a rewind takes the log back with the rest of the world.
+with its score, failed and why, or abandoned; "Restart flight" (starting the mission again) logs the
+old run as abandoned); a rewind takes the log back with the rest of the world.
 
 - **Empty world:** nothing but the launch pad, the landing zones and the tower.
 - **Satellites in orbit:** four satellites already in circular orbits 9 to 10 km up, each of which
@@ -174,8 +174,8 @@ min 40 s, to when this mission began" (or "was resumed"), which brings the whole
 was at the last choice made from the menu this session (a mission begun, started again or carried
 on), never further back than the world was picked. It asks to be confirmed first: everything since
 then is undone, other vessels, other missions and the world log. "Abandon mission" (beside it,
-while the flown vessel's mission is in progress) gives the mission up, its vessels left where they
-are.
+while the flown vessel's mission is in progress) gives the mission up once confirmed ("Confirm
+abandon", under it), its vessels left where they are.
 
 **Errors.** If anything goes wrong (a world that can't be saved, say), a red warning sign shows in
 the middle of the screen with the number of errors in the last 5 seconds. The details are on the

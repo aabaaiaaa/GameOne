@@ -135,7 +135,7 @@ internal readonly record struct Coming(Vessel Watched, SolidKind With, Vessel? O
 /// <param name="Camera">Where the main view's camera is, which the vessels near it in that view are witnessed by (see <see cref="Scene.MainViewWitnessed"/>); without it, the flown vessel, which the camera follows.</param>
 /// <param name="NearMisses">Whether near misses past the flown vessel and the watched are slowed for and shown ahead (the player's setting, <see cref="Settings.SlowNearMisses"/>): see <see cref="Flight.NearMissWarning"/>.</param>
 /// <param name="ToggleBayDoors">Open the flown vessel's bay doors, or close them (a vessel with a bay: <see cref="Vessel.HasBay"/>). No key does this.</param>
-/// <param name="CarryOn">Carry on flying the vessel of this id where it is, in its run or in free play (one of <see cref="Flight.CarryOnChoices"/>): a menu choice, as <paramref name="Choose"/> is.</param>
+/// <param name="CarryOn">Carry on flying the vessel of this id where it is, in its run or in free play (any vessel in the world that can be flown: the carry-on screen offers <see cref="Flight.CarryOnChoices"/>): a menu choice, as <paramref name="Choose"/> is.</param>
 /// <param name="CompleteRun">Complete the flown vessel's run with a bonus still open ("Complete mission"): the bonuses not done are lost.</param>
 /// <param name="AbandonRun">Give up the flown vessel's run ("Abandon mission"): its vessels stay where they are, in no run.</param>
 internal readonly record struct FlightInput(
@@ -184,6 +184,15 @@ internal sealed record CarryOnChoice(Vessel Vessel, MissionRun? Run);
 internal sealed record RewindPoint(WorldState World, bool Resumed, int? VesselId, Mission Mission, LaunchSite Site);
 
 /// <summary>
+/// A brief word of a run ended while the flown vessel wasn't one of its own (<see cref="Flight.Notice"/>):
+/// its <paramref name="text"/>. A class, so each notice is a new one to the HUD however alike their words.
+/// </summary>
+internal sealed class RunNotice(string text)
+{
+    public string Text { get; } = text;
+}
+
+/// <summary>
 /// The flight, in the world it is flown in: the launch, then every vessel in this flight (the
 /// rocket, and each part that comes away from it), the pilot's input sent to the one being flown,
 /// and the sounds they call for; and every other vessel in the world, left there by earlier flights
@@ -219,7 +228,7 @@ internal sealed class Flight : IDisposable
     private readonly Worlds _worlds;
     private readonly List<SoundEvent> _sounds = [];
     private readonly List<MissionRun> _runs = []; // every run begun since the world was loaded, oldest first
-    private List<MissionRun> _inProgress = [];   // those of them in progress with objectives, as last asked (see Runs)
+    private List<MissionRun> _inProgress = [];   // those of them in progress, as last asked (see Runs)
     private readonly List<Vessel> _flownFlight = []; // the flown vessel's flight's vessels (see Vessels)
     private (Vessel? Flown, int Changes) _flownFlightOf; // what _flownFlight was gathered for
     private int _worldChanges;                    // how many times _world has had a vessel added or taken out
@@ -274,11 +283,17 @@ internal sealed class Flight : IDisposable
     /// they are, in no run, and nothing else in the world changes but what a new rocket on that
     /// pad clears away.
     /// </summary>
+    /// <summary>
+    /// What starting again (<see cref="FlightInput.StartAgain"/>) begins, and where: the flown
+    /// vessel's run's mission at its site (an ended run's too, while it is shown), or for a vessel
+    /// of none, its own mission and site.
+    /// </summary>
+    public (Mission Mission, LaunchSite Site) StartAgainOf => Run is { } run ? (run.Mission, run.Site) : (Controlled.Mission, Controlled.Site);
+
     private void StartAgain()
     {
-        var flown = Controlled;
-        var (mission, site) = Run is { } run ? (run.Mission, run.Site) : (flown.Mission, flown.Site);
-        RunOf(flown)?.Abandon("Started again.", WorldLog.StartedAgain);
+        var (mission, site) = StartAgainOf;
+        RunOf(Controlled)?.Abandon("Started again.", WorldLog.StartedAgain);
         LaunchFrom(site, mission);
     }
 
@@ -289,13 +304,12 @@ internal sealed class Flight : IDisposable
     /// </summary>
     private void Rewind(RewindPoint point)
     {
-        Restore(point.World);
-        if (point.VesselId is { } id)
-        {
-            if (_world.Find(v => v.Id == id) is { } vessel)
-                CarryOn(vessel, rewindHere: false);
-        }
-        else
+        // A mission begun comes back as it was chosen: looked at from the pad, its new rocket next.
+        Restore(point.World, flightStarts: !point.Resumed);
+        // Something carried on is carried on again; were it not there to fly, the vessel the world
+        // would be flown with, so a world is never flown unchosen (or with none, the point's mission).
+        if (point.VesselId is not { } id
+            || !(_world.Find(v => v.Id == id) is { } vessel && CarryOn(vessel, rewindHere: false)) && !CarryOn(Controlled, rewindHere: false))
             LaunchFrom(point.Site, point.Mission, rewindHere: false);
         _rewind = point;
     }
@@ -334,7 +348,8 @@ internal sealed class Flight : IDisposable
     }
 
     /// <summary>
-    /// Carries on flying <paramref name="vessel"/> where it is, in its run (which it is now the
+    /// Carries on flying <paramref name="vessel"/> (any in the world that can be flown, not only one
+    /// of <see cref="CarryOnChoices"/>) where it is, in its run (which it is now the
     /// vessel flown last of) or in free play: a menu choice (<see cref="Chosen"/>), which adds,
     /// moves and removes nothing in the world but the placeholder. It is brought into the physics
     /// and flown as a switch to it is (<see cref="SwitchTo"/>). False, and nothing done, if it
@@ -356,6 +371,7 @@ internal sealed class Flight : IDisposable
         else
             SwitchTo(vessel);
         RunOf(vessel)?.LastFlownId = vessel.Id; // only a run in progress: one ended is no one's
+        CarriedOn?.Invoke(vessel);
         return true;
     }
 
@@ -366,13 +382,20 @@ internal sealed class Flight : IDisposable
         {
             // The same list while nothing has changed (so asking allocates nothing), a new one when
             // something has (so a list handed out earlier never changes under its holder).
+            // (Only a mission with objectives makes a run. _runs holds only runs in progress after
+            // each step; one ended within a step is let go at its end.)
             var at = 0;
+            var same = true;
             foreach (var run in _runs)
-                if (run.End == RunEnd.InProgress && run.Mission.HasObjectives && (at >= _inProgress.Count || _inProgress[at++] != run))
-                    return _inProgress = [.. _runs.Where(r => r.End == RunEnd.InProgress && r.Mission.HasObjectives)];
-            if (at != _inProgress.Count)
-                _inProgress = [.. _runs.Where(r => r.End == RunEnd.InProgress && r.Mission.HasObjectives)];
-            return _inProgress;
+                if (run.End == RunEnd.InProgress)
+                    same &= at < _inProgress.Count && _inProgress[at++] == run;
+            if (same && at == _inProgress.Count)
+                return _inProgress;
+            var runs = new List<MissionRun>(_runs.Count);
+            foreach (var run in _runs)
+                if (run.End == RunEnd.InProgress)
+                    runs.Add(run);
+            return _inProgress = runs;
         }
     }
 
@@ -404,10 +427,10 @@ internal sealed class Flight : IDisposable
 
     /// <summary>
     /// A brief word of a run that ended while the flown vessel wasn't one of its own ("REACH ORBIT
-    /// (flight 5) complete: 1,800 pts"), and the real time it came (<see cref="RunFrame"/>'s clock),
-    /// for the HUD to fade; the run's world-log entry stays.
+    /// (flight 5) complete: 1,800 pts"), for the HUD to show and fade by its own clock; the run's
+    /// world-log entry stays.
     /// </summary>
-    public (string Text, double RealTime)? Notice { get; private set; }
+    public RunNotice? Notice { get; private set; }
 
     /// <summary>Every run's steps by its own vessels, whichever is flown, each ended once it is over (see <see cref="MissionRun.Update"/>); those ended are let go.</summary>
     private void UpdateRuns()
@@ -438,12 +461,12 @@ internal sealed class Flight : IDisposable
         if (Controlled is { } flown && run.Vessels.Contains(flown))
             _shownEnded = run;
         else
-            Notice = (run.End switch
+            Notice = new(run.End switch
             {
                 RunEnd.Completed => $"{name} complete: {run.Score ?? 0:#,0} pts",
                 RunEnd.Failed => $"{name} {WorldLog.FailedBecause(run.EndReason ?? "")}",
                 _ => $"{name} abandoned",
-            }, _realTime);
+            });
     }
 
     /// <summary>An entry of <paramref name="run"/>'s in the world's log: named by its flight, at its site, now, and seen.</summary>
@@ -596,6 +619,9 @@ internal sealed class Flight : IDisposable
     /// <summary>Raised when the pilot switches to flying another vessel.</summary>
     public event Action? Switched;
 
+    /// <summary>Raised when a vessel is carried on (<see cref="CarryOn"/>, a rewind to one too), with that vessel: it may be flown only after its link-up.</summary>
+    public event Action<Vessel>? CarriedOn;
+
     /// <summary>
     /// Raised when what the flown vessel's readings, frames and the camera are in changes to
     /// another body's frame: the flown vessel crossing a sphere of influence's edge, or one at
@@ -663,8 +689,8 @@ internal sealed class Flight : IDisposable
     /// <summary>
     /// Brings <paramref name="world"/> to life (whatever world was here before is gone: capture it
     /// first to keep it) and starts a flight of <paramref name="mission"/> in it, from
-    /// <paramref name="site"/> (or the site flown from last): <see cref="Restore"/>, then that
-    /// flight chosen.
+    /// <paramref name="site"/> (or the site flown from last): brought to life as <see cref="Restore"/>
+    /// brings it, but looked at from the pad, where the new rocket goes, and that flight chosen.
     /// </summary>
     public void Load(WorldState world, Mission mission, LaunchSite? site = null)
     {
@@ -682,14 +708,20 @@ internal sealed class Flight : IDisposable
     /// be flown has a rocket of free play put on the current <see cref="Site"/>'s pad meanwhile,
     /// behind the menu, which goes again, never saved, as a choice is made (<see cref="Chosen"/>).
     /// </summary>
-    public void Restore(WorldState world)
+    public void Restore(WorldState world) => Restore(world, flightStarts: false);
+
+    /// <summary>
+    /// <see cref="Restore(WorldState)"/>; with <paramref name="flightStarts"/>, looked at from the pad
+    /// (a new rocket going on it next, as a rewind to a mission begun puts it), as <see cref="Load"/> does.
+    /// </summary>
+    private void Restore(WorldState world, bool flightStarts)
     {
         Starts++;
         LinkUp.Cancel(); // a vessel being switched to, or its link clearing, is the last world's
         foreach (var link in _viewLinks)
             link.Cancel(); // and so is a view's
         var before = Controlled;
-        var flown = Revive(world, flightStarts: false);
+        var flown = Revive(world, flightStarts);
         Chosen = false;
         if (flown is not null)
             Controlled = flown;
@@ -708,14 +740,20 @@ internal sealed class Flight : IDisposable
     /// </summary>
     public bool Chosen { get; private set; }
 
+    /// <summary>The vessel the world was saved flying (its <see cref="WorldState.Flown"/>), as last brought to life, if any: whether or not it could be flown.</summary>
+    public int? SavedFlown { get; private set; }
+
     /// <summary>The rocket of free play behind the menu after <see cref="Restore"/> of a world with nothing that can be flown, until a choice is made; never saved.</summary>
     private Vessel? _placeholder;
-    private (int Flights, int NextId) _beforePlaceholder; // the world's numbers as they were without it
 
-    /// <summary>Puts <see cref="_placeholder"/> on the current site's pad and flies it, in no run, beside whatever is on the pad (nothing is cleared for it).</summary>
+    /// <summary>
+    /// Puts <see cref="_placeholder"/> on the current site's pad and flies it, in no run, beside
+    /// whatever is on the pad (nothing is cleared for it: it may overlap debris there, but it is only
+    /// ever behind a paused menu). It takes the world's next flight number and vessel id without
+    /// counting them, so the world's numbers are as they were without it.
+    /// </summary>
     private void PutPlaceholder()
     {
-        _beforePlaceholder = (_flights, _nextId);
         var pad = _worlds.Need(SitesBody);
         var mission = Mission.FreePlay;
         _placeholder = new Vessel(_worlds, pad, mission, _sounds, pad.Launch(mission.Vehicle, Site), [.. mission.Vehicle.Stages.Select(s => s.FuelMass)], _nextId, _flights + 1) { Site = Site };
@@ -728,7 +766,7 @@ internal sealed class Flight : IDisposable
 
     /// <summary>
     /// A choice has been made of what to fly (a new mission, or one carried on): the placeholder, if
-    /// there is one, goes, unlogged, leaving the world's numbers as they were.
+    /// there is one, goes, unlogged (the world's numbers never counted it).
     /// </summary>
     private void ChoiceMade()
     {
@@ -738,7 +776,6 @@ internal sealed class Flight : IDisposable
         _placeholder = null;
         placeholder.Physics?.Remove(placeholder.Craft);
         TakeOut(_world.IndexOf(placeholder));
-        (_flights, _nextId) = _beforePlaceholder;
         ForgetCollisions(); // one the map may show is gone
     }
 
@@ -763,8 +800,11 @@ internal sealed class Flight : IDisposable
         _coming.Clear(); // nor is anything coming at that world's vessels
         // A world saved with more than it holds loses debris first, then vessels of no run in
         // progress, then runs' vessels, the oldest first in each (they are saved oldest first), never
-        // the one to be flown.
-        var goes = Excess(world);
+        // the one to be flown (the one it was saved flying, or if that one isn't there to fly, the
+        // newest that can be).
+        var flown = world.Vessels.FirstOrDefault(s => s.Id == world.Flown && CanFly(s)) ?? world.Vessels.LastOrDefault(CanFly);
+        SavedFlown = world.Flown;
+        var goes = Excess(world, flown);
         RemovedForRoom = goes.Count;
         _info = world with { Vessels = [], Log = [], Runs = [], Flown = null };
         // (Wrecks are never saved, so none loaded is waiting to be logged.)
@@ -796,7 +836,6 @@ internal sealed class Flight : IDisposable
         _flights = world.Flights;
         _nextId = world.NextVesselId;
         var kept = world.Vessels.Where(s => !goes.Contains(s)).ToArray();
-        var flown = kept.FirstOrDefault(s => s.Id == world.Flown && CanFly(s)) ?? kept.LastOrDefault(CanFly);
         var (focusBody, focus) = flightStarts || flown is null ? (SitesBody, Site.Pad) : (Bodies.Named(flown.Body), flown.CentreOfMass);
         var partedFrom = world.Vessels.Where(s => s.PartingFrom is not null).Select(s => s.PartingFrom!.Value).ToHashSet();
         foreach (var state in kept)
@@ -834,11 +873,11 @@ internal sealed class Flight : IDisposable
     public WorldState Capture() => _info with
     {
         Time = WorldTime,
-        Flights = _placeholder is null ? _flights : _beforePlaceholder.Flights,
-        NextVesselId = _placeholder is null ? _nextId : _beforePlaceholder.NextId,
+        Flights = _flights,
+        NextVesselId = _nextId,
         Vessels = [.. _world.Where(v => v.State != FlightState.Crashed && v != _placeholder).Select(v => v.Capture(_world))],
         Log = [.. _log],
-        Runs = [.. Runs.Select(r => r.Capture())],
+        Runs = [.. Runs.Select(r => r.Capture())], // (every Capture comes after an UpdateRuns with nothing stepped between: a run failed has ended by then, so isn't saved)
         // (Not one taken out, as the one in a new rocket's way on its pad is while it starts.)
         Flown = Controlled is { } flown && flown != _placeholder && _world.Contains(flown) ? flown.Id : null,
     };
@@ -2355,9 +2394,11 @@ internal sealed class Flight : IDisposable
     /// <summary>
     /// The vessels of a saved <paramref name="world"/> that go to bring it within its
     /// <see cref="Capacity"/>: debris first, then those of no run in progress, then runs' vessels,
-    /// the oldest first within each, never the one to be flown.
+    /// the oldest first within each, never <paramref name="flown"/>, the one to be flown. (A saved
+    /// world's runs are only ever runs in progress, so a vessel's flight number alone says whether
+    /// it is a run's.)
     /// </summary>
-    private static HashSet<VesselState> Excess(WorldState world)
+    private static HashSet<VesselState> Excess(WorldState world, VesselState? flown)
     {
         var goes = new HashSet<VesselState>(ReferenceEqualityComparer.Instance);
         var excess = world.Vessels.Count - Capacity;
@@ -2365,7 +2406,7 @@ internal sealed class Flight : IDisposable
             return goes;
         var runNumbers = world.Runs.Select(r => r.Number).ToHashSet();
         foreach (var state in world.Vessels
-            .Where(s => s.Id != world.Flown)
+            .Where(s => !ReferenceEquals(s, flown))
             .OrderBy(s => RoomRank(!Enumerable.Range(s.First, s.Last - s.First + 1).Any(i => s.Vehicle.Stages[i].Guided), runNumbers.Contains(s.Flight)))
             .Take(excess))
             goes.Add(state);
@@ -2375,6 +2416,8 @@ internal sealed class Flight : IDisposable
     /// <summary>Takes the vessel at <paramref name="i"/> out of the world's list, and out of its run (its body is the caller's to see to).</summary>
     private void TakeOut(int i)
     {
+        // (A run failed earlier in this step is no one's to RunOf, so keeps the vessel in its list:
+        // it ends at the step's UpdateRuns all the same.)
         RunOf(_world[i])?.Remove(_world[i]);
         _world.RemoveAt(i);
         _worldChanges++;

@@ -207,7 +207,7 @@ public sealed class MoonMissionTests(ITestOutputHelper output)
             Done = [.. Enumerable.Range(0, steps).Select(i => i < 2)],
             Points = [.. Enumerable.Range(0, steps).Select(i => i == Step(Landing) ? 2000 : 0)],
         };
-        var sim = new Simulation(LandOnTheMoon, body: Moon);
+        using var sim = new Simulation(LandOnTheMoon, body: Moon); // (closed by Reloaded; disposed here should a check fail first)
         sim.Flight.Restore(new WorldState { Vessels = [lander], Runs = [run], Flown = 0, Flights = 1, NextVesselId = 1 });
         sim.Flight.CarryOn(sim.Flight.Controlled);
         var flown = sim.Flight.Controlled;

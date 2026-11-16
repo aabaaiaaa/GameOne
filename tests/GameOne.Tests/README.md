@@ -601,7 +601,15 @@ say) stalls frames and spoils the timing.
   own mission at its site; a rewind (`FlightInput.Rewind`) bringing back the whole world (its
   clock, every vessel where it was, the log) as it was at the menu choice, `RewindSeconds` naming
   how far, going back to the choice (a carry-on) and not a switch made since, and nothing to
-  rewind to after a restore before a choice.
+  rewind to after a restore before a choice; a rewind to a mission begun coming back as it was
+  chosen, every time (its clock, its fresh rocket, the log). And what a restore and a carry-on
+  start from: a saved flown vessel that is debris or missing falling back to the newest that can
+  be flown (and no choice marked "(last flown)" for it, `CarryOnRow`); a run's points kept; the
+  placeholder's body gone with it; the choices' order (runs oldest first, then the vessel flown,
+  then flights newest first; a failed run, or one with nothing to fly, not offered); carrying on
+  the vessel flown letting its ended run's result go; a world loaded over its capacity losing
+  debris, then vessels of no run, then runs', never the one flown; and the readout's runs, rewind,
+  vessel id and position.
 - **`WorldLogTests`:** the world's log: a crash on the ground, two vessels colliding (one entry; and two wrecked by one collision steps apart joined into the first's entry; two pairs colliding side by side an entry each, by who hit whom), an unwatched loss under formula (not witnessed, near its site), those removed to make room as a world loads (oldest first, unseen, no speed, printed without one), one cleared from the launch pad (unseen as a world loads; seen, flown, as a flight from its site starts), and the newest 300 kept; the missions' entries (a run begun, a step done with its points, completed with its score, and nothing for free play); and each crash reason worded without its advice (or the break-up's cause after its colon), its speed taken out to be the entry's (a line never says two speeds).
 - **`WorldStoreTests`:** saving and loading, in a folder of the test's own: a world loads back
   exactly (every field of every vessel, a body targeted from the planet and from the moon
@@ -617,11 +625,14 @@ say) stalls frames and spoils the timing.
 - **`MenuLayoutTests`:** the menu screens' lists (`Hud.ListRegion`, `Hud.MenuMiddle`): from one
   saved world to two hundred, at 600, 720 and 1080 px high, a list that doesn't fit scrolls in a
   region that keeps its whole window on the screen, and one that fits is as tall as it is; a short
-  menu keeps its place a little above the middle.
+  menu keeps its place a little above the middle; and, laid out by ImGui, the carry-on screen,
+  the try-again window and the game menu (its "Abandon mission" asking to be confirmed) on the
+  screen and clear of the credits.
 - **`ViewsTests`:** the small views, kept in step with the flight as `GameView` does (no window
   needed): each part that comes away and can be flown gets a view; clicking one (or Tab) flies it
   and the two vessels swap places; a closed view's vessel carries on and can be given a view again;
-  debris gets a view only when asked and can't be swapped in; starting again closes them all; a
+  debris gets a view only when asked and can't be swapped in; starting again closes them all, and
+  a world restored or something carried on (or rewound to) opens none and swaps nothing in; a
   swap (or Tab to a vessel with no view) hands each view's held shadow place on with its vessel;
   the strip's place (`Hud.StripPlace`): its buttons below the instruments' panel however tall it
   is, the views under them made smaller to fit; under a panel reaching nearly to the bottom, the

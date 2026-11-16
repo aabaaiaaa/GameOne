@@ -25,6 +25,7 @@ public sealed class ViewsTests
         var sim = new Simulation(Mission.DeploySatellite);
         var views = new Views();
         var camera = new ChaseCamera(null);
+        views.Update(Dt, sim.Flight, camera); // the first frame, as the game's: the rocket alone
         sim.Run(Climb, f => f.Ground > 30f, maxSeconds: 30);
         sim.Step(new FlightInput(Stage: true)); // the booster
         views.Update(Dt, sim.Flight, camera);
@@ -177,6 +178,7 @@ public sealed class ViewsTests
         using var sim = new Simulation(expendable);
         var views = new Views();
         var camera = new ChaseCamera(null);
+        views.Update(Dt, sim.Flight, camera); // the first frame, as the game's: the rocket alone
         sim.Run(Climb, f => f.Ground > 300f, maxSeconds: 30);
         sim.Step(new FlightInput(Stage: true));
         views.Update(Dt, sim.Flight, camera);
@@ -199,6 +201,69 @@ public sealed class ViewsTests
             views.Update(Dt, sim.Flight, camera);
             Assert.Empty(views.Small);
         }
+    }
+
+    /// <summary>
+    /// A REACH ORBIT rocket climbing, staged: its upper stage flown, its booster (guided) beside it,
+    /// with the views following the flight as the game's do.
+    /// </summary>
+    private static (Simulation Sim, Views Views, ChaseCamera Camera, Vessel Upper, Vessel Booster) Staged()
+    {
+        var sim = new Simulation(Mission.ReachOrbit);
+        var views = new Views();
+        var camera = new ChaseCamera(null);
+        views.Follow(sim.Flight);
+        views.Update(Dt, sim.Flight, camera); // the first frame, as the game's: the rocket alone
+        sim.Run(Climb, f => f.Ground > 30f, maxSeconds: 30);
+        sim.Step(new FlightInput(Stage: true));
+        views.Update(Dt, sim.Flight, camera);
+        var upper = sim.Flight.Controlled;
+        var booster = sim.Flight.Vessels.Single(v => v != upper);
+        Assert.True(booster.Guided);
+        Assert.Same(booster, Assert.Single(views.Small).Vessel);
+        return (sim, views, camera, upper, booster);
+    }
+
+    [Fact]
+    public void A_restored_world_and_a_carry_on_open_no_views()
+    {
+        var (sim, views, camera, upper, _) = Staged();
+        using var _ = sim;
+        var flight = sim.Flight;
+        flight.Restore(flight.Capture());
+        views.Update(Dt, flight, camera);
+        Assert.Empty(views.Small); // behind the menu: the small views are opened again by hand
+
+        sim.Step(new FlightInput(CarryOn: upper.Id));
+        views.Update(Dt, flight, camera);
+        sim.Step(default);
+        views.Update(Dt, flight, camera);
+        Assert.Equal(upper.Id, flight.Controlled.Id);
+        Assert.Empty(views.Small);
+    }
+
+    [Fact]
+    public void Carrying_on_another_flights_vessel_puts_nothing_in_the_strip()
+    {
+        var (sim, views, camera, upper, _) = Staged();
+        using var _ = sim;
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(Choose: Mission.LaunchAndLand, From: LaunchSites.All.Single(s => s.Name == "Highcrest")));
+        views.Update(Dt, flight, camera);
+        Assert.Empty(views.Small); // a new flight: its rocket alone
+
+        sim.Step(new FlightInput(CarryOn: upper.Id));
+        views.Update(Dt, flight, camera);
+        Assert.Same(upper, flight.Controlled);
+        Assert.Empty(views.Small); // not the rocket flown before, swapped in
+
+        // A rewind to that carry-on comes back with the strip empty too.
+        sim.Step(new FlightInput(Rewind: true));
+        views.Update(Dt, flight, camera);
+        sim.Step(default);
+        views.Update(Dt, flight, camera);
+        Assert.Equal(upper.Id, flight.Controlled.Id);
+        Assert.Empty(views.Small);
     }
 
     [Fact]

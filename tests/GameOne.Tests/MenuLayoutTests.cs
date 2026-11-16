@@ -8,7 +8,7 @@ namespace GameOne.Tests;
 /// The menu screens' lists (the mission menu's missions, the world list's saved worlds): a long one
 /// scrolls in a region that keeps the whole window on the screen, a short one doesn't, at every
 /// window height the HUD supports (<see cref="Hud.ListRegion"/>, <see cref="Hud.MenuMiddle"/>);
-/// and the carry-on screen and the try-again window, laid out by ImGui, on the screen and clear of
+/// and the carry-on screen, the try-again window and the game menu, laid out by ImGui, on the screen and clear of
 /// the credits at every size the HUD supports.
 /// </summary>
 public sealed class MenuLayoutTests
@@ -77,6 +77,25 @@ public sealed class MenuLayoutTests
             {
                 var rect = Laid(display, Hud.TryAgainName, font => Hud.TryAgainWindow(display, font, start, rewind, confirming));
                 AssertClear(display, rect, $"The try-again window{(confirming ? ", confirming," : "")} at {display.X}x{display.Y}");
+            }
+    }
+
+    [Fact]
+    public void The_game_menu_asks_for_abandon_to_be_confirmed_clear_of_the_credits()
+    {
+        var name = new string('W', 63);
+        foreach (var display in Displays)
+            foreach (var confirming in (ReadOnlySpan<bool>)[false, true])
+            {
+                var buttons = new List<(string Name, System.Numerics.Vector2 At)>();
+                var rect = Laid(display, Hud.GameMenuName, font =>
+                {
+                    buttons.Clear();
+                    Hud.GameMenuWindow(display, font, name, "DEPLOY A SATELLITE", canAbandon: true, confirmingAbandon: confirming, buttons);
+                });
+                AssertClear(display, rect, $"The game menu{(confirming ? ", confirming abandon," : "")} at {display.X}x{display.Y}");
+                Assert.Contains(buttons, b => b.Name == "Abandon mission");
+                Assert.Equal(confirming, buttons.Exists(b => b.Name == "Confirm abandon"));
             }
     }
 

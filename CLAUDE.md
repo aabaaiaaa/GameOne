@@ -6,13 +6,14 @@ with 1 g at its surface. Four missions: launch a booster and land it on a landin
 two-stage rocket into a stable orbit (and, as a bonus, fly its booster back to the drone ship
 downrange); put a satellite into orbit (raising it to 10 km with its own engine) and land the
 booster and upper stage; or carry a lander to the moon and land it as near its landing spot as
-can be, then open its bay doors; and free play, the satellite launcher with no objectives. A rocket that
-comes apart becomes several vessels, flown one at a time (Tab). Missions are flown in saved worlds
-that keep everything left in them from one flight to the next (picked from a world list at
-start-up). A mission belongs to its vessels, several in progress in a world at once, saved with
-it and carried on after a load from the carry-on screen. It uses Jolt physics, Vulkan rendering (sun shadows, planet, sky, smoke, fire, lens
-flare), OpenAL positional audio, and an ImGui HUD crediting BRUTAL. See `README.md` for what each
-file does, the controls, and the planet's and rockets' numbers.
+can be, then open its bay doors; and free play, the satellite launcher with no objectives. A
+rocket that comes apart becomes several vessels, flown one at a time (Tab). Missions are flown in
+saved worlds that keep everything left in them from one flight to the next (picked from a world
+list at start-up). A mission belongs to its vessels, several in progress in a world at once,
+saved with it and carried on after a load from the carry-on screen. It uses Jolt physics, Vulkan
+rendering (sun shadows, planet, sky, smoke, fire, lens flare), OpenAL positional audio, and an
+ImGui HUD crediting BRUTAL. See `README.md` for what each file does, the controls, and the
+planet's and rockets' numbers.
 
 This repo is public on GitHub (`origin`, github.com/aabaaiaaa/GameOne): only `main` is pushed,
 and only when the user asks. Its commits carry the public identity set in the repo's own git
@@ -402,23 +403,26 @@ dotnet run --project src/GameOne
 - **Worlds:** a world carries on from flight to flight and is saved (`WorldStore`, one JSON file
   each, in `WorldStore.FormatVersion`: a file in any other is listed as unreadable). Each vessel is
   saved by its body (`VesselState.Body`, by name), its place, attitude and velocity in that body's
-  frame, and comes back into that body's physics, or under formula there. Anything new about a vessel that should survive a save goes in `VesselState`, in
-  `Vessel.Capture` and in the `Vessel` constructor that restores one (the store tests check every
-  field round-trips). The missions in progress are saved too (`RunState`, `WorldState.Runs`: each
-  run's mission, site, flight number, start time, steps done with their points, and the vessel
-  flown last of it; its vessels are saved among the world's, a run ended is not kept), with the vessel flown (`WorldState.Flown`). `Flight.Restore`
-  brings a world back as saved and starts no flight (`Flight.Load` is `Restore` and then a mission
-  chosen): `Flight.Chosen` is false until the player picks what to fly (a new mission or one carried
-  on, `Flight.CarryOnChoices`), and a world saved before then is saved as it was, without the
-  rocket of free play put behind the menu meanwhile (the placeholder: never saved, taken away
-  unlogged once a choice is made). The rewind point (`Flight.CanRewind`, `FlightInput.Rewind`) is
-  the world captured at the last menu choice this session (a mission begun, begun again or carried
-  on): never saved, none after a `Restore` until a choice is made, so never earlier than the load.
-  Missions and vehicles are saved by name: renaming one makes old saves
-  unreadable, which is fine (see below). A world holds `Flight.Capacity` vessels (1,000, under the
-  physics' 4,096 bodies (`RocketPhysics.MaxBodies`)): past it debris (nothing guided) goes first, then
-  vessels of no run in progress, then runs' vessels, the oldest first in each and never the flown
-  one, whenever vessels are added or a world loads. The player's `Settings` (the same in every world) are saved beside the worlds, in
+  frame, and comes back into that body's physics, or under formula there. Anything new about a
+  vessel that should survive a save goes in `VesselState`, in `Vessel.Capture` and in the
+  `Vessel` constructor that restores one (the store tests check every field round-trips). The
+  missions in progress are saved too (`RunState`, `WorldState.Runs`: each run's mission, site,
+  start time, steps done with their points, the vessel flown last of it, and its flight number,
+  which is all that ties a vessel to it: its vessels are the world's of that number, `Vessel.Flight`;
+  a run ended is not kept), with the vessel flown (`WorldState.Flown`). `Flight.Restore` brings a
+  world back as saved and starts no flight (`Flight.Load` brings it back looked at from the pad
+  and starts a mission): `Flight.Chosen` is false until the player picks what to fly (a new
+  mission or one carried on, `Flight.CarryOnChoices`), and a world saved before then is saved as
+  it was, without the rocket of free play put behind the menu meanwhile (the placeholder: never
+  saved nor counted in the world's numbers, taken away unlogged once a choice is made). The rewind
+  point (`Flight.CanRewind`, `FlightInput.Rewind`) is the world captured at the last menu choice
+  this session (a mission begun, begun again or carried on): never saved, none after a `Restore`
+  until a choice is made, so never earlier than the load. Missions and vehicles are saved by name:
+  renaming one makes old saves unreadable, which is fine (see below). A world holds
+  `Flight.Capacity` vessels (1,000, under the physics' 4,096 bodies (`RocketPhysics.MaxBodies`)):
+  past it debris (nothing guided) goes first, then vessels of no run in progress, then runs'
+  vessels, the oldest first in each and never the flown one, whenever vessels are added or a world
+  loads. The player's `Settings` (the same in every world) are saved beside the worlds, in
   `player.settings`; a new one goes in `Settings` and the settings screen.
 - **No backwards compatibility (yet):** the game is early in development and features are expected
   to need game-wide refactoring. Don't keep old code paths, shims or migrations alive for

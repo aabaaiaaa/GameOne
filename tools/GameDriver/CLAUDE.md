@@ -91,7 +91,7 @@ list is drawn while a menu is up), and while the "Add view" list
 is open each entry by its vessel's name, `Marker Add view: Satellite` (the first listed of two with
 one name), so a script gives a view with `click marker "Add view"` then `click marker "Add view:
 Upper stage"`, wherever they are. The mission menu's buttons read out so too (`Marker Mission:
-FREE PLAY`, `Marker Site: Home`, `Marker Change world`, and in a world just picked with something to carry on, `Marker Back`), the carry-on screen's (`Marker Carry on: <mission>` for a run, the first listed of two of one mission; `Marker Carry on: <vessel>` by the log's name, `Carry on: Booster 0`, for a vessel of no run; `Marker New mission`, `Marker Back to worlds`), the game menu's, by their labels without dots (`Marker Resume`, `Marker Restart flight`, `Marker Abandon mission`, `Marker Missions`, `Marker World log`, `Marker Change world`, `Marker Settings`, `Marker Quit game`), the try-again window's (`Marker Start again`, `Marker Rewind`, then `Marker Confirm rewind`, `Marker Cancel`) and the mission panel's `Marker Complete mission`, and the world list's (`Marker New: Empty
+FREE PLAY`, `Marker Site: Home`, `Marker Change world`, and in a world just picked with something to carry on, `Marker Back`), the carry-on screen's (`Marker Carry on: <mission>` for a run, the first listed of two of one mission; `Marker Carry on: <vessel>` by the log's name, `Carry on: Booster 0`, for a vessel of no run; `Marker New mission`, `Marker Back to worlds`), the game menu's, by their labels without dots (`Marker Resume`, `Marker Restart flight`, `Marker Abandon mission`, then `Marker Confirm abandon`, `Marker Missions`, `Marker World log`, `Marker Change world`, `Marker Settings`, `Marker Quit game`), the try-again window's (`Marker Start again`, `Marker Rewind`, then `Marker Confirm rewind`, `Marker Cancel`) and the mission panel's `Marker Complete mission`, and the world list's (`Marker New: Empty
 world`, `Marker Play: <a world's name>`, `Marker Delete: <a world's name>`, `Marker Yes, delete
 it`): see "Where things are on the screen".
 The flown vessel's actions: `Marker Flown vessel` (its centre of
@@ -138,7 +138,8 @@ centred on the smaller height):
   script clicks it so, after `until Menu = Missions`.
 - **The game menu** (with a world): Resume `0 -100`, Restart flight `0 -65` (the left half of
   that row while the flown vessel's mission is in progress, "Abandon mission" the right half: click
-  either by its marker), "Missions..." `0 -31`, "World log..." `0 3`, "Change world..." `0 37`,
+  either by its marker; "Abandon mission" asks to be confirmed, a line and "Confirm abandon" under
+  that row, which moves the buttons above and below it), "Missions..." `0 -31`, "World log..." `0 3`, "Change world..." `0 37`,
   Settings `0 71`, Quit game `0 109` (the menu is centred on its height, so a button added to it
   moves the others). Restart flight opens the try-again window (`Menu = TryAgain`): click its
   buttons by their markers.
