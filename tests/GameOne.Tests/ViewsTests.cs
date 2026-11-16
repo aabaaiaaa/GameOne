@@ -284,13 +284,16 @@ public sealed class ViewsTests
         sim.Step(new FlightInput(CarryOn: moonLander.Id));
         views.Update(Dt, flight, camera);
         Assert.Empty(views.Small);
+        var linked = flight.LinkUp.On;
         var frames = 0;
         while (flight.LinkUp.On && frames++ < 600)
         {
             sim.Step(default);
             views.Update(Dt, flight, camera);
+            linked |= flight.LinkUp.On;
             Assert.Empty(views.Small);
         }
+        Assert.True(linked, "the carry-on went through a link-up");
         Assert.False(flight.LinkUp.On);
         Assert.Same(moonLander, flight.Controlled);
         Assert.Empty(views.Small);
