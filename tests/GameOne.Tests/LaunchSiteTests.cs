@@ -191,11 +191,11 @@ public sealed class LaunchSiteTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Restarting_relaunches_from_the_same_site()
+    public void Starting_again_relaunches_from_the_same_site()
     {
         using var sim = new Simulation(site: Polar);
         sim.Run((f, _) => f.State == FlightState.Ready ? new FlightInput(Launch: true, FullThrottle: true) : default, _ => false, maxSeconds: 2);
-        sim.Step(new FlightInput(Restart: true));
+        sim.Step(new FlightInput(StartAgain: true));
         Assert.Same(Polar, sim.Flight.Site);
         Assert.Equal(FlightState.Ready, sim.Flight.Controlled.State);
         Assert.True(Vector3.Distance(sim.Flight.Controlled.Position, Polar.RocketStart) < 0.1f);

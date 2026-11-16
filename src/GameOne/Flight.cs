@@ -119,8 +119,9 @@ internal readonly record struct Coming(Vessel Watched, SolidKind With, Vessel? O
 /// <param name="CutThrottle">Cut the engine.</param>
 /// <param name="ToggleProgradeHold">Keep the nose pointed the way the rocket is moving, or stop doing so.</param>
 /// <param name="ToggleRetrogradeHold">Keep the nose pointed against the way it is moving (to slow down, as for a landing burn), or stop doing so.</param>
-/// <param name="Restart">Put a fresh rocket on the pad and start again.</param>
-/// <param name="Choose">Start again on this mission, whatever is happening.</param>
+/// <param name="StartAgain">Start the flown vessel's mission again ("Start the mission again"): its run abandoned if it is in progress, and a new run of that mission begun at its site, a fresh rocket on its pad; nothing else in the world changes. A menu choice, as <paramref name="Choose"/> is.</param>
+/// <param name="Rewind">Bring the world back as it was at the last menu choice this session and make that choice again (see <see cref="Flight.CanRewind"/>); nothing, if none has been made.</param>
+/// <param name="Choose">Start a flight of this mission (a new run), whatever is happening.</param>
 /// <param name="From">The launch site to launch <paramref name="Choose"/> from: the flight's own (<see cref="Flight.Site"/>) if none.</param>
 /// <param name="SwitchVessel">Fly the next vessel that can be flown (e.g. a booster with guidance, once dropped).</param>
 /// <param name="SwitchTo">Fly this vessel instead, if it can be flown (e.g. one clicked in its view).</param>
@@ -148,7 +149,8 @@ internal readonly record struct FlightInput(
     bool CutThrottle = false,
     bool ToggleProgradeHold = false,
     bool ToggleRetrogradeHold = false,
-    bool Restart = false,
+    bool StartAgain = false,
+    bool Rewind = false,
     Mission? Choose = null,
     LaunchSite? From = null,
     bool SwitchVessel = false,
@@ -172,6 +174,14 @@ internal readonly record struct FlightInput(
 /// <paramref name="Vessel"/>, of <paramref name="Run"/> in progress, or of none (free play).
 /// </summary>
 internal sealed record CarryOnChoice(Vessel Vessel, MissionRun? Run);
+
+/// <summary>
+/// The moment of the last menu choice this session, to rewind to (<see cref="Flight.CanRewind"/>):
+/// the world as it was then (<paramref name="World"/>, before a new rocket went on its pad), and
+/// the choice, to make again: carrying on the vessel <paramref name="VesselId"/>
+/// (<paramref name="Resumed"/>), or a flight of <paramref name="Mission"/> from <paramref name="Site"/>.
+/// </summary>
+internal sealed record RewindPoint(WorldState World, bool Resumed, int? VesselId, Mission Mission, LaunchSite Site);
 
 /// <summary>
 /// The flight, in the world it is flown in: the launch, then every vessel in this flight (the
@@ -210,14 +220,13 @@ internal sealed class Flight : IDisposable
     private readonly List<SoundEvent> _sounds = [];
     private readonly List<MissionRun> _runs = []; // every run begun since the world was loaded, oldest first
     private List<MissionRun> _inProgress = [];   // those of them in progress with objectives, as last asked (see Runs)
-    private MissionRun? _latest;                  // the run begun last, which starting again begins afresh (after a restore, the flown vessel's)
     private readonly List<Vessel> _flownFlight = []; // the flown vessel's flight's vessels (see Vessels)
     private (Vessel? Flown, int Changes) _flownFlightOf; // what _flownFlight was gathered for
     private int _worldChanges;                    // how many times _world has had a vessel added or taken out
     private readonly List<Vessel> _world = [];    // everything in the world, this flight's included
     private readonly List<RocketControl> _controls = [];
     private WorldState _info = new();             // the world's name and so on (its vessels are live, in _world)
-    private WorldState _atStart = new();          // the world as it was when this flight started, for starting again
+    private RewindPoint? _rewind;                 // the last menu choice this session, to rewind to (never saved)
     private readonly List<LogEntry> _log = [];    // the world's losses, oldest first (see Log)
     private int _nextId, _flights;
 
@@ -230,12 +239,65 @@ internal sealed class Flight : IDisposable
     /// </summary>
     public LaunchSite Site { get; private set; }
 
-    /// <summary>Starts another flight of <paramref name="mission"/>, from <paramref name="site"/>, in this world.</summary>
-    public void LaunchFrom(LaunchSite site, Mission mission)
+    /// <summary>Starts another flight of <paramref name="mission"/>, from <paramref name="site"/>, in this world: a menu choice, which the rewind comes back to (<see cref="CanRewind"/>).</summary>
+    public void LaunchFrom(LaunchSite site, Mission mission) => LaunchFrom(site, mission, rewindHere: true);
+
+    /// <summary>
+    /// <see cref="LaunchFrom(LaunchSite, Mission)"/>, the rewind point taken there only if
+    /// <paramref name="rewindHere"/> (not when a rewind makes the same choice again).
+    /// </summary>
+    private void LaunchFrom(LaunchSite site, Mission mission, bool rewindHere)
     {
         ChoiceMade();
         Site = site;
-        StartFlight(mission);
+        StartFlight(mission, rewindHere);
+    }
+
+    /// <summary>
+    /// Whether there is a moment to rewind to (<see cref="FlightInput.Rewind"/>): the last menu
+    /// choice this session (a new mission, a mission started again, or something carried on), and
+    /// never a switch to another vessel. None after <see cref="Restore"/> until a choice is made, so
+    /// it is never before the world was loaded; never saved, as the saved world is that base anyway.
+    /// </summary>
+    public bool CanRewind => _rewind is not null;
+
+    /// <summary>How far back in the world's time the rewind goes: its clock now less its clock at the rewind point (0 with none).</summary>
+    public double RewindSeconds => _rewind is { } point ? WorldTime - point.World.Time : 0;
+
+    /// <summary>Whether the rewind point's choice was something carried on (it "was resumed"), not a mission begun.</summary>
+    public bool RewindResumed => _rewind?.Resumed ?? false;
+
+    /// <summary>
+    /// Starts the flown vessel's mission again ("Start the mission again"): its run, if it is in
+    /// progress, is abandoned (logged as started again), and a new run of the run's mission (or,
+    /// for a vessel of none, the vessel's own) is begun at its site. Its old vessels stay where
+    /// they are, in no run, and nothing else in the world changes but what a new rocket on that
+    /// pad clears away.
+    /// </summary>
+    private void StartAgain()
+    {
+        var flown = Controlled;
+        var (mission, site) = Run is { } run ? (run.Mission, run.Site) : (flown.Mission, flown.Site);
+        RunOf(flown)?.Abandon("Started again.", WorldLog.StartedAgain);
+        LaunchFrom(site, mission);
+    }
+
+    /// <summary>
+    /// Brings back the world of <paramref name="point"/> and makes its choice again, keeping the same
+    /// point, so a second rewind goes back to the same moment. Nothing is written to the log: the
+    /// log is rewound with the rest of the world.
+    /// </summary>
+    private void Rewind(RewindPoint point)
+    {
+        Restore(point.World);
+        if (point.VesselId is { } id)
+        {
+            if (_world.Find(v => v.Id == id) is { } vessel)
+                CarryOn(vessel, rewindHere: false);
+        }
+        else
+            LaunchFrom(point.Site, point.Mission, rewindHere: false);
+        _rewind = point;
     }
 
     /// <summary>
@@ -271,20 +333,24 @@ internal sealed class Flight : IDisposable
     /// vessel flown last of) or in free play: a menu choice (<see cref="Chosen"/>), which adds,
     /// moves and removes nothing in the world but the placeholder. It is brought into the physics
     /// and flown as a switch to it is (<see cref="SwitchTo"/>). False, and nothing done, if it
-    /// can't be flown.
+    /// can't be flown. The rewind comes back to this choice (<see cref="CanRewind"/>).
     /// </summary>
-    public bool CarryOn(Vessel vessel)
+    public bool CarryOn(Vessel vessel) => CarryOn(vessel, rewindHere: true);
+
+    /// <summary><see cref="CarryOn(Vessel)"/>, the rewind point taken there only if <paramref name="rewindHere"/> (not when a rewind makes the same choice again).</summary>
+    private bool CarryOn(Vessel vessel, bool rewindHere)
     {
         if (vessel == _placeholder || !CanFly(vessel) || !_world.Contains(vessel))
             return false;
         ChoiceMade();
+        if (rewindHere)
+            _rewind = new RewindPoint(Capture(), Resumed: true, vessel.Id, RunOf(vessel)?.Mission ?? vessel.Mission, vessel.Site);
         _shownEnded = null; // a choice, as a switch is: a run ended shows no more
         if (vessel == Controlled)
             BringIn(vessel);
         else
             SwitchTo(vessel);
-        _latest = RunOf(vessel); // only a run in progress: one ended is no one's
-        _latest?.LastFlownId = vessel.Id;
+        RunOf(vessel)?.LastFlownId = vessel.Id; // only a run in progress: one ended is no one's
         return true;
     }
 
@@ -624,8 +690,7 @@ internal sealed class Flight : IDisposable
             Controlled = flown;
         else
             PutPlaceholder();
-        _latest = RunOf(Controlled);
-        _atStart = world;
+        _rewind = null; // nothing chosen in this world yet, to rewind to
         if (before is not null && before.Body != Controlled.Body)
             Rebase(Bodies.Change(before.Body, Controlled.Body, WorldTime));
         Begun();
@@ -1489,7 +1554,7 @@ internal sealed class Flight : IDisposable
         var held = input with
         {
             Launch = false, Stage = false, ToggleLegs = false, FullThrottle = false, CutThrottle = false,
-            ToggleProgradeHold = false, ToggleRetrogradeHold = false, Restart = false, Choose = null, From = null,
+            ToggleProgradeHold = false, ToggleRetrogradeHold = false, StartAgain = false, Rewind = false, Choose = null, From = null,
             SwitchVessel = false, SwitchTo = null, SetTarget = null, ClearTarget = false, Plan = null, ChooseFrame = null,
             Slower = false, Faster = false, ToggleBayDoors = false, CarryOn = null, CompleteRun = false, AbandonRun = false,
         };
@@ -1515,8 +1580,10 @@ internal sealed class Flight : IDisposable
             LaunchFrom(input.From ?? Site, chosen);
         else if (input.CarryOn is { } carried && _world.Find(v => v.Id == carried) is { } carriedOn)
             CarryOn(carriedOn);
-        else if (input.Restart)
-            Load(_atStart, _latest?.Mission ?? Controlled.Mission); // as it was when the last flight started, and that flight again
+        else if (input.StartAgain)
+            StartAgain();
+        else if (input.Rewind && _rewind is { } point)
+            Rewind(point);
         if (input.CompleteRun)
             RunOf(Controlled)?.Complete();
         if (input.AbandonRun)
@@ -2179,9 +2246,11 @@ internal sealed class Flight : IDisposable
     /// Starts another flight of <paramref name="mission"/> in this world, a new run, leaving
     /// everything in it where it is, but for wrecks (gone) and anything in the new rocket's way on
     /// its site's pad (cleared away): a fresh rocket on the pad. Other runs go on, their rockets
-    /// waiting on other pads included; one whose every vessel was cleared away is abandoned.
+    /// waiting on other pads included; one whose every vessel was cleared away is abandoned. With
+    /// <paramref name="rewindHere"/>, the rewind point is taken just before the new rocket goes on
+    /// the pad (see <see cref="CanRewind"/>).
     /// </summary>
-    private void StartFlight(Mission mission)
+    private void StartFlight(Mission mission, bool rewindHere = true)
     {
         Starts++;
         LinkUp.Cancel(); // a vessel being switched to, or its link clearing, is the last flight's
@@ -2217,7 +2286,8 @@ internal sealed class Flight : IDisposable
         // A run left with no vessels by the wrecks cleared away fails now, so it isn't saved again.
         UpdateRuns();
         ForgetCollisions(); // wrecks gone, the pad cleared, and a new rocket on it
-        _atStart = Capture(); // starting again comes back to this, before the new rocket
+        if (rewindHere)
+            _rewind = new RewindPoint(Capture(), Resumed: false, VesselId: null, mission, Site); // a rewind comes back to this, before the new rocket
 
         _flights++;
         var pad = _worlds.Need(SitesBody);
@@ -2227,9 +2297,9 @@ internal sealed class Flight : IDisposable
         Controlled.ResetLandingLights(WorldTime);
         _shownEnded = null; // something new begun
         // Free play makes no run: its vessels belong to none, with nothing to judge or log.
-        _latest = mission.HasObjectives ? new MissionRun(this, mission, Site, _flights, WorldTime) { LastFlownId = Controlled.Id } : null;
-        if (_latest is { } begun)
+        if (mission.HasObjectives)
         {
+            var begun = new MissionRun(this, mission, Site, _flights, WorldTime) { LastFlownId = Controlled.Id };
             begun.Add(Controlled);
             // A vessel's flight number is what links it to its run: any already in the world with
             // this one's (put there with it) are the run's too, after its rocket.

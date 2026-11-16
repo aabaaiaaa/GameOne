@@ -64,7 +64,7 @@ public sealed class WorldTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Starting_again_undoes_this_flight_and_puts_the_world_back_as_it_was()
+    public void A_rewind_undoes_this_flight_and_puts_the_world_back_as_it_was()
     {
         using var sim = new Simulation(Mission.ReachOrbit);
         var flight = sim.Flight;
@@ -77,7 +77,7 @@ public sealed class WorldTests(ITestOutputHelper output)
         sim.Run(Climb, f => f.Ground > 300f, maxSeconds: 30);
         sim.Step(new FlightInput(Stage: true));
         Assert.Equal(2, flight.Vessels.Count);
-        sim.Step(new FlightInput(Restart: true));
+        sim.Step(new FlightInput(Rewind: true));
 
         Assert.Equal(2, flight.Run!.Number); // the same flight, again
         Assert.Single(flight.Vessels);

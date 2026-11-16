@@ -195,7 +195,7 @@ public sealed class ViewsTests
         using (sim)
         {
             sim.Flight.Restarted += views.Reset;
-            sim.Step(new FlightInput(Restart: true));
+            sim.Step(new FlightInput(StartAgain: true));
             views.Update(Dt, sim.Flight, camera);
             Assert.Empty(views.Small);
         }

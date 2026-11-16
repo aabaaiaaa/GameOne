@@ -201,7 +201,7 @@ say) stalls frames and spoils the timing.
   the fuel then (`Ends`).
 - **`FlightTests`:** the landing mission succeeding (and, flown on, a landed booster that takes off
   again keeping its landing and its score), and each way of failing it (engine bell, too
-  fast, tower, off target), plus fuel, the launch (Space lights the engine at the throttle set) and restart.
+  fast, tower, off target), plus fuel, the launch (Space lights the engine at the throttle set) and starting the mission again.
 - **`EncounterTests`:** where an `Orbit` says a vessel will be and when (against gravity stepped
   by hand from several climbs and speeds, and a vessel in orbit in the real physics a minute on);
   its highest and lowest points ahead and where it comes into the air; the closest approach
@@ -571,11 +571,11 @@ say) stalls frames and spoils the timing.
 - **`VesselTests`:** several vessels in one flight: staging makes the dropped stage a vessel, one
   without guidance is debris that can't be flown, switching hands the controls over while the other
   keeps its last inputs, losing the flown vessel doesn't end the flight while another flies, and
-  starting again leaves just the rocket; and a rocket tumbling end over end over the air comes
+  a rewind leaves just the rocket; and a rocket tumbling end over end over the air comes
   apart each part going on as it moved with the whole (its centre of mass's own velocity, the
   turning's share included, within 0.05 m/s), and the push apart, the whole's momentum kept (the parts' velocities less their pushes, weighed by their shares of its mass); and its fairing halves likewise (their mean against the rocket the turning's share where they are). They fly the orbit mission (its booster carries guidance), and a test rocket whose booster has none.
 - **`WorldTests`:** the world carrying on from flight to flight: choosing a mission leaves the last
-  flight's vessels where they are (and flying); a mission counts only its own flight; R undoes the
+  flight's vessels where they are (and flying); a mission counts only its own flight; a rewind undoes the
   flight; wrecks go (one wrecked on the pad at once, body and all, not left inside the new rocket);
   anything left on the launch pad is cleared for the new rocket (a rocket that
   never launched is just replaced); Tab goes round the flown vessel's flight, and another flight's
@@ -595,7 +595,13 @@ say) stalls frames and spoils the timing.
   with no vessels (failed), abandoned (`FlightInput.AbandonRun`, its vessels left in no run) or
   by its waiting rocket cleared from its pad (abandoned, logged once); an ended run's result
   shown until a switch, a notice for one ended unflown (`Flight.Notice`), and carrying on every
-  kind of choice flying the choice's own run.
+  kind of choice flying the choice's own run; and trying again: starting the mission again
+  (`FlightInput.StartAgain`) leaving the old vessels and the other runs untouched (the old run
+  abandoned, logged as started again), and after a failure, for a vessel of no run, starting its
+  own mission at its site; a rewind (`FlightInput.Rewind`) bringing back the whole world (its
+  clock, every vessel where it was, the log) as it was at the menu choice, `RewindSeconds` naming
+  how far, going back to the choice (a carry-on) and not a switch made since, and nothing to
+  rewind to after a restore before a choice.
 - **`WorldLogTests`:** the world's log: a crash on the ground, two vessels colliding (one entry; and two wrecked by one collision steps apart joined into the first's entry; two pairs colliding side by side an entry each, by who hit whom), an unwatched loss under formula (not witnessed, near its site), those removed to make room as a world loads (oldest first, unseen, no speed, printed without one), one cleared from the launch pad (unseen as a world loads; seen, flown, as a flight from its site starts), and the newest 300 kept; the missions' entries (a run begun, a step done with its points, completed with its score, and nothing for free play); and each crash reason worded without its advice (or the break-up's cause after its colon), its speed taken out to be the entry's (a line never says two speeds).
 - **`WorldStoreTests`:** saving and loading, in a folder of the test's own: a world loads back
   exactly (every field of every vessel, a body targeted from the planet and from the moon

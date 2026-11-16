@@ -319,8 +319,8 @@ dotnet run --project src/GameOne
   added to, or cleared from the launch pad), is written to the world's log (`Flight.Log`,
   `WorldLog`: fairing halves are not; a removal with no speed, and seen only if the last step had
   it in the physics; two lost to one collision one entry, paired by the vessel actually hit,
-  `Vessel.HitCraft`, however many steps apart; saved with the world, and "Restart flight" reverts
-  it with the world it reloads), shown by the game menu's "World log...". The timings panel counts those under formula (the readout's
+  `Vessel.HitCraft`, however many steps apart; saved with the world, and a rewind (`FlightInput.Rewind`) reverts
+  it with the world it brings back), shown by the game menu's "World log...". The timings panel counts those under formula (the readout's
   "Timings under formula"); its step's parts are every body's physics' together.
   **Crossing a sphere's edge:** each step, after the physics and the vessels' rules, every vessel's
   body is chosen by `Bodies.Choose` (into a child's sphere at its radius, out to the parent only

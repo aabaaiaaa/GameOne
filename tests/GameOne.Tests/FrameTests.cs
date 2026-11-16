@@ -203,7 +203,7 @@ public sealed class FrameTests(ITestOutputHelper output)
         Assert.Equal(FrameChoice.Surface, flight.FrameChoice);
 
         // A new flight starts on Auto.
-        sim.Step(new FlightInput(Restart: true));
+        sim.Step(new FlightInput(StartAgain: true));
         Assert.Equal(FrameChoice.Auto, flight.FrameChoice);
     }
 
@@ -1285,9 +1285,9 @@ public sealed class FrameTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void A_restart_or_a_world_loaded_starts_the_plan_afresh()
+    public void A_rewind_or_a_world_loaded_starts_the_plan_afresh()
     {
-        // The game has one flight, which a restart or a world loaded starts again: every vessel
+        // The game has one flight, which a rewind or a world loaded starts again: every vessel
         // in it is a new one then, so the window worked out for the one flown before is never
         // drawn for its namesake now.
         using var sim = new Simulation(world: WorldPresets.Satellites());
@@ -1296,9 +1296,9 @@ public sealed class FrameTests(ITestOutputHelper output)
         void FlySatellite() => sim.Step(new FlightInput(SwitchTo: flight.WorldVessels.First(v => v.Id == 0), SetTarget: pad, ChooseFrame: FrameChoice.Surface));
 
         FlySatellite();
-        var paths = Built(flight, null, new Paths(workMilliseconds: 0)); // one step a Build: half done again after the restart, on any machine
+        var paths = Built(flight, null, new Paths(workMilliseconds: 0)); // one step a Build: half done again after the rewind, on any machine
         Assert.NotEmpty(paths.PlannedWindow);
-        sim.Step(new FlightInput(Restart: true));
+        sim.Step(new FlightInput(Rewind: true));
         FlySatellite();
         paths.Build(flight, PlanFor(flight));
         Assert.True(paths.Working);

@@ -344,7 +344,7 @@ internal sealed class Hud : IDisposable
 
     private bool _restart;
 
-    /// <summary>Whether the game menu's "Restart flight" was clicked since the last call, for the flight to undo itself.</summary>
+    /// <summary>Whether the game menu's "Restart flight" was clicked since the last call, for the flight to start its mission again.</summary>
     public bool TakeRestart()
     {
         var restart = _restart;

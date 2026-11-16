@@ -94,7 +94,7 @@ public sealed class MissionProgressTests
         step.Done = true;
         sim.Step(default);
         step.Done = false;
-        sim.Step(new FlightInput(Restart: true));
+        sim.Step(new FlightInput(StartAgain: true));
         Assert.False(sim.Flight.Run!.Progress.IsDone(0));
     }
 

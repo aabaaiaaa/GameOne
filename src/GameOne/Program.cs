@@ -167,7 +167,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
                 lastChosen = choice;
             var given = VesselActions.Into(input, switching ? null : action) with
             {
-                Choose = choice, From = LaunchSites.Named(hud.Settings.LaunchSite), Restart = hud.TakeRestart(), SwitchTo = swap, SetTarget = target, ClearTarget = clearTarget,
+                Choose = choice, From = LaunchSites.Named(hud.Settings.LaunchSite), StartAgain = hud.TakeRestart(), SwitchTo = swap, SetTarget = target, ClearTarget = clearTarget,
                 Plan = hud.TakePlan(), ChooseFrame = hud.TakeFrameChoice(),
                 Slower = controls.Take(ControlAction.Slower), Faster = controls.Take(ControlAction.Faster), Watched = watched,
                 Camera = view.Camera.Position, // last frame's: what the main view showed

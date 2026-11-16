@@ -1,3 +1,4 @@
+using System.Numerics;
 using Xunit;
 
 namespace GameOne.Tests;
@@ -411,5 +412,154 @@ public sealed class MissionRunTests
             Assert.Same(choice.Run, flight.Run);
         }
         Assert.Equal(lastFlown, runA.LastFlownId); // an ended run's last flown is left as it ended
+    }
+
+    /// <summary>
+    /// Mission A launched from Highcrest and flown up clear of its pad's tower, then mission B
+    /// chosen at Home (its rocket flown, on the pad).
+    /// </summary>
+    private static (Simulation Sim, Switch A, Switch B) TwoRunsOneFlying()
+    {
+        var (a, b) = (new Switch(), new Switch());
+        var sim = new Simulation(Test("A", a), site: Highcrest);
+        sim.Step(new FlightInput(Launch: true, FullThrottle: true));
+        var rocket = sim.Flight.Controlled;
+        Assert.True(sim.Run((_, _) => new FlightInput(Throttle: 1f), _ => Highcrest.ToLocal(rocket.CentreOfMass).Y > Scene.TowerHeight + 50f, maxSeconds: 30), "A's rocket never cleared its tower");
+        sim.Step(new FlightInput(Choose: Test("B", b), From: LaunchSites.Home));
+        return (sim, a, b);
+    }
+
+    [Fact]
+    public void Starting_again_leaves_the_old_vessels_and_the_rest_untouched()
+    {
+        var (sim, _, _) = TwoRunsOneFlying();
+        using var _ = sim;
+        var flight = sim.Flight;
+        var (runA, runB) = (flight.Runs[0], flight.Runs[1]);
+        var oldRocket = runA.Vessels[0];
+        sim.Step(new FlightInput(SwitchTo: oldRocket));
+        var bDone = Enumerable.Range(0, runB.Mission.Steps.Length).Select(runB.Progress.IsDone).ToArray();
+        var before = flight.WorldVessels.ToArray();
+
+        sim.Step(new FlightInput(StartAgain: true));
+        Assert.Equal(RunEnd.Abandoned, runA.End);
+        Assert.Contains(flight.Log, e => e.What == "A (flight 1)" && e.How == WorldLog.StartedAgain);
+        Assert.NotSame(oldRocket, flight.Controlled);
+        Assert.Equal(FlightState.Ready, flight.Controlled.State);
+        Assert.Same(Highcrest, flight.Run!.Site);
+        Assert.Equal("A", flight.Run.Mission.Name);
+        Assert.Equal(3, flight.Run.Number);
+        foreach (var vessel in before)
+            Assert.Contains(vessel, flight.WorldVessels);
+        Assert.Null(flight.RunOf(oldRocket));
+        Assert.Equal(RunEnd.InProgress, runB.End);
+        Assert.Equal(bDone, Enumerable.Range(0, runB.Mission.Steps.Length).Select(runB.Progress.IsDone));
+        Assert.True(flight.CanRewind);
+        Assert.False(flight.RewindResumed);
+    }
+
+    [Fact]
+    public void Starting_again_after_a_failure_starts_the_vessels_own_mission()
+    {
+        var (sim, a, _) = TwoRunsOneFlying();
+        using var _ = sim;
+        var flight = sim.Flight;
+        var runA = flight.Runs[0];
+        var rocket = runA.Vessels[0];
+        a.Lost = true;
+        sim.Step(default);
+        Assert.Equal(RunEnd.Failed, runA.End);
+        sim.Step(new FlightInput(SwitchTo: rocket));
+        Assert.Null(flight.Run); // flying a vessel of no run now
+
+        var logged = flight.Log.Count;
+        sim.Step(new FlightInput(StartAgain: true));
+        Assert.Equal("A", flight.Run!.Mission.Name);
+        Assert.Same(Highcrest, flight.Run.Site);
+        Assert.Equal(FlightState.Ready, flight.Controlled.State);
+        Assert.Contains(rocket, flight.WorldVessels);
+        Assert.DoesNotContain(flight.Log.Skip(logged), e => e.How == WorldLog.StartedAgain); // nothing in progress to give up
+    }
+
+    /// <summary>Mission A chosen at Highcrest and B at Home, both rockets on their pads; then the world restored as saved.</summary>
+    private static (Simulation Sim, Vessel A, Vessel B) TwoRunsRestored()
+    {
+        var sim = new Simulation(Test("A", new Switch()), site: Highcrest);
+        sim.Step(new FlightInput(Choose: Test("B", new Switch()), From: LaunchSites.Home));
+        var flight = sim.Flight;
+        flight.Restore(flight.Capture());
+        Assert.False(flight.CanRewind);
+        var (a, b) = (flight.Runs[0].Vessels[0], flight.Runs[1].Vessels[0]);
+        return (sim, a, b);
+    }
+
+    [Fact]
+    public void A_rewind_brings_back_the_whole_world_as_it_was_at_the_choice()
+    {
+        var (sim, a, b) = TwoRunsRestored();
+        using var _ = sim;
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(CarryOn: a.Id));
+        Assert.True(flight.CanRewind);
+        Assert.True(flight.RewindResumed);
+        var time = flight.WorldTime;
+        var places = flight.WorldVessels.Select(v => (v.Id, v.Position)).ToArray();
+        var logged = flight.Log.Count;
+
+        // A launched and flown for 30 s, and B's rocket (another run's) launched too.
+        sim.Step(new FlightInput(Launch: true, FullThrottle: true));
+        sim.Run((_, _) => new FlightInput(Throttle: 1f), _ => false, maxSeconds: 15);
+        sim.Step(new FlightInput(SwitchTo: b));
+        sim.Step(new FlightInput(Launch: true, FullThrottle: true));
+        sim.Run((_, _) => new FlightInput(Throttle: 1f), f => f.WorldTime >= time + 30, maxSeconds: 20);
+        Assert.Equal(FlightState.Flying, b.State);
+        Assert.Equal(30, flight.RewindSeconds, Simulation.FrameSeconds);
+
+        sim.Step(new FlightInput(Rewind: true));
+        Assert.Equal(time, flight.WorldTime, 1e-6);
+        Assert.Equal(logged, flight.Log.Count);
+        var after = flight.WorldVessels.Select(v => (v.Id, v.Position)).ToArray();
+        Assert.Equal(places.Select(p => p.Id), after.Select(p => p.Id));
+        for (var i = 0; i < places.Length; i++)
+            Assert.True(Vector3.Distance(places[i].Position, after[i].Position) < 0.01f, $"vessel {places[i].Id} isn't back where it was");
+        Assert.Equal(a.Id, flight.Controlled.Id);
+        Assert.All(flight.WorldVessels, v => Assert.Equal(FlightState.Ready, v.State));
+        Assert.Equal(2, flight.Runs.Count);
+        Assert.All(flight.Runs, r => Assert.False(r.Progress.IsDone(0), "a launch undone is still ticked"));
+        Assert.True(flight.CanRewind); // the same point, to go back to again
+        Assert.True(flight.RewindResumed);
+        Assert.Equal(0, flight.RewindSeconds, 1e-6);
+    }
+
+    [Fact]
+    public void A_rewind_goes_back_to_the_menu_choice_not_a_switch()
+    {
+        var (sim, a, b) = TwoRunsRestored();
+        using var _ = sim;
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(CarryOn: a.Id));
+        var time = flight.WorldTime;
+        sim.Run((_, _) => default, _ => false, maxSeconds: 2);
+        sim.Step(new FlightInput(SwitchTo: b));
+        sim.Step(new FlightInput(Launch: true, FullThrottle: true));
+        sim.Run((_, _) => new FlightInput(Throttle: 1f), _ => false, maxSeconds: 3);
+
+        sim.Step(new FlightInput(Rewind: true));
+        Assert.Equal(time, flight.WorldTime, 1e-6);
+        Assert.Equal(a.Id, flight.Controlled.Id);
+        Assert.Same(flight.Runs[0], flight.Run);
+    }
+
+    [Fact]
+    public void There_is_nothing_to_rewind_to_before_a_choice()
+    {
+        using var sim = new Simulation(Test("A", new Switch()));
+        var flight = sim.Flight;
+        flight.Restore(flight.Capture());
+        Assert.False(flight.CanRewind);
+        var time = flight.WorldTime;
+        sim.Step(new FlightInput(Rewind: true)); // nothing happens
+        Assert.True(flight.WorldTime > time);
+        Assert.False(flight.CanRewind);
     }
 }

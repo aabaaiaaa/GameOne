@@ -195,7 +195,7 @@ public sealed class VesselTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Starting_again_leaves_just_the_rocket_on_the_pad()
+    public void A_rewind_leaves_just_the_rocket_on_the_pad()
     {
         using var sim = new Simulation(Mission.ReachOrbit);
         var crafts = sim.Physics.Crafts.Count;
@@ -203,7 +203,7 @@ public sealed class VesselTests(ITestOutputHelper output)
         sim.Step(new FlightInput(Stage: true));
         sim.Step(new FlightInput(SwitchVessel: true));
 
-        sim.Step(new FlightInput(Restart: true));
+        sim.Step(new FlightInput(Rewind: true));
         Assert.Single(sim.Flight.Vessels);
         Assert.Equal(FlightState.Ready, sim.Flight.State);
         Assert.Equal(0, sim.Flight.Controlled.Id);

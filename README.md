@@ -139,7 +139,7 @@ first (the last 300): when, which vessel (or the two that collided), how (hit an
 ground, the tower...), how fast, where (a site's name within 5 km, else its height, in the sea or
 on the ground), and whether anyone saw it. One removed to make room, or cleared from the launch pad
 for the new rocket, is listed too (with no speed: nothing hit it). It is saved with
-the world; "Restart flight" undoes what that flight added, with the rest of the flight.
+the world; "Restart flight" starting the mission again logs its run as abandoned, to start it again.
 
 - **Empty world:** nothing but the launch pad, the landing zones and the tower.
 - **Satellites in orbit:** four satellites already in circular orbits 9 to 10 km up, each of which
@@ -149,8 +149,9 @@ the world; "Restart flight" undoes what that flight added, with the rest of the 
   hours, as they drift slowly back into line). The other two are in planes of their own.
 
 Earlier flights' vessels are listed under "Also in this world" on the mission panel, and in Add
-view; Tab only goes round the flown vessel's flight's. "Restart flight" (in the game menu) starts the flight
-again: the world goes back to how it was when the flight started.
+view; Tab only goes round the flown vessel's flight's. "Restart flight" (in the game menu) starts the flown
+vessel's mission again: a new run of it at its site, with a fresh rocket on its pad, its old vessels
+left where they are (in no run) and nothing else in the world changed.
 
 **Errors.** If anything goes wrong (a world that can't be saved, say), a red warning sign shows in
 the middle of the screen with the number of errors in the last 5 seconds. The details are on the
@@ -260,7 +261,7 @@ The controls are the same for every mission:
 | F2 | Hide the whole HUD, for a screenshot of the world alone: the instruments, markers, paths, small views, controls and credits all go; F2 again brings it back. Esc still opens the game menu over it. Each run starts with it shown. |
 | Click a marker | Make it your target (see Markers and targets above); click it again, or elsewhere, to let it go. |
 | Click the path | Zoomed out: place a manoeuvre node there. Pull its handles to plan the burn, drag it along the path to move it, right-click it (or its x) to delete it (see Planning burns above). |
-| Esc | Pause, in the game menu: resume, restart this flight (undoing it), missions, the world log, change world, settings, quit. Esc again resumes; from the missions or the world list, Esc goes to the game menu and their Close button back to flying. |
+| Esc | Pause, in the game menu: resume, restart flight (start the mission again), missions, the world log, change world, settings, quit. Esc again resumes; from the missions or the world list, Esc goes to the game menu and their Close button back to flying. |
 
 **Steering.** Hover the pointer over the rocket and two rings appear round its centre of mass: a
 flat blue one marked N E S W (the heading: which compass direction to point the nose) and an

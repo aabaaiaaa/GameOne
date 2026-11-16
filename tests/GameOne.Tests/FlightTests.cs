@@ -213,13 +213,13 @@ public sealed class FlightTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Restarting_puts_the_booster_back_on_the_pad()
+    public void Starting_again_puts_the_booster_back_on_the_pad()
     {
         using var sim = new Simulation();
         sim.RunToEnd(new Autopilot { TouchdownSpeed = 12f }.Fly);
         Assert.Equal(FlightState.Crashed, sim.Flight.State);
 
-        sim.Step(new FlightInput(Restart: true));
+        sim.Step(new FlightInput(StartAgain: true));
         sim.Run((_, _) => default, _ => false, maxSeconds: 1);
 
         var flight = sim.Flight;
