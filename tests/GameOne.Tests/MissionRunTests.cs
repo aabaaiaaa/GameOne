@@ -91,15 +91,24 @@ public sealed class MissionRunTests
     [Fact]
     public void Parts_that_come_off_belong_to_their_run()
     {
-        using var sim = new Simulation(Mission.ReachOrbit);
+        // A two-stage rocket of run A climbing from Highcrest, then run B chosen at Home: A's is no
+        // longer the newest run when it is staged.
+        using var sim = new Simulation(Mission.ReachOrbit, site: Highcrest);
         var flight = sim.Flight;
         sim.Step(new FlightInput(Launch: true, FullThrottle: true));
         sim.Run((_, _) => default, _ => false, maxSeconds: 2);
+        sim.Step(new FlightInput(Choose: Test("B", new Switch()), From: LaunchSites.Home));
+        Assert.Equal(2, flight.Runs.Count);
+        var (a, b) = (flight.Runs[0], flight.Runs[1]);
+        var (rocket, bRocket) = (a.Vessels[0], b.Vessels[0]);
+
+        sim.Step(new FlightInput(SwitchTo: rocket));
+        Assert.Same(rocket, flight.Controlled);
         sim.Step(new FlightInput(Stage: true));
-        var run = Assert.Single(flight.Runs);
-        Assert.Equal(2, run.Vessels.Count);
-        Assert.All(flight.WorldVessels, v => Assert.Contains(v, run.Vessels));
-        Assert.Same(run, flight.RunOf(run.Vessels[1]));
-        Assert.Equal(run.Number, run.Vessels[1].Flight);
+        var part = Assert.Single(flight.WorldVessels, v => v != rocket && v != bRocket);
+        Assert.Equal([rocket, part], a.Vessels);
+        Assert.Equal([bRocket], b.Vessels);
+        Assert.Same(a, flight.RunOf(part));
+        Assert.Equal(a.Number, part.Flight);
     }
 }
