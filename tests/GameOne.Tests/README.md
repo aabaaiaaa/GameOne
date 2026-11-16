@@ -260,7 +260,9 @@ say) stalls frames and spoils the timing.
   counted down only landed on the moon (not flying, not landed on the planet) and its bay only
   fully open there; from the pad, the lander released at 2.5 km and lost fails it (its two steps
   lost), the booster lost only its bonus, and the upper stage lost once the lander is away
-  nothing; and the satellite launcher and the missions that fly it as they were.
+  nothing; the mission saved with its lander landed by the spot and carried on where it was (no
+  fresh rocket, its steps still done, its bay then opened ticking the last); and the satellite
+  launcher and the missions that fly it as they were.
 - **`VesselActionTests`:** a vessel's actions (`VesselActions`, `ActionMenu`): the lander offering
   its bay doors and its legs, the launcher and its upper stage (each a stack) their bottom stage's
   legs, a satellite nothing (and no menu); each item saying what it will do now, going into the
@@ -583,8 +585,11 @@ say) stalls frames and spoils the timing.
   put another in orbit.
 - **`MissionRunTests`:** runs (`MissionRun`): two in progress at once, each ticking its own steps
   whichever vessel is flown; the mission panel's run (`Flight.Run`) following the flown vessel;
-  a new mission at Home leaving another site's waiting rocket, and its run, in place; and the
-  parts staged off a rocket belonging to its run.
+  a new mission at Home leaving another site's waiting rocket, and its run, in place; the
+  parts staged off a rocket belonging to its run; a world restored keeping its runs and the
+  vessel flown, and one left before a choice saved as it was; and carrying on
+  (`Flight.CarryOnChoices`, `FlightInput.CarryOn`): a run whose vessel flown last is gone by
+  another of its own, a free-play vessel in no run, and debris and wrecks never offered.
 - **`WorldLogTests`:** the world's log: a crash on the ground, two vessels colliding (one entry; and two wrecked by one collision steps apart joined into the first's entry; two pairs colliding side by side an entry each, by who hit whom), an unwatched loss under formula (not witnessed, near its site), those removed to make room as a world loads (oldest first, unseen, no speed, printed without one), one cleared from the launch pad (unseen as a world loads; seen, flown, as a flight from its site starts), and the newest 300 kept; and each crash reason worded without its advice (or the break-up's cause after its colon), its speed taken out to be the entry's (a line never says two speeds).
 - **`WorldStoreTests`:** saving and loading, in a folder of the test's own: a world loads back
   exactly (every field of every vessel, a body targeted from the planet and from the moon

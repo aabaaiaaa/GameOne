@@ -194,6 +194,44 @@ public sealed class MoonMissionTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void A_moon_mission_saved_on_the_way_is_carried_on_where_it_was()
+    {
+        // The run's lander (the lander launcher's own) set down by the spot, its bay shut, the
+        // launch and the landing done: saved, and carried on.
+        var at = SpotSky.Place;
+        var lander = Drops.Placed(at, Moon.East(at), 0.3f, Vehicle.LanderLauncher, first: 2, clearance: 0.2f, mission: LandOnTheMoon, flight: 1, body: Moon, fuel: 0.5f);
+        var steps = LandOnTheMoon.Steps.Length;
+        var run = new RunState
+        {
+            Mission = LandOnTheMoon, Site = LaunchSites.Home.Name, Number = 1, LastFlown = 0,
+            Done = [.. Enumerable.Range(0, steps).Select(i => i < 2)],
+            Points = [.. Enumerable.Range(0, steps).Select(i => i == Step(Landing) ? 2000 : 0)],
+        };
+        var sim = new Simulation(LandOnTheMoon, body: Moon);
+        sim.Flight.Restore(new WorldState { Vessels = [lander], Runs = [run], Flown = 0, Flights = 1, NextVesselId = 1 });
+        sim.Flight.CarryOn(sim.Flight.Controlled);
+        var flown = sim.Flight.Controlled;
+        Assert.True(sim.Run(Nobody, _ => flown.State == FlightState.Crashed || flown.State == FlightState.Landed && flown.Craft.Frozen, maxSeconds: 40));
+        Assert.Equal(FlightState.Landed, flown.State);
+        var (id, position) = (flown.Id, flown.Position);
+
+        using var back = sim.Reloaded();
+        var flight = back.Flight;
+        output.WriteLine($"carried on {WorldLog.Named(flight.Controlled)}, {Vector3.Distance(flight.Controlled.Position, position) * 1000:0.000} mm from where it was saved");
+        Assert.Equal(id, flight.Controlled.Id);
+        Assert.True(Vector3.Distance(flight.Controlled.Position, position) < 1e-3f);
+        Assert.DoesNotContain(flight.WorldVessels, v => v.State == FlightState.Ready); // no fresh rocket
+        Assert.Same(LandOnTheMoon, flight.Mission);
+        Assert.True(flight.Run!.Progress.IsDone(Step("Launch")));
+        Assert.True(flight.Run.Progress.IsDone(Step(Landing)));
+        Assert.Equal(2000, flight.Run.Progress.PointsFor(Step(Landing)));
+
+        back.Step(new FlightInput(ToggleBayDoors: true));
+        back.Run(Nobody, _ => flight.Controlled.BayDoors >= 1f, maxSeconds: Scene.LanderDoorSeconds + 1);
+        Assert.True(flight.Run.Progress.IsDone(Step(Bay)), "the bay opened, but its step wasn't ticked");
+    }
+
+    [Fact]
     public void The_satellite_launcher_and_its_missions_are_unchanged()
     {
         Assert.Same(Vehicle.ThreeStage, Mission.DeploySatellite.Vehicle);

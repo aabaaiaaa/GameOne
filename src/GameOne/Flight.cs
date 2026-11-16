@@ -134,6 +134,7 @@ internal readonly record struct Coming(Vessel Watched, SolidKind With, Vessel? O
 /// <param name="Camera">Where the main view's camera is, which the vessels near it in that view are witnessed by (see <see cref="Scene.MainViewWitnessed"/>); without it, the flown vessel, which the camera follows.</param>
 /// <param name="NearMisses">Whether near misses past the flown vessel and the watched are slowed for and shown ahead (the player's setting, <see cref="Settings.SlowNearMisses"/>): see <see cref="Flight.NearMissWarning"/>.</param>
 /// <param name="ToggleBayDoors">Open the flown vessel's bay doors, or close them (a vessel with a bay: <see cref="Vessel.HasBay"/>). No key does this.</param>
+/// <param name="CarryOn">Carry on flying the vessel of this id where it is, in its run or in free play (one of <see cref="Flight.CarryOnChoices"/>): a menu choice, as <paramref name="Choose"/> is.</param>
 internal readonly record struct FlightInput(
     float Throttle = 0f,
     Vector3 Lean = default,
@@ -159,7 +160,14 @@ internal readonly record struct FlightInput(
     IReadOnlyList<Vessel>? Watched = null,
     Vector3? Camera = null,
     bool NearMisses = false,
-    bool ToggleBayDoors = false);
+    bool ToggleBayDoors = false,
+    int? CarryOn = null);
+
+/// <summary>
+/// Something the player can carry on flying where it is (<see cref="Flight.CarryOnChoices"/>):
+/// <paramref name="Vessel"/>, of <paramref name="Run"/> in progress, or of none (free play).
+/// </summary>
+internal sealed record CarryOnChoice(Vessel Vessel, MissionRun? Run);
 
 /// <summary>
 /// The flight, in the world it is flown in: the launch, then every vessel in this flight (the
@@ -224,6 +232,55 @@ internal sealed class Flight : IDisposable
         ChoiceMade();
         Site = site;
         StartFlight(mission);
+    }
+
+    /// <summary>
+    /// What can be carried on where it is (see <see cref="CarryOn"/>): each run in progress that
+    /// hasn't failed, oldest first, by its vessel flown last if that is still there to fly, else
+    /// its first that is; then every vessel there to fly that is in no run in progress (free
+    /// play's, and those of runs ended or failed), the one flown first, then by flight, newest
+    /// first. Debris and wrecks can't be flown, so are never among them, nor is a run with none
+    /// of its own left to fly.
+    /// </summary>
+    public IReadOnlyList<CarryOnChoice> CarryOnChoices()
+    {
+        var choices = new List<CarryOnChoice>();
+        foreach (var run in Runs)
+        {
+            if (run.Failed)
+                continue;
+            var vessel = run.Vessels.FirstOrDefault(v => v.Id == run.LastFlownId && Resumable(v)) ?? run.Vessels.FirstOrDefault(Resumable);
+            if (vessel is not null)
+                choices.Add(new CarryOnChoice(vessel, run));
+        }
+        // (OrderBy is stable: within a flight, in the order they came to be.)
+        foreach (var vessel in _world.Where(v => Resumable(v) && !InRunInProgress(v)).OrderByDescending(v => v == Controlled).ThenByDescending(v => v.Flight))
+            choices.Add(new CarryOnChoice(vessel, null));
+        return choices;
+
+        bool Resumable(Vessel v) => v != _placeholder && CanFly(v) && _world.Contains(v);
+        bool InRunInProgress(Vessel v) => RunOf(v) is { End: RunEnd.InProgress, Mission.HasObjectives: true, Failed: false };
+    }
+
+    /// <summary>
+    /// Carries on flying <paramref name="vessel"/> where it is, in its run (which it is now the
+    /// vessel flown last of) or in free play: a menu choice (<see cref="Chosen"/>), which adds,
+    /// moves and removes nothing in the world but the placeholder. It is brought into the physics
+    /// and flown as a switch to it is (<see cref="SwitchTo"/>). False, and nothing done, if it
+    /// can't be flown.
+    /// </summary>
+    public bool CarryOn(Vessel vessel)
+    {
+        if (vessel == _placeholder || !CanFly(vessel) || !_world.Contains(vessel))
+            return false;
+        ChoiceMade();
+        if (vessel == Controlled)
+            BringIn(vessel);
+        else
+            SwitchTo(vessel);
+        _latest = RunOf(vessel);
+        _latest?.LastFlownId = vessel.Id;
+        return true;
     }
 
     /// <summary>The runs in progress whose missions have objectives, oldest first (free play's are never among them).</summary>
@@ -1367,7 +1424,7 @@ internal sealed class Flight : IDisposable
             Launch = false, Stage = false, ToggleLegs = false, FullThrottle = false, CutThrottle = false,
             ToggleProgradeHold = false, ToggleRetrogradeHold = false, Restart = false, Choose = null, From = null,
             SwitchVessel = false, SwitchTo = null, SetTarget = null, ClearTarget = false, Plan = null, ChooseFrame = null,
-            Slower = false, Faster = false, ToggleBayDoors = false,
+            Slower = false, Faster = false, ToggleBayDoors = false, CarryOn = null,
         };
         for (var i = 0; i < steps; i++)
         {
@@ -1389,6 +1446,8 @@ internal sealed class Flight : IDisposable
 
         if (input.Choose is { } chosen)
             LaunchFrom(input.From ?? Site, chosen);
+        else if (input.CarryOn is { } carried && _world.Find(v => v.Id == carried) is { } carriedOn)
+            CarryOn(carriedOn);
         else if (input.Restart)
             Load(_atStart, _latest?.Mission ?? Controlled.Mission); // as it was when the last flight started, and that flight again
 

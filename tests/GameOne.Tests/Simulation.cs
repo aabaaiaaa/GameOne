@@ -101,8 +101,10 @@ internal sealed class Simulation : IDisposable
 
     /// <summary>
     /// This simulation's world, saved to a file (in a folder of its own, as the game saves one) and
-    /// loaded into a fresh simulation for the same body, which starts a new flight of the same
-    /// mission in it. This one is closed first; disposing it again does nothing.
+    /// loaded into a fresh simulation for the same body, restored as the game restores one
+    /// (<see cref="Flight.Restore"/>) and carried on, flying the vessel it was saved flying (or, as
+    /// the restore chooses, another), nothing stepped; with nothing in it to fly, a new flight of
+    /// the same mission is started in it. This one is closed first; disposing it again does nothing.
     /// </summary>
     public Simulation Reloaded()
     {
@@ -111,9 +113,13 @@ internal sealed class Simulation : IDisposable
         {
             var store = new WorldStore(directory);
             store.Save(Flight.Capture() with { Id = "reloaded", Name = "Reloaded" });
-            var (mission, body) = (Flight.Mission, _body);
+            var (mission, body, site) = (Flight.Mission, _body, Flight.Site);
             Dispose();
-            return new Simulation(mission, world: store.Load("reloaded"), body: body);
+            var back = new Simulation(mission, body: body, site: site);
+            back.Flight.Restore(store.Load("reloaded"));
+            if (!back.Flight.CarryOn(back.Flight.Controlled))
+                back.Flight.LaunchFrom(site, mission);
+            return back;
         }
         finally
         {

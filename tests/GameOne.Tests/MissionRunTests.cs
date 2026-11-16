@@ -154,4 +154,73 @@ public sealed class MissionRunTests
         Assert.Equal((4, 7), (vessel.Flight, vessel.Id));
         Assert.Equal(4, Assert.Single(flight.Runs).Number);
     }
+
+    [Fact]
+    public void Carrying_on_a_run_whose_last_flown_is_gone_flies_another_of_it()
+    {
+        // Run A's two-stage rocket climbing, staged, its new part flown last; then that part gone
+        // from the world as it is saved.
+        using var sim = new Simulation(Mission.ReachOrbit);
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(Launch: true, FullThrottle: true));
+        sim.Run((_, _) => default, _ => false, maxSeconds: 2);
+        var rocket = flight.Controlled;
+        sim.Step(new FlightInput(Stage: true));
+        var part = Assert.Single(flight.WorldVessels, v => v != rocket);
+        sim.Step(new FlightInput(SwitchTo: part));
+        Assert.Equal(part.Id, flight.Run!.LastFlownId);
+        var saved = flight.Capture();
+        Assert.Equal(part.Id, saved.Runs.Single().LastFlown);
+
+        flight.Restore(saved with { Vessels = [.. saved.Vessels.Where(v => v.Id != part.Id)] });
+        var choice = flight.CarryOnChoices()[0];
+        Assert.Equal(rocket.Id, choice.Vessel.Id);
+        Assert.Same(flight.Runs[0], choice.Run);
+        sim.Step(new FlightInput(CarryOn: rocket.Id));
+        Assert.True(flight.Chosen);
+        Assert.Equal(rocket.Id, flight.Controlled.Id);
+        Assert.Same(choice.Run, flight.Run);
+        Assert.Equal(rocket.Id, flight.Run!.LastFlownId);
+    }
+
+    [Fact]
+    public void A_free_play_vessel_is_carried_on_with_no_run()
+    {
+        using var sim = new Simulation(Mission.FreePlay);
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(Launch: true, FullThrottle: true));
+        sim.Run((_, _) => default, _ => false, maxSeconds: 1);
+        var (id, ids) = (flight.Controlled.Id, flight.WorldVessels.Select(v => v.Id).ToArray());
+
+        flight.Restore(flight.Capture());
+        Assert.Empty(flight.Runs);
+        var choice = Assert.Single(flight.CarryOnChoices());
+        Assert.Equal(id, choice.Vessel.Id);
+        Assert.Null(choice.Run);
+        sim.Step(new FlightInput(CarryOn: id));
+        Assert.True(flight.Chosen);
+        Assert.Equal(id, flight.Controlled.Id);
+        Assert.Null(flight.Run);
+        Assert.False(flight.Mission.HasObjectives);
+        Assert.Equal(ids, flight.WorldVessels.Select(v => v.Id).ToArray()); // nothing added or removed
+    }
+
+    [Fact]
+    public void Debris_and_wrecks_are_never_choices()
+    {
+        // A fairing half lying by the landing zone, and a booster dropped beside it too fast, with
+        // the new rocket on the pad.
+        var zone = Scene.LandingZoneCentre;
+        var half = Drops.Placed(zone + 30f * Planet.East(zone), Planet.East(zone), 0f, Vehicle.FairingHalf, mission: Mission.FreePlay, legsOut: false, clearance: 0.5f, id: 0);
+        var falling = Drops.Placed(zone, Planet.East(zone), 40f, Vehicle.Booster, mission: Mission.FreePlay, clearance: 2f, id: 1);
+        using var sim = new Simulation(Mission.FreePlay, world: new WorldState { Vessels = [half, falling], NextVesselId = 2 });
+        var flight = sim.Flight;
+        var booster = flight.WorldVessels.Single(v => v.Id == 1);
+        Assert.True(sim.Run((_, _) => default, _ => booster.State == FlightState.Crashed, maxSeconds: 5), $"the booster should crash: {booster.State}");
+        Assert.Contains(booster, flight.WorldVessels);
+
+        var choices = flight.CarryOnChoices();
+        Assert.DoesNotContain(choices, c => c.Vessel.Id is 0 or 1);
+        Assert.Equal([flight.Controlled], choices.Select(c => c.Vessel)); // the new rocket alone
+    }
 }
