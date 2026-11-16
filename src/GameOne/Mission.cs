@@ -5,13 +5,14 @@ namespace GameOne;
 
 /// <summary>
 /// One part of a mission, ticked off on the HUD the first time <see cref="Done"/> says so, and
-/// done from then on (see <see cref="MissionProgress"/>). An optional one is a bonus: the mission
+/// done from then on (see <see cref="MissionProgress"/>), judged against its run's own vessels
+/// (<see cref="MissionRun.Vessels"/>), whichever vessel is flown. An optional one is a bonus: the mission
 /// succeeds without it. <see cref="Lost"/>, if given, says when it can't be done any more (what it
 /// needed has been destroyed): a needed step lost before it is done fails the mission.
 /// <see cref="Points"/>, if given, are what it scores, worked out once, as it is done.
 /// </summary>
-internal sealed record MissionStep(string Label, Func<Flight, bool> Done, bool Optional = false, Func<Flight, bool>? Lost = null,
-    Func<Flight, int>? Points = null);
+internal sealed record MissionStep(string Label, Func<MissionRun, bool> Done, bool Optional = false, Func<MissionRun, bool>? Lost = null,
+    Func<MissionRun, int>? Points = null);
 
 /// <summary>
 /// What the player is asked to do on a flight: its name and briefing, the rocket it is flown with,
@@ -56,25 +57,6 @@ internal sealed class Mission
     /// <summary>Whether it asks anything of the player: one with no steps is just flying, with nothing to win, lose or score.</summary>
     public bool HasObjectives => Steps.Length > 0;
 
-    /// <summary>Whether every needed step is done. Never, for a mission with no steps: there was nothing to do.</summary>
-    public bool Succeeded(Flight flight) => HasObjectives && Steps.Select((step, i) => step.Optional || flight.Progress.IsDone(i)).All(done => done);
-
-    /// <summary>Whether step <paramref name="step"/> (by its place in the steps) can't be done now: it isn't done, and what it needed has been destroyed.</summary>
-    public static bool IsLost(int step, Flight flight) =>
-        flight.Mission.Steps[step].Lost is { } lost && !flight.Progress.IsDone(step) && lost(flight);
-
-    /// <summary>
-    /// Whether the mission has failed: a step it needs can't be done any more, because what it
-    /// needed (the upper stage to land, say) was destroyed. A lost bonus doesn't fail it.
-    /// </summary>
-    public bool Failed(Flight flight) => Steps.Where((step, i) => !step.Optional && IsLost(i, flight)).Any();
-
-    /// <summary>
-    /// The flight's points, once the mission has succeeded (null until then): the steps' done so
-    /// far, each as it was when done. A bonus done later adds to them.
-    /// </summary>
-    public int? Score(Flight flight) => Succeeded(flight) && !Failed(flight) ? flight.Progress.Points : null;
-
     /// <summary>Points for landing safely anywhere (a splashdown too).</summary>
     public const int SafeLandingPoints = 1000;
 
@@ -110,22 +92,22 @@ internal sealed class Mission
     internal static bool BayOpen(Vessel? lander) => LanderDown(lander) && lander.BayDoors >= 1f;
 
     /// <summary>Stage <paramref name="stage"/> once it is flying on its own (dropped, or left once the rest has gone), if it is.</summary>
-    private static Vessel? Alone(Flight flight, int stage) =>
-        flight.Vessels.FirstOrDefault(v => v.Stage == stage && v.TopStage == stage && v.StageCount > 1);
+    private static Vessel? Alone(MissionRun run, int stage) =>
+        run.Vessels.FirstOrDefault(v => v.Stage == stage && v.TopStage == stage && v.StageCount > 1);
 
     /// <summary>The booster once it has been dropped, if it has been.</summary>
-    private static Vessel? DroppedBooster(Flight flight) => Alone(flight, 0);
+    private static Vessel? DroppedBooster(MissionRun run) => Alone(run, 0);
 
     /// <summary>The part above the booster once it has been dropped, if it has been.</summary>
-    private static Vessel? UpperStage(Flight flight) => flight.Vessels.FirstOrDefault(v => v.Stage > 0);
+    private static Vessel? UpperStage(MissionRun run) => run.Vessels.FirstOrDefault(v => v.Stage > 0);
 
     /// <summary>
     /// Whether the mission rocket's stage <paramref name="stage"/> has been destroyed: no vessel of
-    /// this flight that has it is still in one piece. (Only the rocket's own parts: a fairing half
+    /// this run that has it is still in one piece. (Only the rocket's own parts: a fairing half
     /// is a vehicle of its own.)
     /// </summary>
-    private static bool Gone(Flight flight, int stage) =>
-        !flight.Vessels.Any(v => v.Vehicle == flight.Mission.Vehicle && v.State != FlightState.Crashed && v.Stage <= stage && v.TopStage >= stage);
+    private static bool Gone(MissionRun run, int stage) =>
+        !run.Vessels.Any(v => v.Vehicle == run.Mission.Vehicle && v.State != FlightState.Crashed && v.Stage <= stage && v.TopStage >= stage);
 
     /// <summary>Whether it has come down safely anywhere: landed, or floating in the sea.</summary>
     private static bool Landed([NotNullWhen(true)] Vessel? vessel) => vessel is { State: FlightState.Landed or FlightState.Floating };
@@ -144,8 +126,8 @@ internal sealed class Mission
         LandingSites = [Scene.LandingZoneCentre],
         Steps =
         [
-            new("Launch", f => f.Vessels[0].State != FlightState.Ready), // this flight's rocket, not whatever is flown
-            new($"Climb past {Scene.TargetAltitude:0} m", f => f.ReachedTarget),
+            new("Launch", f => f.Vessels[0].State != FlightState.Ready), // this run's rocket, not whatever is flown
+            new($"Climb past {Scene.TargetAltitude:0} m", f => f.Vessels[0].ReachedTarget), // the rocket, not whatever is flown
             // The rocket launched, not whatever is flown: an earlier flight's booster on the zone isn't this one's landing.
             new("Land on the landing zone", f => LandedOnTarget(f.Vessels[0]), Lost: f => Gone(f, 0),
                 Points: f => SafeLandingPoints + TargetLandingPoints(f.Vessels[0])),
@@ -172,7 +154,7 @@ internal sealed class Mission
         LandingSites = [Scene.DroneShipCentre],
         Steps =
         [
-            new("Launch", f => f.Vessels[0].State != FlightState.Ready), // this flight's rocket, not whatever is flown
+            new("Launch", f => f.Vessels[0].State != FlightState.Ready), // this run's rocket, not whatever is flown
             new("Drop the booster", f => f.Vessels.Count > 1, Lost: f => Gone(f, 1)),
             new($"Climb above the atmosphere ({Scene.AtmosphereHeight:0} m)", f => f.Vessels.Any(v => v.Stage > 0 && v.ReachedTarget), Lost: f => Gone(f, 1)),
             new($"Reach a stable orbit (lowest point above {Scene.AtmosphereHeight:0} m)", f => f.Vessels.Any(v => v.Stage > 0 && v.AchievedOrbit), Lost: f => Gone(f, 1),
@@ -207,7 +189,7 @@ internal sealed class Mission
         LandingSites = [Scene.DroneShipCentre, Scene.LandingZoneCentre],
         Steps =
         [
-            new("Launch", f => f.Vessels[0].State != FlightState.Ready), // this flight's rocket, not whatever is flown
+            new("Launch", f => f.Vessels[0].State != FlightState.Ready), // this run's rocket, not whatever is flown
             new("Land the booster", f => Landed(DroppedBooster(f)), Lost: f => Gone(f, 0), Points: _ => SafeLandingPoints),
             new("Release the satellite", f => Alone(f, 2) is not null, Lost: f => Gone(f, 2)),
             // With its engine off: passing through the band mid-burn isn't the orbit it is left on.
@@ -246,7 +228,7 @@ internal sealed class Mission
         PointsOfInterest = [PointOfInterest.MoonLandingSpot],
         Steps =
         [
-            new("Launch", f => f.Vessels[0].State != FlightState.Ready), // this flight's rocket, not whatever is flown
+            new("Launch", f => f.Vessels[0].State != FlightState.Ready), // this run's rocket, not whatever is flown
             new("Land the lander on the moon", f => LanderDown(Alone(f, 2)), Lost: f => Gone(f, 2),
                 Points: f => SafeLandingPoints + SpotPoints(PointOfInterest.MoonLandingSpot.DistanceFrom(Alone(f, 2)!, f.WorldTime))),
             new("Open its bay doors", f => BayOpen(Alone(f, 2)), Lost: f => Gone(f, 2), Points: _ => BayPoints),

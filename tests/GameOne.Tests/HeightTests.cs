@@ -135,7 +135,7 @@ public sealed class HeightTests
     {
         using var sim = new Simulation(site: LaunchSites.Named("Highcrest"));
         sim.Run(Launch, _ => false, maxSeconds: 1);
-        Assert.True(sim.Flight.Progress.IsDone(Climb));
+        Assert.True(sim.Flight.Run!.Progress.IsDone(Climb));
     }
 
     [Fact]
@@ -143,7 +143,7 @@ public sealed class HeightTests
     {
         using var sim = new Simulation();
         sim.Run(Launch, _ => false, maxSeconds: 1);
-        Assert.False(sim.Flight.Progress.IsDone(Climb));
+        Assert.False(sim.Flight.Run!.Progress.IsDone(Climb));
     }
 
     [Fact]

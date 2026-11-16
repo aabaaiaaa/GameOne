@@ -506,7 +506,7 @@ internal sealed class Hud : IDisposable
         if (flight.AchievedOrbit && !_wasInOrbit)
             _orbitAt = time;
         _wasInOrbit = flight.AchievedOrbit;
-        var failed = flight.Mission.Failed(flight);
+        var failed = flight.Run?.Failed ?? false;
         if (failed && !_wasFailed)
             _failedAt = time;
         _wasFailed = failed;
@@ -1806,17 +1806,20 @@ internal sealed class Hud : IDisposable
             if (ImGui.SmallButton("Menu (Esc)"u8))
                 Screen = MenuScreen.Game;
             ImGui.Separator();
-            var steps = flight.Mission.Steps;
-            for (var i = 0; i < steps.Length; i++)
+            if (flight.Run is { } run)
             {
-                var done = flight.Progress.IsDone(i);
-                var lost = GameOne.Mission.IsLost(i, flight);
-                ImGui.TextColored(done ? Good : lost ? Bad : Quiet, Escape($"{(done ? "[x]" : lost ? "[!]" : "[ ]")}  {steps[i].Label}"));
+                var steps = run.Mission.Steps;
+                for (var i = 0; i < steps.Length; i++)
+                {
+                    var done = run.Progress.IsDone(i);
+                    var lost = run.IsLost(i);
+                    ImGui.TextColored(done ? Good : lost ? Bad : Quiet, Escape($"{(done ? "[x]" : lost ? "[!]" : "[ ]")}  {steps[i].Label}"));
+                }
+                if (run.Failed)
+                    ImGui.TextColored(Bad, "MISSION FAILED"u8);
             }
-            if (flight.Mission.Failed(flight))
-                ImGui.TextColored(Bad, "MISSION FAILED"u8);
             ImGui.TextColored(Quiet, $"Best altitude {flight.MaxAltitude:0} m");
-            if (flight.Mission.Score(flight) is { } points)
+            if (flight.Run?.Score is { } points)
                 ImGui.TextColored(Good, $"Score {points}");
             Vessels(flight);
             _missionRect = ThisWindow();
@@ -2080,7 +2083,7 @@ internal sealed class Hud : IDisposable
 
     /// <summary>The world's vessels that aren't this flight's, by kind: satellites and landers, then stages, then debris.</summary>
     private static IEnumerable<Vessel> OthersByKind(Flight flight) => flight.WorldVessels
-        .Where(v => v.Flight != flight.FlightNumber)
+        .Where(v => v.Flight != flight.Controlled.Flight)
         .OrderBy(v => !v.Guided ? 2 : v.CurrentStage.Kind is StageKind.Satellite or StageKind.Lander ? 0 : 1);
 
     /// <summary>How <paramref name="vessel"/> is doing, in a few words, and a colour for it. <paramref name="brief"/> leaves out all but its height while it flies.</summary>
@@ -2173,8 +2176,8 @@ internal sealed class Hud : IDisposable
                     views.Swap(view);
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip(Escape(!flyable ? "Debris: it can't be flown"
-                        : vessel.Flight == flight.FlightNumber ? $"Click (or Tab) to fly the {vessel.Name.ToLowerInvariant()}"
-                        : $"Click to fly the {vessel.Name.ToLowerInvariant()} (from an earlier flight: Tab only goes round this one's)"));
+                        : vessel.Flight == flight.Controlled.Flight ? $"Click (or Tab) to fly the {vessel.Name.ToLowerInvariant()}"
+                        : $"Click to fly the {vessel.Name.ToLowerInvariant()} (from another flight: Tab only goes round the flown one's)"));
 
                 // Its landing site, if it has one and it is in sight (a site is the planet's: in its camera's frame, its vessel's body's).
                 if (vessel is { State: FlightState.Flying, LandingSite: { } site }
@@ -2474,7 +2477,7 @@ internal sealed class Hud : IDisposable
                 lines.Add((another ?? "To try again: Restart flight, in the menu (Esc).", new float4(1, 1, 1, 1)));
                 return (title, color);
         }
-        if (flight.Mission.Score(flight) is { } score)
+        if (flight.Run?.Score is { } score)
             lines.Add(($"Score  {score}", new float4(1, 1, 1, 1)));
         lines.Add((another ?? "To fly again: Restart flight, in the menu (Esc).", new float4(1, 1, 1, 1)));
         return (title, color);
@@ -2518,7 +2521,7 @@ internal sealed class Hud : IDisposable
                     title = "ORBIT ACHIEVED";
                     titleColor = Good;
                     lines.Add(($"A stable orbit, {flight.Periapsis:0} to {flight.Apoapsis:0} m up. Fly on, or restart from the menu (Esc).", Good));
-                    if (flight.Mission.Score(flight) is { } orbitScore)
+                    if (flight.Run?.Score is { } orbitScore)
                         lines.Add(($"Score  {orbitScore}", new float4(1, 1, 1, 1)));
                 }
                 else if (time - _fairingAt < 2)
@@ -2570,9 +2573,9 @@ internal sealed class Hud : IDisposable
 
         // The mission failing (a needed vessel destroyed) is news for a while, and stays said
         // over the wreck; flying on is still allowed.
-        if (flight.Mission.Failed(flight) && (time - _failedAt < 6 || vessel.State == FlightState.Crashed))
+        if (flight.Run is { Failed: true } failedRun && (time - _failedAt < 6 || vessel.State == FlightState.Crashed))
         {
-            var lost = flight.Mission.Steps.Where((step, i) => !step.Optional && GameOne.Mission.IsLost(i, flight)).First();
+            var lost = failedRun.Mission.Steps.Where((step, i) => !step.Optional && failedRun.IsLost(i)).First();
             if (title is null)
                 (title, titleColor) = ("MISSION FAILED", Bad);
             else

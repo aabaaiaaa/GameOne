@@ -38,8 +38,8 @@ public sealed class MissionProgressTests
         sim.Step(default);
         step.Done = false;
         sim.Step(default);
-        Assert.True(sim.Flight.Progress.IsDone(0));
-        Assert.True(sim.Flight.Mission.Succeeded(sim.Flight));
+        Assert.True(sim.Flight.Run!.Progress.IsDone(0));
+        Assert.True(sim.Flight.Run!.Succeeded);
     }
 
     [Fact]
@@ -51,8 +51,8 @@ public sealed class MissionProgressTests
         sim.Step(default);
         (step.Done, step.Lost) = (false, true);
         sim.Step(default);
-        Assert.False(Mission.IsLost(0, sim.Flight));
-        Assert.False(sim.Flight.Mission.Failed(sim.Flight));
+        Assert.False(sim.Flight.Run!.IsLost(0));
+        Assert.False(sim.Flight.Run!.Failed);
     }
 
     [Fact]
@@ -62,10 +62,10 @@ public sealed class MissionProgressTests
         using var _ = sim;
         for (var i = 0; i < 60; i++)
             sim.Step(default);
-        Assert.False(sim.Flight.Progress.IsDone(0));
+        Assert.False(sim.Flight.Run!.Progress.IsDone(0));
         step.Done = true;
         sim.Step(default);
-        Assert.True(sim.Flight.Progress.IsDone(0));
+        Assert.True(sim.Flight.Run!.Progress.IsDone(0));
     }
 
     [Fact]
@@ -77,13 +77,13 @@ public sealed class MissionProgressTests
         sim.Step(default);
         step.Points = 9;
         sim.Step(default);
-        Assert.Equal(5, sim.Flight.Progress.Points);
+        Assert.Equal(5, sim.Flight.Run!.Progress.Points);
         step.Done = false;
         sim.Step(default);
         step.Done = true;
         sim.Step(default);
-        Assert.Equal(5, sim.Flight.Progress.Points);
-        Assert.Equal(5, sim.Flight.Mission.Score(sim.Flight));
+        Assert.Equal(5, sim.Flight.Run!.Progress.Points);
+        Assert.Equal(5, sim.Flight.Run!.Score);
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public sealed class MissionProgressTests
         sim.Step(default);
         step.Done = false;
         sim.Step(new FlightInput(Restart: true));
-        Assert.False(sim.Flight.Progress.IsDone(0));
+        Assert.False(sim.Flight.Run!.Progress.IsDone(0));
     }
 
     [Fact]

@@ -53,7 +53,8 @@ internal sealed class Views
 
     private readonly List<SmallView> _small = [];
     private Vessel? _main;
-    private int _seen; // how many of the flight's vessels have been looked at, to open views for new ones
+    private int _seen; // how many of the flown vessel's flight's vessels have been looked at, to open views for new ones
+    private int? _seenOf; // which flight's those are (Vessel.Flight): none since a reset
     private int _removedForRoom; // the flight's count of vessels removed to make room, when last looked at
     private Vessel? _swapTo;
 
@@ -70,6 +71,7 @@ internal sealed class Views
         _main = null;
         MainShadowPlace = -1;
         _seen = 0;
+        _seenOf = null;
         _swapTo = null;
     }
 
@@ -110,6 +112,13 @@ internal sealed class Views
             _seen = Math.Min(_seen, flight.Vessels.Count);
         }
 
+        // Flying a vessel of another flight, that flight's vessels are there already: only parts
+        // coming off from now on are new.
+        if (_seenOf != flown.Flight)
+        {
+            _seen = _seenOf is null ? 0 : flight.Vessels.Count;
+            _seenOf = flown.Flight;
+        }
         for (; _seen < flight.Vessels.Count; _seen++)
             if (flight.Vessels[_seen] is { Guided: true } vessel && vessel != flown)
                 Open(vessel, flight);

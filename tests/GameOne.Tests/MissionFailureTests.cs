@@ -28,13 +28,13 @@ public sealed class MissionFailureTests
         using var sim = new Simulation(Mission.LaunchAndLand);
         var flight = sim.Flight;
         Assert.True(sim.Run(Climb, f => f.Ground > 150f, maxSeconds: 60));
-        Assert.False(flight.Mission.Failed(flight));
+        Assert.False(flight.Run!.Failed);
         sim.Step(new FlightInput(CutThrottle: true));
         Assert.True(sim.Run(Coast, f => Crashed(f.Vessels[0]), maxSeconds: 60), "with its engine cut it should fall and crash");
 
-        Assert.True(flight.Mission.Failed(flight));
-        Assert.Null(flight.Mission.Score(flight));
-        Assert.True(Mission.IsLost(Array.FindIndex(flight.Mission.Steps, s => s.Label == "Land on the landing zone"), flight));
+        Assert.True(flight.Run!.Failed);
+        Assert.Null(flight.Run!.Score);
+        Assert.True(flight.Run!.IsLost(Array.FindIndex(flight.Mission.Steps, s => s.Label == "Land on the landing zone")));
     }
 
     [Fact]
@@ -46,13 +46,13 @@ public sealed class MissionFailureTests
         var upper = flight.Vessels.Single(v => v.Stage == 1);
         sim.Step(new FlightInput(SwitchTo: upper));
         sim.Step(new FlightInput(CutThrottle: true));
-        Assert.False(flight.Mission.Failed(flight));
+        Assert.False(flight.Run!.Failed);
         Assert.True(sim.Run(Coast, f => Crashed(upper), maxSeconds: 60), "the upper stage, its engine cut, should fall and crash");
 
-        Assert.True(flight.Mission.Failed(flight));
-        Assert.Null(flight.Mission.Score(flight));
-        Assert.True(Mission.IsLost(Array.FindIndex(flight.Mission.Steps, s => s.Label == "Land the upper stage"), flight));
-        Assert.True(Mission.IsLost(Array.FindIndex(flight.Mission.Steps, s => s.Label == "Release the satellite"), flight)); // it went down with it
+        Assert.True(flight.Run!.Failed);
+        Assert.Null(flight.Run!.Score);
+        Assert.True(flight.Run!.IsLost(Array.FindIndex(flight.Mission.Steps, s => s.Label == "Land the upper stage")));
+        Assert.True(flight.Run!.IsLost(Array.FindIndex(flight.Mission.Steps, s => s.Label == "Release the satellite"))); // it went down with it
     }
 
     [Fact]
@@ -65,6 +65,6 @@ public sealed class MissionFailureTests
         Assert.True(sim.Run(Coast, _ => Crashed(booster), maxSeconds: 60), "the dropped booster should fall and crash");
 
         Assert.NotEqual(FlightState.Crashed, flight.Vessels.Single(v => v.Stage == 1).State);
-        Assert.False(flight.Mission.Failed(flight));
+        Assert.False(flight.Run!.Failed);
     }
 }

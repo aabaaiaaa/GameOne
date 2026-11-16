@@ -170,13 +170,15 @@ public sealed class LaunchSiteTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Choosing_a_mission_at_another_site_replaces_the_rocket_never_launched()
+    public void Choosing_a_mission_at_another_site_leaves_the_rocket_waiting_at_the_first()
     {
-        // The rocket waiting on Home's pad was never launched: launching from Polar instead, it is
-        // just replaced (as on the same pad), not left standing there.
+        // The rocket waiting on Home's pad is its run's, still in progress: launching from Polar
+        // clears only Polar's pad, so it stays standing there.
         using var sim = new Simulation();
+        var waiting = sim.Flight.Controlled;
         sim.Step(new FlightInput(Choose: Mission.LaunchAndLand, From: Polar));
-        Assert.Single(sim.Flight.WorldVessels);
+        Assert.Equal(2, sim.Flight.WorldVessels.Count);
+        Assert.Equal(FlightState.Ready, waiting.State);
         Assert.Equal(0, sim.Flight.ClearedFromPad);
     }
 

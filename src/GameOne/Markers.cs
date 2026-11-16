@@ -346,7 +346,7 @@ internal sealed class Markers
             if (vessel == flown || vessel == comingVessel || vessel.State == FlightState.Crashed)
                 continue;
             var craft = Flight.CanFly(vessel);
-            var thisFlight = flight.Vessels.Contains(vessel);
+            var thisFlight = vessel.Flight == flown.Flight; // the flown vessel's flight's (Flight.Vessels)
             var kind = !craft ? MarkerKind.Debris : thisFlight ? MarkerKind.ThisFlight : MarkerKind.EarlierFlight;
             Add(new Candidate(frames.InView(vessel.Body, vessel.Position), MathF.Max(vessel.Height, 2f) / 2, vessel.Name, kind,
                 !craft ? Look.Dot : thisFlight ? Look.Diamond : Look.HollowDiamond, NavTarget.OfVessel(vessel),

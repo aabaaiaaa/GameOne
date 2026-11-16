@@ -82,7 +82,7 @@ public sealed class OrbitTests(ITestOutputHelper output)
         Assert.Equal(FlightState.Flying, flight.State);
         Assert.Equal(1, flight.Stage);
         Assert.True(flight.Periapsis > Scene.AtmosphereHeight, $"periapsis only {flight.Periapsis:0} m");
-        Assert.True(flight.Mission.Succeeded(flight));
+        Assert.True(flight.Run!.Succeeded);
         Assert.True(flight.Fuel > 0f, "the upper stage ran dry getting there: the margin is too thin");
 
         // A lap and a bit, coasting: a stable orbit never dips back into the atmosphere (whose
@@ -136,10 +136,10 @@ public sealed class OrbitTests(ITestOutputHelper output)
         Assert.Same(upper, flight.Controlled);
         Assert.True(sim.Run(orbit.Fly, f => f.AchievedOrbit || f.State != FlightState.Flying, maxSeconds: 120), "never reached orbit");
         Report(sim, "in orbit");
-        Assert.True(flight.Mission.Succeeded(flight));
-        Assert.All(flight.Mission.Steps.Select((step, i) => (step, i)), x => Assert.True(flight.Progress.IsDone(x.i), $"not done: {x.step.Label}"));
+        Assert.True(flight.Run!.Succeeded);
+        Assert.All(flight.Mission.Steps.Select((step, i) => (step, i)), x => Assert.True(flight.Run!.Progress.IsDone(x.i), $"not done: {x.step.Label}"));
         Assert.True(upper.Fuel > 0.3f, $"the upper stage only has {upper.Fuel * 100:0}% left");
-        output.WriteLine($"score {flight.Mission.Score(flight)}");
+        output.WriteLine($"score {flight.Run!.Score}");
     }
 
     [PlaythroughFact(Long = false)]
@@ -174,8 +174,8 @@ public sealed class OrbitTests(ITestOutputHelper output)
         var flight = sim.Flight;
         Assert.True(sim.Run(pilot, f => f.Vessels.Count > 1 && f.Vessels.All(v => v.State != FlightState.Flying || v.AchievedOrbit), maxSeconds: 300),
             "never got the upper stage into orbit with the booster down");
-        Assert.True(flight.Mission.Succeeded(flight));
-        return (flight.Mission.Score(flight), [.. flight.Mission.Steps.Select((s, i) => (s, i)).Where(x => x.s.Optional).Select(x => flight.Progress.IsDone(x.i))]);
+        Assert.True(flight.Run!.Succeeded);
+        return (flight.Run!.Score, [.. flight.Mission.Steps.Select((s, i) => (s, i)).Where(x => x.s.Optional).Select(x => flight.Run!.Progress.IsDone(x.i))]);
     }
 
     [Fact]
@@ -243,7 +243,7 @@ public sealed class OrbitTests(ITestOutputHelper output)
         var flight = sim.Flight;
         Assert.True(flight.MaxAltitude > Scene.AtmosphereHeight, $"only reached {flight.MaxAltitude:0} m");
         Assert.False(flight.AchievedOrbit);
-        Assert.False(flight.Mission.Succeeded(flight));
+        Assert.False(flight.Run!.Succeeded);
     }
 
     private void Report(Simulation sim, string when)

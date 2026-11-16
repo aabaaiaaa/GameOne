@@ -136,7 +136,7 @@ public sealed class MoonMissionTests(ITestOutputHelper output)
         sim.Step(new FlightInput(SwitchTo: left));
         sim.Step(new FlightInput(CutThrottle: true));
         sim.Step(new FlightInput(SwitchTo: lander));
-        Assert.False(flight.Mission.Failed(flight));
+        Assert.False(flight.Run!.Failed);
         return (left, lander);
     }
 
@@ -151,10 +151,10 @@ public sealed class MoonMissionTests(ITestOutputHelper output)
         Assert.True(sim.Run(Nobody, _ => lander.State == FlightState.Crashed, maxSeconds: 300), $"the lander, its engine cut, should fall and crash: {lander.State}");
         output.WriteLine($"the lander: {lander.CrashReason} at {sim.Time:0} s");
 
-        Assert.True(flight.Mission.Failed(flight));
-        Assert.Null(flight.Mission.Score(flight));
-        Assert.True(Mission.IsLost(Step(Landing), flight));
-        Assert.True(Mission.IsLost(Step(Bay), flight));
+        Assert.True(flight.Run!.Failed);
+        Assert.Null(flight.Run!.Score);
+        Assert.True(flight.Run!.IsLost(Step(Landing)));
+        Assert.True(flight.Run!.IsLost(Step(Bay)));
     }
 
     [Fact]
@@ -169,9 +169,9 @@ public sealed class MoonMissionTests(ITestOutputHelper output)
         Assert.True(sim.Run(Nobody, _ => booster.State == FlightState.Crashed, maxSeconds: 60), "the dropped booster should fall and crash");
 
         Assert.NotEqual(FlightState.Crashed, flight.Vessels.Single(v => v.Stage == 1).State);
-        Assert.False(flight.Mission.Failed(flight));
-        Assert.False(Mission.IsLost(Step(Landing), flight));
-        Assert.False(Mission.IsLost(Step(Bay), flight));
+        Assert.False(flight.Run!.Failed);
+        Assert.False(flight.Run!.IsLost(Step(Landing)));
+        Assert.False(flight.Run!.IsLost(Step(Bay)));
     }
 
     [Fact]
@@ -188,9 +188,9 @@ public sealed class MoonMissionTests(ITestOutputHelper output)
 
         Assert.Equal(FlightState.Crashed, upper.State);
         Assert.NotEqual(FlightState.Crashed, lander.State);
-        Assert.False(flight.Mission.Failed(flight));
-        Assert.False(Mission.IsLost(Step(Landing), flight));
-        Assert.False(Mission.IsLost(Step(Bay), flight));
+        Assert.False(flight.Run!.Failed);
+        Assert.False(flight.Run!.IsLost(Step(Landing)));
+        Assert.False(flight.Run!.IsLost(Step(Bay)));
     }
 
     [Fact]

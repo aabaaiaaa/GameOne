@@ -281,7 +281,7 @@ public sealed class LanderTripTests(ITestOutputHelper output)
             return;
         Assert.True(booster.State is FlightState.Landed or FlightState.Floating, $"the booster {booster.State} {booster.CrashReason}");
         Assert.True(booster.LandedOnTarget, $"the booster {booster.State}, {booster.DistanceToLandingSite:0.0} m from Home's second drone ship");
-        Assert.True(flight.Progress.IsDone(Array.FindIndex(Mission.LandOnTheMoon.Steps, s => s.Label == "Bonus: the booster on the drone ship")));
+        Assert.True(flight.Run!.Progress.IsDone(Array.FindIndex(Mission.LandOnTheMoon.Steps, s => s.Label == "Bonus: the booster on the drone ship")));
     }
 
     // ---- The lander's trip: round the moon, let go, down by the spot ----
@@ -542,8 +542,8 @@ public sealed class LanderTripTests(ITestOutputHelper output)
         void Tick(Flight f)
         {
             for (var i = 0; i < points.Length; i++)
-                if (points[i] is null && f.Progress.IsDone(i))
-                    points[i] = mission.Steps[i].Points?.Invoke(f) ?? 0;
+                if (points[i] is null && f.Run!.Progress.IsDone(i))
+                    points[i] = mission.Steps[i].Points?.Invoke(f.Run!) ?? 0;
         }
         var done = sim.Run(pilot.Fly, f =>
         {
@@ -564,14 +564,14 @@ public sealed class LanderTripTests(ITestOutputHelper output)
         output.WriteLine($"the booster {booster.State}{(booster.LandedOnTarget ? " on target" : "")}{(booster.CrashReason is { } why ? $" ({why})" : "")}, {booster.DistanceToLandingSite:0.0} m from Home's second drone ship, {Kg(booster):0} kg left");
         if (pilot.Lander is { } lander)
             output.WriteLine($"the lander {lander.State}, touchdown {lander.TouchdownSpeed:0.00} m/s, {PointOfInterest.MoonLandingSpot.DistanceFrom(lander, flight.WorldTime):0.0} m from the spot, {Kg(lander):0.0} kg left, the bay doors {lander.BayDoors:0.00} open");
-        output.WriteLine($"the mission {(mission.Succeeded(flight) ? "succeeded" : "not succeeded")}; score {mission.Score(flight)?.ToString() ?? "none"} ({flight.Progress.Points} points):");
+        output.WriteLine($"the mission {(flight.Run!.Succeeded ? "succeeded" : "not succeeded")}; score {flight.Run!.Score?.ToString() ?? "none"} ({flight.Run!.Progress.Points} points):");
         for (var i = 0; i < points.Length; i++)
             output.WriteLine($"  {mission.Steps[i].Label}: {(points[i] is { } p ? $"{p} points" : "not done")}");
 
         Assert.True(done, $"never done ({pilot.Now})");
-        Assert.True(mission.Succeeded(flight), "the mission didn't succeed");
-        Assert.Equal(flight.Progress.Points, points.Sum(p => p ?? 0));
-        Assert.Equal(flight.Progress.Points, mission.Score(flight));
+        Assert.True(flight.Run!.Succeeded, "the mission didn't succeed");
+        Assert.Equal(flight.Run!.Progress.Points, points.Sum(p => p ?? 0));
+        Assert.Equal(flight.Run!.Progress.Points, flight.Run!.Score);
         LandedNearTheSpot(sim, pilot.Lander!);
         Margins(pilot);
         Assert.True(fastest.Speed < Scene.TopSpeed, $"{fastest.Speed:0} m/s over the ground");

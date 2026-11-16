@@ -428,7 +428,7 @@ public sealed class SlowdownTests(ITestOutputHelper output)
     {
         var (sim, a, _) = FastCollisionTests.Fly(FastCollisionTests.Pair(2000f, 5000f, 5f));
         using var _ = sim;
-        var far = sim.Flight.Vessels[0]; // the new rocket on Home's pad
+        var far = sim.Flight.WorldVessels.Single(v => v.State == FlightState.Ready); // the new rocket on Home's pad
         Assert.NotSame(a, far);
         Assert.True(sim.Run(Nobody, f => f.TimeScale < 0.5f, maxSeconds: 6), "never slowed");
         output.WriteLine($"{Vector3.Distance(far.Position, a.Position):0} m apart; switched away at a scale of {sim.Flight.TimeScale:0.000}");

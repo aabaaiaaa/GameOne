@@ -24,19 +24,19 @@ public sealed class FlightTests(ITestOutputHelper output)
         Assert.Equal(FlightState.Landed, flight.State);
         Assert.True(flight.ReachedTarget, $"only reached {flight.MaxAltitude:0} m");
         Assert.True(flight.LandedOnTarget, $"landed {flight.DistanceToLandingSite:0.0} m from the landing zone's centre");
-        Assert.True(flight.Mission.Succeeded(flight));
+        Assert.True(flight.Run!.Succeeded);
         Assert.InRange(flight.TouchdownSpeed, 0f, Scene.SafeTouchdownSpeed);
         Assert.True(flight.Fuel > 0f);
 
         // Then it takes off again: the landing stays, and so does the score.
-        var score = flight.Mission.Score(flight);
+        var score = flight.Run!.Score;
         Assert.NotNull(score);
         sim.Run((_, _) => new FlightInput(FullThrottle: true), _ => false, 3);
-        output.WriteLine($"{flight.State}, {flight.Ground:0.0} m up; score {score} then {flight.Mission.Score(flight)}");
+        output.WriteLine($"{flight.State}, {flight.Ground:0.0} m up; score {score} then {flight.Run!.Score}");
         Assert.Equal(FlightState.Flying, flight.State);
         Assert.True(flight.Ground > 3f, $"only {flight.Ground:0.00} m up");
-        Assert.True(flight.Progress.IsDone(Array.FindIndex(flight.Mission.Steps, s => s.Label == "Land on the landing zone")));
-        Assert.Equal(score, flight.Mission.Score(flight));
+        Assert.True(flight.Run!.Progress.IsDone(Array.FindIndex(flight.Mission.Steps, s => s.Label == "Land on the landing zone")));
+        Assert.Equal(score, flight.Run!.Score);
     }
 
     [Fact]
@@ -153,7 +153,7 @@ public sealed class FlightTests(ITestOutputHelper output)
         var flight = sim.Flight;
         Assert.Equal(FlightState.Landed, flight.State);
         Assert.False(flight.LandedOnTarget);
-        Assert.False(flight.Mission.Succeeded(flight));
+        Assert.False(flight.Run!.Succeeded);
     }
 
     [Fact]

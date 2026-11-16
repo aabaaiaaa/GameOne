@@ -98,10 +98,12 @@ dotnet run --project src/GameOne
   in front of its sphere.
 - **Game code:** `Flight` holds the flight and its vessels, in its world, `Vessel` each one's rules
   and state, `RocketPhysics` a body's Jolt world (one `Craft` per vessel in its physics there; one world a body in use, `Worlds`), `Mission` what success means
-  (and which `Vehicle` flies it), `MissionProgress` the flight's steps done (each stays done, with
+  (and which `Vehicle` flies it), `MissionRun` one flight of a mission (its own vessels, the rocket and the
+  parts off it, by which its steps are judged whichever is flown; any number in progress at once,
+  `Flight.Runs`, the flown vessel's `Flight.Run`), `MissionProgress` a run's steps done (each stays done, with
   its points as they were then, whatever happens after), `GroundBody` a body's shape, gravity, air
   and orbits. A new mode should be a new `Mission` where it can be. `Flight`'s properties are the
-  controlled vessel's. `Flight.Vessels` is this flight's (what missions count);
+  controlled vessel's. `Flight.Vessels` is the flown vessel's flight's (what Tab goes round);
   `Flight.WorldVessels` is everything in the world, earlier flights' included: anything that must
   work for every vessel (sounds, effects, plumes, drawing) iterates that.
 - **The terrain:** the planet is not a sphere. `Terrain/` holds `CubeSphere` (directions to and from

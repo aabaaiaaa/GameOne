@@ -576,11 +576,15 @@ say) stalls frames and spoils the timing.
   flight's vessels where they are (and flying); a mission counts only its own flight; R undoes the
   flight; wrecks go (one wrecked on the pad at once, body and all, not left inside the new rocket);
   anything left on the launch pad is cleared for the new rocket (a rocket that
-  never launched is just replaced); Tab stays within this flight while an earlier vessel can be
-  flown through its view; a captured world comes back exactly and carries on the same; the
+  never launched is just replaced); Tab goes round the flown vessel's flight, and another flight's
+  vessel is flown through its view; a captured world comes back exactly and carries on the same; the
   satellites preset's satellites hold their orbits for a lap of the highest (each its height all the way round, and
   the size of each orbit, among the stars, not creeping lap by lap as the ground turns under it); a world of a hundred vessels can still
   put another in orbit.
+- **`MissionRunTests`:** runs (`MissionRun`): two in progress at once, each ticking its own steps
+  whichever vessel is flown; the mission panel's run (`Flight.Run`) following the flown vessel;
+  a new mission at Home leaving another site's waiting rocket, and its run, in place; and the
+  parts staged off a rocket belonging to its run.
 - **`WorldLogTests`:** the world's log: a crash on the ground, two vessels colliding (one entry; and two wrecked by one collision steps apart joined into the first's entry; two pairs colliding side by side an entry each, by who hit whom), an unwatched loss under formula (not witnessed, near its site), those removed to make room as a world loads (oldest first, unseen, no speed, printed without one), one cleared from the launch pad (unseen as a world loads; seen, flown, as a flight from its site starts), and the newest 300 kept; and each crash reason worded without its advice (or the break-up's cause after its colon), its speed taken out to be the entry's (a line never says two speeds).
 - **`WorldStoreTests`:** saving and loading, in a folder of the test's own: a world loads back
   exactly (every field of every vessel, a body targeted from the planet and from the moon

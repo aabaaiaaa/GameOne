@@ -489,7 +489,7 @@ public sealed class BodiesInPlayTests(ITestOutputHelper output)
         Assert.InRange(float.Parse(reading[..^2], System.Globalization.CultureInfo.InvariantCulture), expected - 1f, expected + 1f);
 
         // Flying the rocket on Home's pad instead, the planet is straight down.
-        sim.Step(new FlightInput(SwitchVessel: true));
+        sim.Step(new FlightInput(SwitchTo: sim.Flight.WorldVessels.Single(v => v.State == FlightState.Ready)));
         Assert.Same(Home, sim.Flight.Body);
         Assert.Equal("-90 °", Readout.FlightReadings(sim.Flight)["Planet height"]);
     }

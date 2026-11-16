@@ -224,13 +224,16 @@ internal sealed class Readout
 
         Show("Site", flight.Site.Name);
         Show("Mission", flight.Mission.Name);
-        var steps = flight.Mission.Steps;
-        for (var i = 0; i < steps.Length; i++)
-            Show(steps[i].Label, flight.Progress.IsDone(i) ? "[x]" : Mission.IsLost(i, flight) ? "[!]" : "[ ]");
-        if (flight.Mission.Failed(flight))
-            Show("Mission failed", "yes");
+        if (flight.Run is { } run)
+        {
+            var steps = run.Mission.Steps;
+            for (var i = 0; i < steps.Length; i++)
+                Show(steps[i].Label, run.Progress.IsDone(i) ? "[x]" : run.IsLost(i) ? "[!]" : "[ ]");
+            if (run.Failed)
+                Show("Mission failed", "yes");
+        }
         Show("Best altitude", $"{flight.MaxAltitude:0} m");
-        if (flight.Mission.Score(flight) is { } score)
+        if (flight.Run?.Score is { } score)
             Show("Score", $"{score}");
     }
 

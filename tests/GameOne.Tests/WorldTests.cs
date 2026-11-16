@@ -29,10 +29,10 @@ public sealed class WorldTests(ITestOutputHelper output)
         var flight = sim.Flight;
         FlyToOrbit(sim);
         var upper = flight.Controlled;
-        Assert.Equal(1, flight.FlightNumber);
+        Assert.Equal(1, flight.Run!.Number);
 
         sim.Step(new FlightInput(Choose: Mission.LaunchAndLand));
-        Assert.Equal(2, flight.FlightNumber);
+        Assert.Equal(2, flight.Run!.Number);
         Assert.Single(flight.Vessels); // this flight: the new rocket on the pad
         Assert.Equal(FlightState.Ready, flight.Controlled.State);
         Assert.Contains(upper, flight.WorldVessels);
@@ -53,14 +53,14 @@ public sealed class WorldTests(ITestOutputHelper output)
         using var sim = new Simulation(Mission.LaunchAndLand);
         var flight = sim.Flight;
         Assert.True(sim.RunToEnd(new Autopilot().Fly));
-        Assert.True(flight.Mission.Succeeded(flight));
+        Assert.True(flight.Run!.Succeeded);
         var first = flight.Controlled;
 
         sim.Step(new FlightInput(Choose: Mission.LaunchAndLand));
         Assert.Contains(first, flight.WorldVessels); // still standing on the landing zone ...
         Assert.Equal(FlightState.Landed, first.State);
-        Assert.False(flight.Mission.Succeeded(flight)); // ... but it was the last flight that landed it
-        Assert.Null(flight.Mission.Score(flight));
+        Assert.False(flight.Run!.Succeeded); // ... but it was the last flight that landed it
+        Assert.Null(flight.Run!.Score);
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public sealed class WorldTests(ITestOutputHelper output)
         Assert.Equal(2, flight.Vessels.Count);
         sim.Step(new FlightInput(Restart: true));
 
-        Assert.Equal(2, flight.FlightNumber); // the same flight, again
+        Assert.Equal(2, flight.Run!.Number); // the same flight, again
         Assert.Single(flight.Vessels);
         Assert.Equal(FlightState.Ready, flight.Controlled.State);
         Assert.Equal(time, flight.WorldTime, 0.05);
@@ -176,7 +176,7 @@ public sealed class WorldTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Tab_cycles_this_flight_s_vessels_but_an_earlier_one_can_still_be_flown_through_its_view()
+    public void Tab_cycles_the_flown_vessel_s_flight_s_vessels_and_another_flight_s_is_flown_through_its_view()
     {
         using var sim = new Simulation(Mission.ReachOrbit);
         var flight = sim.Flight;
@@ -191,9 +191,11 @@ public sealed class WorldTests(ITestOutputHelper output)
 
         sim.Step(new FlightInput(SwitchTo: upper));
         Assert.Same(upper, flight.Controlled); // a click on its view
-        Assert.True(flight.CanSwitch);
+        Assert.All(flight.Vessels, v => Assert.Equal(upper.Flight, v.Flight)); // its own flight's now
+        Assert.DoesNotContain(rocket, flight.Vessels);
         sim.Step(new FlightInput(SwitchVessel: true));
-        Assert.Same(rocket, flight.Controlled); // and Tab comes back to this flight
+        Assert.NotSame(rocket, flight.Controlled); // Tab stays in its flight
+        Assert.Equal(upper.Flight, flight.Controlled.Flight);
     }
 
     [Fact]
@@ -408,7 +410,7 @@ public sealed class WorldTests(ITestOutputHelper output)
             var flight = copy.Flight;
             Assert.Equal(0, flight.ClearedFromPad);
             Assert.Equal(world.Vessels.Count, flight.WorldVessels.Count); // the same, but a new rocket for the old
-            Assert.Equal(world.Flights + 1, flight.FlightNumber);
+            Assert.Equal(world.Flights + 1, flight.Run!.Number);
             Assert.Equal(world.Time, flight.WorldTime);
             foreach (var state in world.Vessels.Where(s => s.Flight == 1))
             {

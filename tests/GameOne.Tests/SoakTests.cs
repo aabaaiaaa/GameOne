@@ -295,7 +295,7 @@ internal sealed class Playlist
         ("orbit, and land the booster downrange", Mission.ReachOrbit, () => new OrbitAndReturnPilot().Fly,
             f => f.Vessels.Count > 1 && f.Vessels.All(v => v.State != FlightState.Flying || v.AchievedOrbit) || Ended(f)),
         ("deploy a satellite, land the rest", Mission.DeploySatellite, () => new SatellitePilot().Fly,
-            f => f.Mission.Succeeded(f) && f.Vessels.All(v => v.State != FlightState.Flying || v.Stage == 2) || Ended(f)),
+            f => f.Run!.Succeeded && f.Vessels.All(v => v.State != FlightState.Flying || v.Stage == 2) || Ended(f)),
         ("land off target", Mission.LaunchAndLand, () => new Autopilot { Target = Scene.LandingZoneCentre + new System.Numerics.Vector3(60f, 0f, 0f) }.Fly, Ended),
     ];
 

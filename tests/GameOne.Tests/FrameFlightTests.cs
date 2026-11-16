@@ -32,7 +32,7 @@ public sealed class FrameFlightTests(ITestOutputHelper output)
             (frame, periapsis) = (f.Frame, f.Periapsis);
             return pilot.Fly(f, dt);
         };
-        Assert.True(sim.Run(watched, f => f.Progress.IsDone(orbit), maxSeconds: 400), "the orbit step was never ticked");
+        Assert.True(sim.Run(watched, f => f.Run!.Progress.IsDone(orbit), maxSeconds: 400), "the orbit step was never ticked");
         var ticked = flight.WorldTime;
         sim.Run(watched, _ => false, maxSeconds: 60); // and on in orbit, coasting: it stays orbital
 

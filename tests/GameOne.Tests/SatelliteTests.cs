@@ -48,8 +48,8 @@ public sealed class SatelliteTests(ITestOutputHelper output, SatelliteTests.OnTh
         Assert.False(doneLit, "\"Raise its orbit\" was done with the engine still burning");
         Assert.Equal(3, flight.Vessels.Count(v => v.Guided));
         Assert.Equal(2, flight.Vessels.Count(v => v.Name == "Fairing half"));
-        Assert.True(flight.Mission.Succeeded(flight), "the mission didn't succeed");
-        Assert.All(flight.Mission.Steps.Select((step, i) => (step, i)), x => Assert.True(flight.Progress.IsDone(x.i), $"not done: {x.step.Label}"));
+        Assert.True(flight.Run!.Succeeded, "the mission didn't succeed");
+        Assert.All(flight.Mission.Steps.Select((step, i) => (step, i)), x => Assert.True(flight.Run!.Progress.IsDone(x.i), $"not done: {x.step.Label}"));
         var upper = flight.Vessels.Single(v => v is { Stage: 1, TopStage: 1 });
         Assert.True(upper.Fuel > 0.05f, $"the upper stage landed with only {upper.Fuel * 100:0}% fuel: too little to spare");
 
@@ -89,7 +89,7 @@ public sealed class SatelliteTests(ITestOutputHelper output, SatelliteTests.OnTh
         var raise = Array.FindIndex(flight.Mission.Steps, s => s.Label.StartsWith("Raise"));
         output.WriteLine($"satellite left at {satellite.Periapsis:0} to {satellite.Apoapsis:0} m");
         Assert.True(satellite.OrbitStable, "the upper stage should leave the satellite in orbit");
-        Assert.False(flight.Progress.IsDone(raise), "the upper stage alone shouldn't get the satellite high enough");
+        Assert.False(flight.Run!.Progress.IsDone(raise), "the upper stage alone shouldn't get the satellite high enough");
     }
 
     [PlaythroughFact(Long = true)]
@@ -107,9 +107,9 @@ public sealed class SatelliteTests(ITestOutputHelper output, SatelliteTests.OnTh
         using (var sim = FlyTheMission(new SatellitePilot(home)))
         {
             var flight = sim.Flight;
-            offPad = flight.Mission.Score(flight);
-            Assert.True(flight.Mission.Succeeded(flight), "a safe landing anywhere should do");
-            Assert.False(flight.Progress.IsDone(flight.Mission.Steps.Length - 1), "it came down on the landing zone after all");
+            offPad = flight.Run!.Score;
+            Assert.True(flight.Run!.Succeeded, "a safe landing anywhere should do");
+            Assert.False(flight.Run!.Progress.IsDone(flight.Mission.Steps.Length - 1), "it came down on the landing zone after all");
         }
         output.WriteLine($"scores: on the pad {onPad}, off it {offPad}");
         Assert.True(onPad > offPad, "landing on the pad should score more");
@@ -234,13 +234,13 @@ public sealed class SatelliteTests(ITestOutputHelper output, SatelliteTests.OnTh
         {
             if (f.Vessels.FirstOrDefault(v => v is { Stage: 2, TopStage: 2 }) is not { } satellite)
                 return;
-            var done = f.Progress.IsDone(raise);
+            var done = f.Run!.Progress.IsDone(raise);
             if (!wasDone && satellite is { EngineLit: true, Periapsis: >= Scene.SatelliteOrbitLow, Apoapsis: <= Scene.SatelliteOrbitHigh })
                 litInBand++;
             doneLit |= done && !wasDone && satellite.EngineLit;
             wasDone = done;
         });
-        return new OnTheZoneFlight.Flown(sim, sim.Flight.Mission.Score(sim.Flight), litInBand, doneLit);
+        return new OnTheZoneFlight.Flown(sim, sim.Flight.Run!.Score, litInBand, doneLit);
     });
 
     /// <summary>Flies the mission with <paramref name="pilot"/> until the booster and upper stage are both down (or something crashed), showing <paramref name="watch"/> the flight after each frame.</summary>
@@ -265,9 +265,9 @@ public sealed class SatelliteTests(ITestOutputHelper output, SatelliteTests.OnTh
 
         foreach (var vessel in flight.Vessels)
             output.WriteLine($"{vessel.Name}: {vessel.State} {vessel.CrashReason}, fuel {vessel.Fuel * 100:0}%, {vessel.DistanceToLandingSite:0.0} m off, touchdown {vessel.TouchdownSpeed:0.0} m/s");
-        output.WriteLine($"after {sim.Time:0} s; score {flight.Mission.Score(flight)}");
+        output.WriteLine($"after {sim.Time:0} s; score {flight.Run!.Score}");
         for (var i = 0; i < flight.Mission.Steps.Length; i++)
-            output.WriteLine($"  [{(flight.Progress.IsDone(i) ? "x" : " ")}] {flight.Mission.Steps[i].Label}");
+            output.WriteLine($"  [{(flight.Run!.Progress.IsDone(i) ? "x" : " ")}] {flight.Mission.Steps[i].Label}");
         return sim;
     }
 }

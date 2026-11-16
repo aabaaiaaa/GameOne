@@ -314,8 +314,8 @@ public sealed class SplashdownTests(ITestOutputHelper output)
             Assert.True(furthest > Scene.FloatFreezeDistance, $"the vessel being flown only got {furthest:0} m from the booster");
             Assert.True(ended, "the booster is still flying");
             Assert.Equal(FlightState.Floating, booster.State);
-            Assert.True(mission.Steps.Single(s => s.Label == safely).Done(sim.Flight), $"not done: {safely}");
-            Assert.False(mission.Steps.Single(s => s.Label == onZone).Done(sim.Flight), $"done: {onZone}");
+            Assert.True(mission.Steps.Single(s => s.Label == safely).Done(sim.Flight.Run!), $"not done: {safely}");
+            Assert.False(mission.Steps.Single(s => s.Label == onZone).Done(sim.Flight.Run!), $"done: {onZone}");
         }
 
         using (var sim = Drop(4f))
@@ -323,7 +323,10 @@ public sealed class SplashdownTests(ITestOutputHelper output)
             var booster = Dropped(sim);
             Assert.True(sim.Run(Nobody, _ => booster.State != FlightState.Flying, maxSeconds: 90));
             Assert.Equal(FlightState.Floating, booster.State);
-            Assert.False(Mission.LaunchAndLand.Steps.Single(s => s.Label == "Land on the landing zone").Done(sim.Flight));
+            // Judged as a run whose rocket it is.
+            var run = new MissionRun(sim.Flight, Mission.LaunchAndLand, LaunchSites.Home, booster.Flight, 0);
+            run.Add(booster);
+            Assert.False(Mission.LaunchAndLand.Steps.Single(s => s.Label == "Land on the landing zone").Done(run));
         }
     }
 

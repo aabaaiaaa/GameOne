@@ -14,9 +14,9 @@ public sealed class FreePlayTests(ITestOutputHelper output)
 
     private static void NothingWonLostOrScored(Flight flight)
     {
-        Assert.False(flight.Mission.Succeeded(flight), "free play was won");
-        Assert.False(flight.Mission.Failed(flight), "free play was lost");
-        Assert.Null(flight.Mission.Score(flight));
+        Assert.False(flight.Run!.Succeeded, "free play was won");
+        Assert.False(flight.Run!.Failed, "free play was lost");
+        Assert.Null(flight.Run!.Score);
         Assert.All(flight.WorldVessels, v => Assert.Null(v.LandingSite));
     }
 
