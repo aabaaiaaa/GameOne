@@ -277,19 +277,19 @@ internal sealed class Flight : IDisposable
     public bool RewindResumed => _rewind?.Resumed ?? false;
 
     /// <summary>
-    /// Starts the flown vessel's mission again ("Start the mission again"): its run, if it is in
-    /// progress, is abandoned (logged as started again), and a new run of the run's mission (or,
-    /// for a vessel of none, the vessel's own) is begun at its site. Its old vessels stay where
-    /// they are, in no run, and nothing else in the world changes but what a new rocket on that
-    /// pad clears away.
-    /// </summary>
-    /// <summary>
     /// What starting again (<see cref="FlightInput.StartAgain"/>) begins, and where: the flown
     /// vessel's run's mission at its site (an ended run's too, while it is shown), or for a vessel
     /// of none, its own mission and site.
     /// </summary>
     public (Mission Mission, LaunchSite Site) StartAgainOf => Run is { } run ? (run.Mission, run.Site) : (Controlled.Mission, Controlled.Site);
 
+    /// <summary>
+    /// Starts the flown vessel's mission again ("Start the mission again"): its run, if it is in
+    /// progress, is abandoned (logged as started again), and a new run of the run's mission (or,
+    /// for a vessel of none, the vessel's own) is begun at its site. Its old vessels stay where
+    /// they are, in no run, and nothing else in the world changes but what a new rocket on that
+    /// pad clears away.
+    /// </summary>
     private void StartAgain()
     {
         var (mission, site) = StartAgainOf;

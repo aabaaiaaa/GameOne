@@ -267,6 +267,36 @@ public sealed class ViewsTests
     }
 
     [Fact]
+    public void Carrying_on_a_vessel_at_the_moon_keeps_the_strip_empty_through_its_link_up()
+    {
+        var lander = OnTheMoon.Lander(0, OnTheMoon.LandingSpot);
+        using var sim = new Simulation(Mission.FreePlay, world: new WorldState { Time = 0.0, Vessels = [lander], NextVesselId = 1, Flights = 1 });
+        var views = new Views();
+        var camera = new ChaseCamera(null);
+        var flight = sim.Flight;
+        views.Follow(flight);
+        views.Update(Dt, flight, camera);
+        var moonLander = flight.WorldVessels.Single(v => v.Id == lander.Id);
+        Assert.NotSame(moonLander, flight.Controlled);
+
+        // The moon's physics isn't made, so the switch to the lander waits behind a link-up: the
+        // rocket flown meanwhile or after it must not be swapped into the strip.
+        sim.Step(new FlightInput(CarryOn: moonLander.Id));
+        views.Update(Dt, flight, camera);
+        Assert.Empty(views.Small);
+        var frames = 0;
+        while (flight.LinkUp.On && frames++ < 600)
+        {
+            sim.Step(default);
+            views.Update(Dt, flight, camera);
+            Assert.Empty(views.Small);
+        }
+        Assert.False(flight.LinkUp.On);
+        Assert.Same(moonLander, flight.Controlled);
+        Assert.Empty(views.Small);
+    }
+
+    [Fact]
     public void The_strips_buttons_go_below_the_instruments_however_tall_they_are()
     {
         var display = new Vector2(1280f, 720f);
