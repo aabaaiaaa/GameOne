@@ -71,7 +71,10 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
                     break;
                 case WorldRequestKind.Rename when request.Id == flight.WorldId:
                     flight.Rename(request.Text);
-                    Save();
+                    if (flight.Chosen)
+                        Save();
+                    else
+                        store.Rename(request.Id, request.Text); // not saved while nothing is chosen in it: renamed on disk, as it stands there
                     break;
                 case WorldRequestKind.Rename:
                     store.Rename(request.Id, request.Text);
