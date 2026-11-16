@@ -1,0 +1,296 @@
+# GameOne: the moon trip, from a low orbit round the planet to the moon's ground, in six worlds
+# (the trip's starts, and moments captured from the trip flown by the tests' autopilots), each
+# played in turn and deleted after.
+# Each world has the satellite launcher's upper stage (flown from a view of its own, as an earlier
+# flight's vessel) and a satellite on a round orbit 9 km over the planet, given the second small
+# view: so from the moon there is a small view at the planet beside the main view there.
+# - A low orbit, the moon targeted: the window shaded on the orbit ahead (90 s on), and the map
+#   zoomed out step by step to its furthest.
+# - The transfer burn done: the path bending round the moon in the map; then warped on to the
+#   moon's sphere and slowed, a run of shots a second apart across the crossing (no jump); then
+#   the map at the moon, the way in bending round it.
+# - Arriving in the moon's sphere: the link-up over the stage's new small view (once the moon's
+#   physics, kept from the last world, has been let go: it is made behind the link-up); the main
+#   view at the moon beside the small view at the planet; switching to the satellite at the
+#   planet and back (no link-up: both bodies' physics are made by then); the map round the moon,
+#   the way in bending round it; levelled and turned, the planet behind the moon from beyond.
+# - On the round orbit over the moon's poles: the loop and its readouts; the map at every zoom
+#   from the nearest to the furthest; then warped on, a shot every 4 s, the stage passing behind
+#   the moon (hidden by it).
+# - On the way down, the de-orbit burn just done and the engine off (no autopilot here: it comes
+#   down unbraked, and crashes), on the retrograde hold: the landing lights coming on in the
+#   moon's night.
+# - Landed at the landing spot by night: its lights on the ground; free look up and round (the
+#   middle button) for the planet over the horizon.
+# The worlds are written by a test (tests/GameOne.Tests/MoonTripWorlds.cs), oldest first in the
+# order played; each is played and deleted by its row's markers ("Play: <its name>", "Delete: ..."), wherever it is. Run with GAMEONE_WORLDS set
+# to a new, empty folder with only those six worlds written into it (the scripts' worlds alone):
+# GAMEONE_WRITE_MOON_WORLD=<folder> dotnet test tests/GameOne.Tests --filter "FullyQualifiedName~Writes_the_moon_trip_worlds"
+# GAMEONE_WORLDS=<folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-moon-trip.txt --out shots
+#
+# 1. The low orbit.
+0    until Menu = Worlds
+1    click marker "Play: The moon trip: a low orbit, the moon targeted"
+0    until Menu = Missions
+1    click marker "Mission: FREE PLAY" # a new rocket on Home's pad
+0    until Menu = None
+1.5  click marker "Add view"     # Add view ...
+2.5  click marker "Add view: Upper stage"     # ... of the upper stage (after the satellite: stages follow satellites)
+3.5  move -492 250
+4    click -492 250     # fly it: click its view (the rocket takes the view)
+0    until Altitude >= 3000 within 10
+1.5  click marker "Add view"     # Add view ...
+3    click marker "Add view: Satellite"     # ... of the satellite (the only entry left)
+6    shot low-views     # the stage in its low orbit; the rocket on the pad and the satellite in the small views
+6.5  readings low-views
+7    tap m              # the map
+12   shot low-window    # the window shaded on the orbit ahead, the moon's closest approach marked
+12.5 scroll 3           # in a little
+16   shot low-window-near
+16.5 scroll -8
+20   shot low-map-1     # out: the moon and its orbit
+20.5 scroll -10
+24   shot low-map-2
+24.5 scroll -15
+28   shot low-map-3
+28.5 scroll -20
+32   shot low-map-4
+32.5 scroll -40         # past the furthest: held there
+36   shot low-map-furthest
+36.5 tap m              # back to the stage
+39   tap escape
+0    until Menu = Game
+0.5  move 0 37
+1    click 0 37         # Change world...
+0    until Menu = Worlds
+1.5  click marker "Delete: The moon trip: a low orbit, the moon targeted" # the world just played ...
+3    click marker "Yes, delete it" # ... yes: five left
+#
+# 2. The transfer burn done (five listed).
+4.5  click marker "Play: The moon trip: the transfer burn done"
+0    until Menu = Missions
+1    click marker "Mission: FREE PLAY"
+0    until Menu = None
+1.5  click marker "Add view"
+2.5  click marker "Add view: Upper stage"     # a view of the upper stage ...
+3.5  move -492 250
+4    click -492 250     # ... flown
+0    until Altitude >= 3000 within 10
+1.5  click marker "Add view"
+3    click marker "Add view: Satellite"     # a view of the satellite
+4    tap m
+9    shot burnt-map     # the path out to the moon, bending round it
+9.5  readings burnt-map
+9.6  scroll -6
+13   shot burnt-map-out
+13.5 tap m
+16   tap .              # 2x
+16.3 tap .              # 4x
+16.6 tap .              # 8x
+16.9 tap .              # 16x
+17.2 tap .              # 32x
+0    until Moon <= 7000 within 60
+0    tap ,              # 16x
+0.3  tap ,              # 8x
+0.6  tap ,              # 4x: closing on the moon's sphere at some 80 m/s
+0    until Moon <= 4300 within 60
+0    shot cross-00      # the crossing, a shot a second (the sphere is some 3,900 m out)
+0.1  readings cross-00
+1    shot cross-01
+2    shot cross-02
+3    shot cross-03
+4    shot cross-04
+0    until Body = Moon within 30
+0    shot cross-05      # just crossed
+0.1  readings cross-05
+1    shot cross-06
+2    shot cross-07
+3    shot cross-08
+4    shot cross-09
+5    shot cross-10
+6    shot cross-11
+6.1  readings cross-11
+6.5  tap ,              # 2x
+6.8  tap ,              # normal speed
+10   shot crossed
+10.1 readings crossed
+10.5 tap m
+15.5 shot crossed-map   # the map at the moon: the way in bending round it
+16   tap m
+18   tap escape
+0    until Menu = Game
+0.5  move 0 37
+1    click 0 37         # Change world...
+0    until Menu = Worlds
+1.5  click marker "Delete: The moon trip: the transfer burn done" # the world just played ...
+3    click marker "Yes, delete it" # ... yes: four left
+#
+# 3. Arriving in the moon's sphere (four listed).
+4.5  click marker "Play: The moon trip: arriving at the moon"
+0    until Menu = Missions
+1    click marker "Mission: FREE PLAY"
+0    until Menu = None
+1    tap .              # 2x
+1.3  tap .              # 4x: the moon's physics, kept from the last world with nothing in it now,
+10.5 tap ,              # is let go after 30 s of the world's time (Scene.PhysicsIdleSeconds) ...
+10.8 tap ,              # ... normal speed
+11.5 click marker "Add view"
+12.5 click marker "Add view: Upper stage"     # a view of the upper stage, at the moon with no physics there:
+0    until "Link Upper stage 0" = connecting within 5
+0.2  shot linkup-view   # the link-up over its new small view (drawn the frame after the click), the moon's physics made behind it
+2    move -492 250
+2.5  click -492 250     # flown: at the moon, the link-up over (1 s of real time)
+0    until Body = Moon within 10
+1.5  click marker "Add view"
+3    click marker "Add view: Satellite"     # a view of the satellite, at the planet
+6    shot arriving-views  # the main view at the moon, a small view at the planet
+6.5  readings arriving
+7    move -216 250
+7.5  click -216 250     # fly the satellite: back to the planet's physics
+0    until Body = Planet within 10
+0    shot switched-planet
+3    shot switched-planet-later
+3.5  move -216 250
+4    click -216 250     # and the stage again
+0    until Body = Moon within 10
+0    shot switched-moon-again
+3    tap m
+8    shot arriving-map  # the way in, bending round the moon
+8.5  rdrag 0 -180       # levelled with the moon's equator ...
+13   shot beyond-0
+13.5 rdrag 262 0        # ... and turned a quarter at a time: the planet behind the moon from beyond
+18   shot beyond-1
+18.5 rdrag 262 0
+23   shot beyond-2
+23.5 rdrag 262 0
+28   shot beyond-3
+28.5 scroll -6          # further out, the planet beside the moon
+33   shot beyond-3-out
+33.5 tap m
+36   tap escape
+0    until Menu = Game
+0.5  move 0 37
+1    click 0 37         # Change world...
+0    until Menu = Worlds
+1.5  click marker "Delete: The moon trip: arriving at the moon" # the world just played ...
+3    click marker "Yes, delete it" # ... yes: three left
+#
+# 4. On the round orbit round the moon (three listed).
+4.5  click marker "Play: The moon trip: in orbit round the moon"
+0    until Menu = Missions
+1    click marker "Mission: FREE PLAY"
+0    until Menu = None
+1.5  click marker "Add view"
+2.5  click marker "Add view: Upper stage"     # a view of the upper stage ...
+3.5  move -492 250
+4    click -492 250     # ... flown
+0    until Body = Moon within 10
+1.5  click marker "Add view"
+3    click marker "Add view: Satellite"     # a view of the satellite, at the planet
+6    shot orbit-views   # the loop's readouts: apoapsis, periapsis, period, round the moon
+6.5  readings orbit
+7    tap m
+12   shot orbit-map     # the loop round the moon
+12.5 scroll -10
+16   shot orbit-map-1
+16.5 scroll -10
+20   shot orbit-map-2   # the planet and the moon's orbit
+20.5 scroll -15
+24   shot orbit-map-3
+24.5 scroll -20
+28   shot orbit-map-4   # the sun's distance
+28.5 scroll -40
+32   shot orbit-map-furthest
+32.5 scroll 100         # back to the nearest
+37   shot orbit-map-near
+37.5 tap .              # 2x
+37.8 tap .              # 4x
+38.1 tap .              # 8x
+42   shot behind-00     # a lap at 8x (440 s, some 55 s): a shot every 4 s, the stage behind the moon in some
+46   shot behind-01
+50   shot behind-02
+54   shot behind-03
+58   shot behind-04
+62   shot behind-05
+66   shot behind-06
+70   shot behind-07
+74   shot behind-08
+78   shot behind-09
+82   shot behind-10
+86   shot behind-11
+90   shot behind-12
+94   shot behind-13
+94.5 tap ,
+94.8 tap ,
+95.1 tap ,              # normal speed
+95.5 tap m
+98   tap escape
+0    until Menu = Game
+0.5  move 0 37
+1    click 0 37         # Change world...
+0    until Menu = Worlds
+1.5  click marker "Delete: The moon trip: in orbit round the moon" # the world just played ...
+3    click marker "Yes, delete it" # ... yes: two left
+#
+# 5. On the way down (two listed).
+4.5  click marker "Play: The moon trip: on the way down to the moon"
+0    until Menu = Missions
+1    click marker "Mission: FREE PLAY"
+0    until Menu = None
+1.5  click marker "Add view"
+2.5  click marker "Add view: Upper stage"     # a view of the upper stage ...
+3.5  move -492 250
+4    click -492 250     # ... flown, falling
+0    until Body = Moon within 10
+1.5  click marker "Add view"
+3    click marker "Add view: Satellite"     # a view of the satellite, at the planet
+3.5  tap r              # the retrograde hold (the surface frame's): its bell, and its landing lights, turned down the way it falls
+7    shot down-high
+7.1  readings down-high
+7.5  rdrag 0 60         # looking down past it at the ground
+0    until Ground <= 450 within 60
+1    shot down-450
+1.1  readings down-450
+0    until Ground <= 200 within 60
+0    shot down-200
+0.1  readings down-200
+0    until Ground <= 60 within 60
+0    shot down-60
+0.1  readings down-60
+0    until State = Crashed within 30
+1    shot down-crashed
+1.1  readings down-crashed
+3    tap escape
+0    until Menu = Game
+0.5  move 0 37
+1    click 0 37         # Change world...
+0    until Menu = Worlds
+1.5  click marker "Delete: The moon trip: on the way down to the moon" # the world just played ...
+3    click marker "Yes, delete it" # ... yes: one left
+#
+# 6. Landed (one listed).
+4.5  click marker "Play: The moon trip: landed on the moon"
+0    until Menu = Missions
+1    click marker "Mission: FREE PLAY"
+0    until Menu = None
+1.5  click marker "Add view"
+2.5  click marker "Add view: Upper stage"     # a view of the upper stage ...
+3.5  move -492 250
+4    click -492 250     # ... flown, landed
+0    until Body = Moon within 10
+1.5  click marker "Add view"
+3    click marker "Add view: Satellite"     # a view of the satellite, at the planet
+6    shot landed        # landed at the spot by night, its lights on the ground
+6.5  readings landed
+7    rdrag 0 100        # looking down on it
+11   shot landed-down
+11.5 rdrag 0 -100
+12   mdrag 0 -40        # free look up a little ...
+16   shot look-0
+16.5 mdrag 262 0        # ... and round, a quarter at a time, for the planet over the horizon
+20.5 shot look-1
+21   mdrag 262 0
+25   shot look-2
+25.5 mdrag 262 0
+29.5 shot look-3
+30   quit

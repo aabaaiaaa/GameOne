@@ -1,0 +1,38 @@
+# GameOne: a hop low over Highcrest's rough ground, to read the ground tiles' timings in play. Make
+# an empty world, pick Free play from Highcrest, turn "Show timings" on, launch the booster, lean it
+# over (D held for a second and a half), cut the engine once it is 60 m over the ground so it falls
+# in an arc, and save the readings (the timings among them) twice on the way down, with shots.
+# Run with GAMEONE_WORLDS set to a new, empty folder, so the world made has its preset's name (a
+# new world's is made unique among those saved) and the driver's worlds stay out of yours. The
+# world list's buttons are clicked by their markers, wherever they are.
+# GAMEONE_WORLDS=<empty folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Release/net10.0/GameOne.exe tools/GameDriver/examples/gameone-tiles-hop.txt --out shots
+0    until Menu = Worlds
+1    click marker "New: Empty world"
+0    until Menu = Missions
+1    click marker "Site: Highcrest"
+2    click marker "Mission: FREE PLAY"
+0    until Menu = None
+1    tap escape          # the game menu ...
+0    until Menu = Game
+0.5  move 0 71
+1    click 0 71          # ... Settings
+0    until Menu = Settings
+1.5  move -160 -16
+2    click -160 -16       # Show timings: on
+3    tap escape
+4    tap escape
+0    until Menu = None
+1    shot pad
+1.5  tap space           # light the engine
+2.5  down d              # lean over ...
+4    up d                # ... a second and a half
+0    until Ground >= 60 within 60
+0.1  tap x               # cut the engine: it coasts up, then falls in an arc
+0.5  readings hop1       # still going up
+0.5  shot hop1
+0    until Vertical <= -15 within 40
+0.2  readings hop2       # falling, low over the ground
+0.2  shot hop2
+1    readings hop3
+1    shot hop3
+3    quit

@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <!--
+      Location of the local BRUTAL source checkout (branch: local-build).
+      Override with -p:BrutalRoot=... or an environment variable if it lives elsewhere.
+    -->
+    <BrutalRoot Condition="'$(BrutalRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', 'Brutal'))</BrutalRoot>
+  </PropertyGroup>
+</Project>

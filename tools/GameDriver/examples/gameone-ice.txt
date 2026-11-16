@@ -1,0 +1,54 @@
+# GameOne: the sea ice, in the Austral Sea (the icy sea round the south pole, some 14 km from the
+# pad: further than a script can fly, so the world starts there, at its local noon).
+# Over the frozen sheet's edge from 150 m: the sheet (ice, not snow on land and not water), its
+# ragged edge, the floes in the water beyond it and the band they make, tinted from far off;
+# then lowered to about 30 m over the edge, and the floes near, a second apart (riding the waves);
+# then the camera drawn far out, past the floes' 2.5 km, where they give way to the band's tint,
+# and from further still, looking down on the sheet and the band round it.
+# The world is written by a test (tests/GameOne.Tests/IceWorld.cs): one booster hovering 150 m
+# over the sheet at its edge. Run with GAMEONE_WORLDS set to a new, empty folder with only that
+# world written into it (its Play is clicked by its marker, by the world's name, so other saved
+# worlds there would do no harm, but the driver's worlds stay out of yours):
+# GAMEONE_WRITE_ICE_WORLD=<folder> dotnet test tests/GameOne.Tests --filter "FullyQualifiedName~IceWorld"
+# GAMEONE_WORLDS=<folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-ice.txt --out shots
+0    until Menu = Worlds
+1    click marker "Play: Sea ice: over the Austral Sea's edge" # the one saved world: the ice
+0    until Menu = Missions
+1    click marker "Mission: LAUNCH AND LAND" # a new flight on the pad, the booster still hovering over the ice
+0    until Menu = None
+1    move -600 328
+1.5  click -600 328     # Add view ...
+2    move -560 308
+2.5  click -560 308     # ... of the booster over the ice (the only entry)
+3.5  move -492 250
+4    click -492 250     # fly it: click its view
+0    until Altitude >= 100 within 10
+2    shot edge-150      # over the sheet's edge from 150 m
+2.5  rdrag 0 150        # look down at the edge
+4    shot edge-down
+4.5  rdrag 0 -150
+5    rdrag 520 0        # and round the other way
+6.5  shot edge-round
+7    rdrag -520 0
+7.5  down ctrl          # the throttle well under the hover: coming down ...
+7.8  up ctrl
+0    until Ground <= 42 within 30
+0    tap z              # ... then full, to stop at about 30 m ...
+0    until Vertical >= -4 within 10
+0    down ctrl          # ... and back to about the hover
+0.75 up ctrl
+1.5  shot edge-30       # about 30 m over the edge
+2    rdrag 0 120        # look down at the floes by the edge
+3    shot floes-a       # twice, a second apart: they ride the waves
+4    shot floes-b
+4.5  scroll 6           # in closer
+6    shot floes-close
+6.5  rdrag 0 -120
+7    scroll -40         # far out: past the floes' range, the band's tint
+9    shot far-1
+10   scroll -20
+12   shot far-2
+13   scroll -40         # further out still ...
+14   rdrag 0 200        # ... looking down on the sheet and its band
+16   shot far-down
+17   quit

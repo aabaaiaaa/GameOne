@@ -1,0 +1,31 @@
+# GameOne: make a world, pick the landing mission, launch, lean right, deploy the legs, throttle
+# back, look round with the right button, pause in the game menu mid-flight, restart the flight
+# from it, then quit from it.
+# Run with GAMEONE_WORLDS set to a new, empty folder, so the world made has its preset's name (a
+# new world's is made unique among those saved) and the driver's worlds stay out of yours. The
+# world list's buttons are clicked by their markers, wherever they are.
+# GAMEONE_WORLDS=<empty folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-launch.txt --out shots
+0    until Menu = Worlds
+0.8  shot worlds        # the game starts on the world list
+1.1  click marker "New: Empty world"
+0    until Menu = Missions
+0.5  shot menu          # then the mission menu
+0.7  click marker "Mission: LAUNCH AND LAND"
+0    until Menu = None
+3    shot ready
+3.2  tap space          # light the engine, at the 75% throttle it starts at
+7    shot liftoff
+8    down d             # lean to the right ...
+9    up d               # ... for a second
+10   tap g              # legs out
+12   shot climbing
+13   down lctrl         # throttle back (from 75%: half a second leaves it lit)
+13.5 up lctrl
+14.5 rdrag 200 0        # look round the rocket
+15.5 shot looked
+16   tap escape         # the game menu: the game is paused
+17   shot paused
+18   click 0 -65        # Restart flight: back on the pad
+19.5 shot restarted
+20   tap escape         # the game menu again ...
+21   click 0 109        # ... and Quit game (it saves the world first)

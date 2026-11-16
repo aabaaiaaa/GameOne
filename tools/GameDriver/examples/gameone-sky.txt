@@ -1,0 +1,179 @@
+# GameOne: the sky and the light through the day, at Home, Highcrest and Polar, and from orbit.
+# Each place is a new world (a new world starts at 07:30 at Home: 11:40 at Highcrest, 75 degrees
+# east; 07:42 at Polar), with the rocket on the place's pad, picked in the mission menu's "Launch
+# from" row (the pick is kept: the orbit world at the end launches from Polar too, which doesn't
+# matter there). The time warp (".", to 32x, which carries on from world to world) runs the sun
+# across the sky, and each shot waits on the HUD's clock ("Local time", read as one number of
+# seconds; a wait past midnight waits for the clock to come round below 01:00). The camera starts
+# looking north, so east is on the right; a right drag of 260 px turns it a quarter round (it
+# keeps its way from one world to the next, so each place ends facing north again; and a shot
+# after a turn waits a few seconds for the camera to follow). At each place: noon (10:00), a low
+# sun (14:50), sunset (15:00) and twilight (15:40) looking west, into the sun, and twilight looking
+# north too; midnight (00:00) looking up at the north sky; sunrise (05:00, and 05:10) looking east.
+# Each world is deleted from the world list when its place is done, so the next is named "Empty
+# world" again (a new world's name is made unique among those saved), as its markers ("Delete:
+# Empty world") name it. Last, the Satellites world: the first
+# satellite flown (Add view, then a click on its view), looking down from 10 km, and zoomed all
+# the way out (M), as its own local time passes 14:30, 15:00 and 15:20: the day-night line under
+# it and the air's band round the planet's rim. The waits are long, as the warp runs slower than
+# 32x when the machine is busy.
+# GAMEONE_WORLDS=<empty folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-sky.txt --out shots
+
+# Home, from 07:30.
+0    until Menu = Worlds
+0.4  click marker "New: Empty world"
+0    until Menu = Missions
+0.7  click marker "Site: Home"
+1.4  click marker "Mission: LAUNCH AND LAND"
+0    until Menu = None
+0    until Site = Home within 5
+1    tap .                          # 2x
+0    until Time = 2x within 5
+0.3  tap .                          # 4x
+0    until Time = 4x within 5
+0.3  tap .                          # 8x
+0    until Time = 8x within 5
+0.3  tap .                          # 16x
+0    until Time = 16x within 5
+0.3  tap .                          # 32x
+0    until Time = 32x within 5
+0    until "Local time" >= 10:00 within 120
+0    shot home-noon
+3    rdrag -260 0                   # round to the west
+0    until "Local time" >= 14:50 within 120
+0    shot home-low-sun-west
+0    until "Local time" >= 15:00 within 30
+0    shot home-sunset-west
+0    until "Local time" >= 15:40 within 30
+0    shot home-twilight-west
+0.5  rdrag 260 0                    # north again
+4    shot home-twilight-north
+4.5  rdrag 0 -60                    # look up, at the night sky to the north
+0    until "Local time" < 01:00 within 120
+0    shot home-midnight
+0.5  rdrag 0 60                     # level again
+2    rdrag 260 0                    # round to the east
+0    until "Local time" >= 05:00 within 120
+0    shot home-sunrise-east
+0    until "Local time" >= 05:10 within 30
+0    shot home-sunrise-east-2
+0.5  rdrag -260 0                   # north again: the camera keeps its way into the next world
+4    tap escape
+0    until Menu = Game
+0.3  move 0 -31
+0.7  click 0 -31                    # Missions...
+0    until Menu = Missions
+1    click marker "Change world"
+0    until Menu = Worlds
+1    click marker "Delete: Empty world" # the one world in the list ...
+2    click marker "Yes, delete it"
+0    until Menu = Worlds
+
+# Highcrest, from 11:40.
+1.4  click marker "New: Empty world"
+0    until Menu = Missions
+0.7  click marker "Site: Highcrest"
+1.4  click marker "Mission: LAUNCH AND LAND"
+0    until Menu = None
+0    until Site = Highcrest within 5
+0    until Time = 32x within 5      # the warp carries on from the last world
+3    rdrag -260 0                   # west
+0    until "Local time" >= 14:50 within 120
+0    shot highcrest-low-sun-west
+0    until "Local time" >= 15:00 within 30
+0    shot highcrest-sunset-west
+0    until "Local time" >= 15:40 within 30
+0    shot highcrest-twilight-west
+0.5  rdrag 260 0                    # north
+4    shot highcrest-twilight-north
+4.5  rdrag 0 -60                    # up
+0    until "Local time" < 01:00 within 120
+0    shot highcrest-midnight
+0.5  rdrag 0 60                     # level again
+2    rdrag 260 0                    # east
+0    until "Local time" >= 05:00 within 120
+0    shot highcrest-sunrise-east
+0    until "Local time" >= 05:10 within 30
+0    shot highcrest-sunrise-east-2
+0.5  rdrag -260 0                   # north
+0    until "Local time" >= 10:00 within 120
+0    shot highcrest-noon
+0.5  tap escape
+0    until Menu = Game
+0.3  move 0 -31
+0.7  click 0 -31                    # Missions...
+0    until Menu = Missions
+1    click marker "Change world"
+0    until Menu = Worlds
+1    click marker "Delete: Empty world"
+2    click marker "Yes, delete it"
+0    until Menu = Worlds
+
+# Polar, from 07:42: 70 degrees south, so the sun stays low and its noon is to the north.
+1.4  click marker "New: Empty world"
+0    until Menu = Missions
+0.7  click marker "Site: Polar"
+1.4  click marker "Mission: LAUNCH AND LAND"
+0    until Menu = None
+0    until Site = Polar within 5
+0    until Time = 32x within 5      # the warp carries on from the last world
+0    until "Local time" >= 10:00 within 120
+0    shot polar-noon
+3    rdrag -260 0                   # west
+0    until "Local time" >= 14:50 within 120
+0    shot polar-low-sun-west
+0    until "Local time" >= 15:00 within 30
+0    shot polar-sunset-west
+0    until "Local time" >= 15:40 within 30
+0    shot polar-twilight-west
+0.5  rdrag 260 0                    # north
+4    shot polar-twilight-north
+4.5  rdrag 0 -60                    # up
+0    until "Local time" < 01:00 within 120
+0    shot polar-midnight
+0.5  rdrag 0 60                     # level again
+2    rdrag 260 0                    # east
+0    until "Local time" >= 05:00 within 120
+0    shot polar-sunrise-east
+0    until "Local time" >= 05:10 within 30
+0    shot polar-sunrise-east-2
+0.5  rdrag -260 0                   # north again
+4    tap escape
+0    until Menu = Game
+0.3  move 0 -31
+0.7  click 0 -31                    # Missions...
+0    until Menu = Missions
+1    click marker "Change world"
+0    until Menu = Worlds
+1    click marker "Delete: Empty world"
+2    click marker "Yes, delete it"
+0    until Menu = Worlds
+
+# From orbit: the Satellites world's first satellite.
+1.4  click marker "New: Satellites in orbit"
+0    until Menu = Missions
+0.7  click marker "Mission: LAUNCH AND LAND" # (the rocket stays on the pad)
+0    until Menu = None
+1    click -600 328                 # Add view ...
+1.6  move -540 250
+2    click -540 250                 # ... of the first satellite
+3    click -492 250                 # fly it: its view's middle
+0    until Vessel != Booster within 5
+1    rdrag 0 250                    # look down at the planet
+1.5  until Time = 32x within 5      # the warp carries on
+0    until "Local time" < 12:00 within 120
+0    until "Local time" >= 14:30 within 120
+0    shot orbit-1430-down
+0.5  tap m                          # zoomed all the way out
+3    shot orbit-out
+0    until "Local time" >= 15:00 within 30
+0    shot orbit-out-1500
+0.5  tap m                          # back to the satellite
+0    until "Local time" >= 15:20 within 30
+0    shot orbit-1520-down
+0.5  rdrag 0 -120                   # up a little, towards the rim
+4    shot orbit-rim
+4.5  tap escape
+0    until Menu = Game
+0.5  move 0 109
+1    click 0 109                    # Quit game

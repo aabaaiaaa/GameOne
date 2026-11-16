@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    End-to-end flight tests: they fly whole missions through the game's real flight rules and
+    Jolt physics, with no window, rendering or audio, as fast as the CPU allows. See README.md.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The game itself: its internals are visible to this project (see GameOne.csproj). -->
+    <ProjectReference Include="../../src/GameOne/GameOne.csproj" />
+    <!-- The test runner, for its tests and for the machine's key and commit it shares with PerfBaseline. -->
+    <ProjectReference Include="../../tools/TestRun/TestRun.csproj" />
+    <!-- The terrain generator: the tests make the moon's map with it and read its layout. -->
+    <ProjectReference Include="../../tools/TerrainGen/TerrainGen.csproj" />
+  </ItemGroup>
+
+</Project>

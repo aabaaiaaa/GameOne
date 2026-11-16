@@ -1,0 +1,219 @@
+# GameOne: the lander and its mission, in a new world and three written for it, each played in turn.
+# - A new world: the mission menu with the new mission; LAND ON THE MOON chosen, the stack on Home's
+#   pad under its wide fairing, the mission's steps; the right-click menu on the booster, its legs
+#   put out by it; launched straight up, the booster dropped, the engine cut and the fairing's foot
+#   cone close by (the HUD hidden, F2), then the fairing jettisoned, its halves coming away.
+# - The stack round the moon by day, 60 degrees short of the landing spot: the spot's marker over
+#   the moon, and on the map (M); SPACE releases the lander, seen from the side.
+# - The lander alone on its way down, its de-orbit burn just done (flown on from the release by
+#   the tests' pilot, the upper stage left on its orbit above, as in the next): the retrograde hold, the spot's
+#   marker as it nears, the right-click menu in flight putting its legs out (no autopilot here: it
+#   comes down unbraked, and crashes).
+# - Landed on the spot by day, its legs out and its doors shut: on the marker with the planet in
+#   its sky; its legs and foot pads as close as the camera comes (F2); the right-click menu, "Open
+#   bay doors", the doors opening and open as ramps, from round it; free look (the middle button)
+#   up to the planet.
+# Each world is played and then deleted by its row's markers ("Play: <its name>", "Delete: ..."),
+# wherever it is. The camera's drags are undone before each world is left, as its heading carries
+# on into the next. The pointer is parked over the view (350 200), clear of the panels, for the
+# wheel's zoom and so the steering rings don't show. Run with GAMEONE_WORLDS set to a new, empty
+# folder with only the lander's three worlds written into it:
+# GAMEONE_WRITE_MOON_WORLD=<folder> dotnet test tests/GameOne.Tests --filter "FullyQualifiedName~Writes_the_lander_worlds"
+# GAMEONE_WORLDS=<folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-lander.txt --out shots
+#
+# 1. A new world: the mission from the pad.
+0    until Menu = Worlds
+1    click marker "New: Empty world"
+0    until Menu = Missions
+1.5  shot missions      # the mission menu: LAND ON THE MOON among the five
+2    click marker "Mission: LAND ON THE MOON"
+0    until Menu = None
+1    move 350 200
+3    shot pad           # the stack on Home's pad under its wide fairing; the briefing; the mission's steps
+3.5  readings pad
+4    tap f2             # the HUD hidden ...
+4.5  scroll -2
+5    rdrag 0 -30 350 200 # ... and a little lower, looking up at it
+9    shot pad-stack     # the whole stack, the fairing over the upper stage
+9.5  rdrag 0 30 350 200
+10   scroll 2
+10.5 tap f2
+12   rclick marker "Flown vessel"
+13.5 shot menu-booster  # the right-click menu on the booster: its name, "Deploy legs"
+14   readings menu-booster
+14.5 click marker "Action: Deploy legs"
+15   move 350 200
+0    until Legs = deployed within 10
+1    shot legs-out      # the booster's legs out on the pad
+3    tap space          # lit ...
+3.1  tap z              # ... at full throttle, straight up
+0    until Altitude >= 2500 within 90
+0    tap space          # the booster dropped, over the thick air
+0.2  tap x              # the engine cut: the stack on its way up with its engine off
+1    shot booster-off
+1.5  rdrag -262 0 350 200 # from the side, the sun behind the camera
+2    tap f2
+2.5  scroll 4           # close by: the fairing's foot cone over the upper stage
+6.5  shot fairing-foot
+7    scroll -3
+10   shot fairing-side
+10.5 tap space          # the fairing jettisoned
+10.8 shot fairing-0
+11.3 shot fairing-1
+12   shot fairing-2
+13   shot fairing-3
+15   shot fairing-4
+15.5 tap f2
+16.5 shot fairing-hud
+17   readings fairing
+17.5 scroll -1
+18   rdrag 262 0 350 200
+20   tap escape
+0    until Menu = Game
+0.5  move 0 37
+1    click 0 37         # Change world...
+0    until Menu = Worlds
+1.5  click marker "Delete: Empty world" # the world just played ...
+3    click marker "Yes, delete it" # ... yes: the three lander worlds left
+#
+# 2. The stack round the moon.
+4.5  click marker "Play: The lander: in orbit round the moon"
+0    until Menu = Missions
+1    click marker "Mission: LAND ON THE MOON" # the spot's marker is this mission's
+0    until Menu = None
+1.5  click marker "Add view"
+2.5  click marker "Add view: Upper stage"     # a view of the stack (the upper stage with the lander on) ...
+3.5  move -492 250
+4    click -492 250     # ... flown: its view clicked
+0    until Body = Moon within 10
+1    move 350 200
+1.5  scroll 5
+2    rdrag 0 60 350 200 # looking down past it at the moon
+6    shot orbit-stack   # the stack round the moon by day, the spot's marker over the moon
+6.5  readings orbit-stack
+7    tap f2
+7.5  scroll 2
+11   shot orbit-stack-near
+11.5 tap f2
+12   tap m              # the map
+17   shot orbit-map     # the spot's marker on the moon, the orbit over it
+17.5 readings orbit-map
+18   rdrag 262 0 350 200
+22   shot orbit-map-turned
+22.5 rdrag -262 0 350 200
+23   tap m
+40   shot orbit-ahead   # on towards the spot, its marker on the ground ahead
+40.5 readings orbit-ahead
+41   rdrag -262 -60 350 200 # from the side, level with it, the sun behind the camera
+45   shot release-before
+45.5 tap space          # the lander released
+45.8 shot release-0
+46.5 shot release-1
+47.5 shot release-2
+49.5 shot release-3
+52.5 shot release-4
+53   readings release
+60   shot release-5
+60.5 rdrag 262 0 350 200
+61   scroll -7
+62   tap escape
+0    until Menu = Game
+0.5  move 0 37
+1    click 0 37         # Change world...
+0    until Menu = Worlds
+1.5  click marker "Delete: The lander: in orbit round the moon" # the world just played ...
+3    click marker "Yes, delete it" # ... yes: two left
+#
+# 3. The way down (two listed).
+4.5  click marker "Play: The lander: on the way down to the moon"
+0    until Menu = Missions
+1    click marker "Mission: LAND ON THE MOON"
+0    until Menu = None
+1.5  click marker "Add view"
+2.5  click marker "Add view: Lander"     # a view of the lander ...
+3.5  move -492 250
+4    click -492 250     # ... flown, falling
+0    until Body = Moon within 10
+1    move 350 200
+1.5  scroll 6
+2    tap r              # the retrograde hold: its bell turned down the way it falls
+7    shot down-start
+7.5  readings down-start
+0    until Ground <= 700 within 120
+0    rclick marker "Flown vessel"
+1.5  shot menu-lander-flying # the right-click menu in flight: "Open bay doors", "Deploy legs"
+2    click marker "Action: Deploy legs"
+2.5  move 350 200
+0    until Ground <= 400 within 60
+0    shot down-400      # the spot's marker ahead as it nears
+0.1  readings down-400
+0    until Ground <= 150 within 60
+0    shot down-150
+0.1  readings down-150
+0    until Ground <= 40 within 60
+0    shot down-40
+0    until State = Crashed within 30
+1    shot down-crashed
+1.5  scroll -6
+3    tap escape
+0    until Menu = Game
+0.5  move 0 37
+1    click 0 37         # Change world...
+0    until Menu = Worlds
+1.5  click marker "Delete: The lander: on the way down to the moon" # the world just played ...
+3    click marker "Yes, delete it" # ... yes: one left
+#
+# 4. Landed (one listed).
+4.5  click marker "Play: The lander: landed at the spot"
+0    until Menu = Missions
+1    click marker "Mission: LAND ON THE MOON"
+0    until Menu = None
+1.5  click marker "Add view"
+2.5  click marker "Add view: Lander"     # a view of the lander ...
+3.5  move -492 250
+4    click -492 250     # ... flown, landed
+0    until Body = Moon within 10
+1    move 350 200
+1.5  scroll 6
+2    rdrag 524 0 350 200 # looking south, to the planet
+2.5  rdrag 0 -120 350 200 # low, level with the ground
+7    shot landed        # landed on the spot's marker by day, its legs out, its doors shut, the planet in its sky
+7.5  readings landed
+8    tap f2
+8.5  rdrag 655 0 350 200 # round to its sunlit side, the sun behind the camera
+13   shot legs-near     # its legs and foot pads, as close as the camera comes
+13.5 rdrag 0 40 350 200
+17.5 shot legs-near-high
+18   rdrag 0 -40 350 200
+18.5 tap f2
+20   rclick marker "Flown vessel"
+21.5 shot menu-lander   # the right-click menu on the lander: "Open bay doors", "Stow legs"
+22   readings menu-lander
+22.5 click marker "Action: Open bay doors"
+23   move 350 200
+24   shot doors-0       # opening: the doors swinging out, their panels unfolding
+25.5 shot doors-1
+27   shot doors-2
+28.5 shot doors-3
+0    until "Bay doors" = open within 10
+1    shot doors-open    # open as ramps, onto the ground
+1.5  readings doors-open
+2    tap f2
+2.5  rdrag 0 40 350 200
+3    scroll -2          # back a little: the ramps reach well out
+6.5  shot ramps-0       # the ramps from round it, a quarter at a time
+7    rdrag 262 0 350 200
+11   shot ramps-1
+11.5 rdrag 262 0 350 200
+15.5 shot ramps-2
+16   rdrag 262 0 350 200
+20   shot ramps-3
+20.5 rdrag 655 -40 350 200 # south again, low
+20.7 scroll 2
+21   tap f2
+22   mdrag 0 -25 350 200 # free look up, to the planet in its sky
+26   shot look-planet
+26.5 readings look-planet
+27   mdrag 0 -25 350 200 # further up
+31   shot look-up
+31.5 quit

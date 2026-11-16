@@ -1,0 +1,98 @@
+# GameOne: a look at the terrain. The pad from the starting camera, and the test range of tilted pads
+# north of it from low down; then looking west (the range inland) and east (the coast and the Sunrise Sea, twice a second apart, to see its waves move); a booster launched and coasting past 1,500 m, looking
+# down and out to the horizon, and from higher still the drone ship in the sea; then the flight
+# restarted and a booster flown out over the coast and on past the drone ship into the sea, to see
+# the ship close (its deck tilted by the waves, its target) and look at the water from just
+# above it (the moment it hits the water, with the splash, then the waves where it went in), and back at the ship and the coast; then, in a Satellites world, a satellite flown and the planet seen
+# zoomed right out (M).
+# Run with GAMEONE_WORLDS set to a new, empty folder, so the world made has its preset's name (a
+# new world's is made unique among those saved) and the driver's worlds stay out of yours. The
+# world list's buttons are clicked by their markers, wherever they are.
+# GAMEONE_WORLDS=<empty folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-terrain.txt --out shots
+0    until Menu = Worlds
+1    click marker "New: Empty world"
+0    until Menu = Missions
+1    click marker "Mission: LAUNCH AND LAND"
+0    until Menu = None
+3    shot pad
+3.5  scroll -20        # zoom out, low on the pad, looking north at the test range
+4.5  shot pad-range
+5    scroll 20
+5.5  rdrag -260 0       # look round to the west: the range
+7    shot pad-west
+7.5  rdrag 520 0        # and the east ...
+8.5  scroll -20         # ... from higher up: the shore is about at the horizon, the sea beyond it
+10   shot pad-east
+10.5 shot sea-low-a     # the Sunrise Sea, low over the shore, twice a second apart: its waves move
+11.5 shot sea-low-b
+12   scroll 20
+12.5 rdrag -260 0       # and round to the north again, ready for the climb
+13   tap space          # light the engine (at 75%) ...
+13.1 tap z              # ... and full throttle
+0    until Altitude >= 400 within 60
+0    shot climb-range   # the test range, 500 m to 1 km north, from 400 m
+0    rdrag 260 0        # round to the east
+1    shot climb-east    # the coast and the sea, from 400 m
+0    until Altitude >= 1500 within 120
+0    tap x              # engine off: coasting up
+1    rdrag 0 250        # look down
+3    shot high-down
+3.5  rdrag 0 -110       # and out to the east
+5    shot high-east
+5.5  rdrag 520 0        # and the west: the range
+7    shot high-west
+0    until Altitude >= 3300 within 60
+0    rdrag -480 0       # back round to the east, looking down past the booster ...
+1    rdrag 0 -10
+2.5  shot far-ship      # ... at the drone ship in the sea, ~2.4 km east of the pad (only a speck from this high up)
+8.5  tap escape         # the game menu ...
+0    until Menu = Game
+0.5  move 0 -65
+1    click 0 -65        # ... Restart flight: back on the pad, to fly out over the sea
+0    until Menu = None
+1    rdrag 0 -130       # level again (the camera keeps its turn: looking east, past the booster)
+1.5  tap space          # light the engine ...
+1.6  tap z              # ... at full throttle
+0    until Message = LIFT-OFF within 10
+0    down d             # lean east ...
+0    until Tilt >= 25 within 20
+0    up d               # ... and hold it there, climbing out over the coast (the air tips it further)
+0    until Horizontal >= 155 within 30
+0    tap x              # engine off: it arcs out over the Sunrise Sea, on over the drone ship
+0    rdrag 0 120        # look down a little: the drone ship's marker ahead, a couple of km off ...
+1    click marker "Drone ship" # ... clicked to target it, as a player does
+0    until Target = "Drone ship" within 5
+0    rdrag 0 80         # look down further ...
+0    until "To target" <= 1000 within 30 # (it passes some 850 m over the ship, at the top of its arc)
+0    shot ship-near     # ... at the drone ship below, just ahead: its deck tilted by the waves, its target
+0    rdrag 0 -200       # and level again
+0    until Ground <= 60 within 60
+0    shot water-fall    # coming down over open water, the camera a few tens of metres above it
+0    until "Mission failed" = yes within 30
+0.2  shot splash        # the moment it hits the water (and is lost): the spray thrown up, in frame
+18   shot water-a       # low over the sea where it went in, once the spray has gone, and half
+18.5 shot water-b       # a second on: the waves, drawn whole this close, moving
+19   rdrag 520 0        # and round to the west: the drone ship close by, and the coast it came from, across the water
+20.5 shot water-coast   # (a seam between seas, or water over the land, would show here; the ship's hull through the waves)
+21   scroll 10          # in closer, the camera just above the waves
+22.5 shot water-close
+23   tap escape         # the game menu ...
+0    until Menu = Game
+0.5  move 0 37
+1    click 0 37         # ... Change world
+0    until Menu = Worlds
+1    click marker "New: Satellites in orbit" # below the saved world
+0    until Menu = Missions
+1    click marker "Mission: LAUNCH AND LAND"
+0    until Menu = None
+1    move -600 328
+1.5  click -600 328     # Add view ...
+2    move -540 250
+2.5  click -540 250     # ... the first satellite
+3.5  move -492 250
+4    click -492 250     # fly it: click its view
+5    tap m              # zoomed right out
+8    shot orbit
+8.5  rdrag 450 0        # round to the day side
+10.5 shot orbit-day
+11   quit

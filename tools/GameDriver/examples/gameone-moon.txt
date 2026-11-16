@@ -1,0 +1,82 @@
+# GameOne: from the moon's ground. Flying there is for later, so the world starts there: two
+# landers (the satellite launcher's upper stage, on its legs) landed on the moon, one at its
+# landing spot 20° from its north pole, the other at the near side's middle, under the planet. The
+# world's time is when the landing spot sees the planet's centre low over its horizon (2°),
+# with the sun some 10° up there, 80° round the sky from the planet (so the planet shows
+# its day and its night side, with its lights twinkling).
+# From the landing spot: the lander on the ground with its shadow, the ground airless under a
+# black sky; then turned to the south, the planet rising over the horizon, and from nearer, free
+# look (the middle button) turned up from there, the planet framed over it. Then the other lander,
+# flown from a view of its own: the planet stands almost overhead there, out of the camera's
+# sight, so its shots are of the lander and the plains. Then back to the first (its view
+# clicked), warped on until the planet has risen clear of the horizon (16°, about 230 s on) and
+# to about its highest there (18°, some 350 s on), the moon's tilt nodding it once a lap.
+# The world is written by a test (tests/GameOne.Tests/MoonWorld.cs). Run with GAMEONE_WORLDS set
+# to a new, empty folder with only that world written into it (its Play is clicked by its marker,
+# by the world's name, so other saved worlds there would do no harm, but the driver's worlds
+# stay out of yours):
+# GAMEONE_WRITE_MOON_WORLD=<folder> dotnet test tests/GameOne.Tests --filter "FullyQualifiedName~MoonWorld"
+# GAMEONE_WORLDS=<folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-moon.txt --out shots
+0    until Menu = Worlds
+1    click marker "Play: The moon: two landers on it" # the one saved world: the moon
+0    until Menu = Missions
+1    click marker "Mission: FREE PLAY" # a new rocket on Home's pad, the landers still on the moon
+0    until Menu = None
+1    move -600 328
+1.5  click -600 328     # Add view ...
+2    move -560 289
+2.5  click -560 289     # ... of the lander at the landing spot (the first of the two entries)
+3.5  move -492 250
+4    click -492 250     # fly it: click its view (the rocket takes the view)
+0    until "Planet height" >= 1 within 10
+3    shot spot-lander   # the lander on the moon's ground, its shadow long under the low sun
+3.5  rdrag 0 120        # look down on it
+7.5  shot spot-down
+8    rdrag 0 -120
+8.5  rdrag 524 0        # turn round, to look south: towards the planet
+9    rdrag 0 -60        # and from low down, looking up a little
+13   shot spot-rising   # the planet on the horizon, rising
+13.5 scroll -10         # further back, for more of the sky
+17   shot spot-rising-far
+17.5 scroll 10          # back in ...
+18   mdrag 0 -30        # ... and free look (the middle button) up from there: the planet framed over the horizon
+22   shot spot-look-up
+22.5 move -600 119
+23   click -600 119     # Add view (moved up over the rocket's view) ...
+24   move -560 99
+24.5 click -560 99      # ... of the other lander (the only entry)
+25.5 move -216 250
+26   click -216 250     # fly it: click its view, the second (the first lander takes it)
+0    until "Planet height" >= 60 within 10
+4    shot middle-lander # the other lander, at the near side's middle, the planet overhead
+4.5  rdrag 524 0
+8.5  shot middle-round
+9    move -216 250
+9.5  click -216 250     # back to the first lander: its view, the second
+0    until "Planet height" <= 30 within 10
+0.5  rdrag 524 0        # turned back to the south
+4.5  tap .              # 2x
+4.8  tap .              # 4x
+5.1  tap .              # 8x
+5.4  tap .              # 16x
+5.7  tap .              # 32x
+0    until "Planet height" >= 16 within 120
+0    tap ,              # 16x
+0.3  tap ,
+0.6  tap ,
+0.9  tap ,
+1.2  tap ,              # back to normal speed
+3    shot spot-risen    # risen clear of the horizon
+3.5  tap .
+3.8  tap .
+4.1  tap .
+4.4  tap .
+4.7  tap .              # 32x again
+0    until "Planet height" >= 18 within 120
+0    tap ,
+0.3  tap ,
+0.6  tap ,
+0.9  tap ,
+1.2  tap ,              # normal speed
+3    shot spot-high     # about as high as it gets over the landing spot
+4    quit

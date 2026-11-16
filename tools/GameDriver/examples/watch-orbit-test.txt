@@ -1,0 +1,22 @@
+# Drives a watched flight test: the orbit test, sped up and slowed down with the watch keys.
+# Start the test watched, then attach to its window (it is a long test, so it is skipped, and no
+# window opens, without GAMEONE_LONG=1):
+#   GAMEONE_LONG=1 GAMEONE_WATCH=1 dotnet test GameOne.slnx --filter "FullyQualifiedName~Autopilot_reaches_a_stable_orbit"
+#   dotnet run tools/GameDriver/drive.cs -- --attach "GameOne: watching" tools/GameDriver/examples/watch-orbit-test.txt --out shots
+4    shot realtime        # 1x: lifting off the pad
+5    tap ]                # 2x
+5.3  tap ]                # 4x
+5.6  tap ]                # 8x
+6    shot fast
+12   shot fast-later      # the camera keeps up: the rocket is still in the middle
+12.5 tap space            # pause
+14   shot paused
+15   tap space            # resume
+15.5 tap 0                # back to real time
+17   shot realtime-again
+18   tap ]                # then fast, to the end of the test
+18.2 tap ]
+18.4 tap ]
+18.6 tap ]
+18.8 tap ]                # 32x
+30   shot orbit

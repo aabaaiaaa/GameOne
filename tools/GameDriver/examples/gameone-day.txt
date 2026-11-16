@@ -1,0 +1,46 @@
+# GameOne: a day and a night at Home. A new world starts at 07:30 at Home; the time warp (".", to
+# 32x) runs the sun across the sky, and each shot waits on the HUD's clock ("Local time", read as
+# one number of seconds, so "09:15" >= "09:00"). The camera looks north, so east is on the right:
+# the morning (lit from the east, the shadows to the left), about noon (10:00: the sun overhead,
+# the shadows short and under things), the afternoon (13:30: lit from the west, the shadows to the
+# right), a low sun before sunset (14:50) and dusk (15:30). Then it looks up at the night sky:
+# midnight (00:00, the next day: dark but for the pad's lights, brighter at night, and the stars),
+# five minutes on (the stars a little further west, to the left: they rise in the east and set in
+# the west, as the sun does) and 02:00 (turned further). Then quit. The waits are long, as the
+# warp runs slower than 32x when the machine is busy (10x to 20x is usual).
+# GAMEONE_WORLDS=<empty folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-day.txt --out shots
+0    until Menu = Worlds
+0.4  click marker "New: Empty world"
+0    until Menu = Missions
+0.7  click marker "Mission: LAUNCH AND LAND" # from Home
+0    until Menu = None
+0    until Site = Home within 5
+1    shot morning                   # about 07:30
+1.2  tap .                          # 2x
+0    until Time = 2x within 2
+0.3  tap .                          # 4x
+0    until Time = 4x within 2
+0.3  tap .                          # 8x
+0    until Time = 8x within 2
+0.3  tap .                          # 16x
+0    until Time = 16x within 2
+0.3  tap .                          # 32x: a day in about 37 s (a little longer if the world can't keep up)
+0    until Time = 32x within 2
+0    until "Local time" >= 10:00 within 120
+0    shot noon
+0    until "Local time" >= 13:30 within 120
+0    shot afternoon
+0    until "Local time" >= 14:50 within 60
+0    shot low-sun
+0    until "Local time" >= 15:30 within 60
+0    shot dusk
+0.5  rdrag 0 -150                   # look up, at the night sky to the north
+0    until "World time" has "Day 2" within 120
+0    shot midnight
+0    until "Local time" >= 00:05 within 30
+0    shot midnight-5
+0    until "Local time" >= 02:00 within 60
+0    shot night-later
+0.5  tap escape
+1.5  move 0 109
+2    click 0 109                    # Quit game

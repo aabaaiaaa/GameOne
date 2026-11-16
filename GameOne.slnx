@@ -1,0 +1,26 @@
+<Solution>
+  <Folder Name="/Brutal/">
+    <Project Path="../Brutal/Brutal.Collections/Brutal.Collections.csproj" />
+    <Project Path="../Brutal/Brutal.Core/Brutal.Core.csproj" />
+    <Project Path="../Brutal/Brutal.Glfw/Brutal.Glfw.csproj" />
+    <Project Path="../Brutal/Brutal.Interop/Brutal.Interop.csproj" />
+    <Project Path="../Brutal/Brutal.Logging/Brutal.Logging.csproj" />
+    <Project Path="../Brutal/Brutal.Memory/Brutal.Memory.csproj" />
+    <Project Path="../Brutal/Brutal.Numerics/Brutal.Numerics.csproj" />
+    <Project Path="../Brutal/Brutal.ShaderC/Brutal.ShaderC.csproj" />
+    <Project Path="../Brutal/Brutal.Stb/Brutal.Stb.csproj" />
+    <Project Path="../Brutal/Brutal.Strings/Brutal.Strings.csproj" />
+    <Project Path="../Brutal/Brutal.Vulkan/Brutal.Vulkan.csproj" />
+    <Project Path="../Brutal/Brutal.Vulkan.Abstractions/Brutal.Vulkan.Abstractions.csproj" />
+    <Project Path="../Brutal/Brutal.ImGui/Brutal.ImGui.csproj" />
+    <Project Path="../Brutal/Brutal.ImGui.Backends/Brutal.ImGui.Backends.csproj" />
+    <Project Path="../Brutal/Brutal.Localization/Brutal.Localization.csproj" />
+    <Project Path="../Brutal/Brutal.OpenGl/Brutal.OpenGl.csproj" />
+    <Project Path="../Brutal/Brutal.OpenAl/Brutal.OpenAl.csproj" />
+    <Project Path="../Brutal/Brutal.Jolt/Brutal.Jolt.csproj" />
+  </Folder>
+  <Project Path="src/GameOne/GameOne.csproj" />
+  <Project Path="tests/GameOne.Tests/GameOne.Tests.csproj" />
+  <Project Path="tools/TerrainGen/TerrainGen.csproj" />
+  <Project Path="tools/TestRun/TestRun.csproj" />
+</Solution>

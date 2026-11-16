@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Makes the planet's terrain map (src/GameOne/Assets/terrain.bin.gz) from layout.json, and the
+    moon's (moon.bin.gz) from moon.json. Run during development, not by the game: see README.md. It
+    references the game for the map's format (TerrainMap, CubeSphere) and for where the sites are
+    (Scene), so the map always matches them.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- The tests make the moon's map twice to check it comes out the same, and read its layout. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="GameOne.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/GameOne/GameOne.csproj" />
+  </ItemGroup>
+
+</Project>

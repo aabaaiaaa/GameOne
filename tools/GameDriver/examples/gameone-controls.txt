@@ -1,0 +1,24 @@
+# GameOne: the controls list (bottom left) starts folded to one line, "Controls (H)"; H opens it,
+# and H again folds it, as does a click on its line. Also the BRUTAL credits, bottom right, at their size. Then quit. Each
+# "until" waits for a reading.
+# GAMEONE_WORLDS=<empty folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-controls.txt --out shots
+0    until Menu = Worlds
+0.4  click marker "New: Empty world"
+0    until Menu = Missions
+0.4  click marker "Mission: LAUNCH AND LAND"
+0    until Menu = None
+0    until Controls = folded within 5
+1    shot folded
+1.2  tap h                          # open the list
+0    until Controls = open within 5
+1    shot open
+1.2  tap h                          # and fold it again
+0    until Controls = folded within 5
+0.3  move -580 329
+0.5  press -580 329                 # or a click on its line opens it (pressed and released apart:
+0.7  release -580 329               # see TODO.md on lost clicks)
+0    until Controls = open within 5
+0.2  tap h
+0    until Controls = folded within 5
+0.5  tap escape
+1    click 0 109                    # Quit game

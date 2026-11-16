@@ -1,0 +1,53 @@
+# GameOne: the timings panel. Make the Satellites world, pick Free play, turn "Show timings" on in
+# the settings, open a small view of the first satellite, and look at the panel (bottom left, or
+# with the small view up there, under the mission panel), at 1x and at 32x warp, saving its numbers
+# from the readout ("Timings ..." in timings.txt and warp.txt) beside each shot; then turn the
+# setting off again, and the panel (and its readings) are gone.
+# Run with GAMEONE_WORLDS set to a new, empty folder, so the world made has its preset's name (a
+# new world's is made unique among those saved) and the driver's worlds stay out of yours. The
+# world list's buttons are clicked by their markers, wherever they are.
+# GAMEONE_WORLDS=<empty folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-timings.txt --out shots
+0    until Menu = Worlds
+1    click marker "New: Satellites in orbit"
+0    until Menu = Missions
+1    click marker "Mission: FREE PLAY"
+0    until Menu = None
+1    tap escape          # the game menu ...
+0    until Menu = Game
+0.5  move 0 71
+1    click 0 71          # ... Settings
+0    until Menu = Settings
+1    shot settings
+1.5  move -160 -16
+2    click -160 -16       # Show timings: on
+3    shot settings-on
+3.5  tap escape          # back to the game menu ...
+4.5  tap escape          # ... and to flying
+0    until Menu = None
+0.5  move -600 328
+1    click -600 328      # Add view ...
+1.5  move -540 250
+2    click -540 250      # ... of the first satellite
+5    shot timings        # the panel, with the GPU's times
+5    readings timings    # and its numbers, as text
+5.2  tap period          # time: faster, up to 32x
+5.4  tap period
+5.6  tap period
+5.8  tap period
+6.0  tap period
+6.2  tap period
+9.2  shot warp           # the warp asked and reached
+9.2  readings warp
+10   tap escape          # the game menu ...
+0    until Menu = Game
+0.5  move 0 71
+1    click 0 71          # ... Settings
+0    until Menu = Settings
+0.5  move -160 -16
+1    click -160 -16       # Show timings: off
+2    tap escape
+3    tap escape
+0    until Menu = None
+2    shot off            # the panel gone
+2    readings off        # and no "Timings ..." readings
+3    quit

@@ -1,0 +1,17 @@
+# GameOne: "LIFT-OFF" is the moment the rocket leaves the pad, not the moment Space is pressed. Cut
+# the throttle on the pad, press Space (the engine is unlit at nothing), wait, then go to full
+# throttle: the title comes as it lifts off. Each "until" waits for a reading.
+# GAMEONE_WORLDS=<empty folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-liftoff.txt --out shots
+0    until Menu = Worlds
+0.4  click marker "New: Empty world"
+0    until Menu = Missions
+0.4  click marker "Mission: LAUNCH AND LAND"
+0    until Menu = None
+0.2  tap x                          # the throttle to nothing ...
+0.4  tap space                      # ... and Space: flying, but unlit, on the pad
+1    shot unlit
+3    tap z                          # full throttle: now it lifts off
+3    until Message = LIFT-OFF within 3
+0    shot liftoff
+0.5  tap escape
+1    click 0 109                    # Quit game

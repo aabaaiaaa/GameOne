@@ -1,0 +1,34 @@
+# GameOne: the orbit mission's ascent by hand - a pitch kick east with the direction rings, let go
+# for the gravity turn, stage, prograde hold - and views of it. (Timed inputs can't fly a precise
+# orbit: the flight tests do that. This is for looking at it.)
+# Run with GAMEONE_WORLDS set to a new, empty folder, so the world made has its preset's name (a
+# new world's is made unique among those saved) and the driver's worlds stay out of yours. The
+# world list's buttons are clicked by their markers, wherever they are.
+# GAMEONE_WORLDS=<empty folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-orbit.txt --out shots
+0    until Menu = Worlds
+0.6  click marker "New: Empty world"     # the world list
+0    until Menu = Missions
+0.6  click marker "Mission: REACH ORBIT"
+0    until Menu = None
+1.5  shot ready
+5    tap space          # light the engine, when the countdown once lit it ...
+5.1  tap z              # ... at full throttle, so the timings below still fit
+6    move 0 85          # hover over the rocket's centre of mass: the rings appear
+6.5  shot rings
+7    move 0 -25         # onto the top of the orange (pitch) ring ...
+7.2  press 0 -25
+7.5  move 10 -24        # ... drag it round a little towards E, to about 80 degrees up ...
+8    move 19 -23
+8.5  shot dragging
+9.5  release 19 -23     # ... and let go: the air carries the turn on
+10   move 400 300       # pointer away: the rings fade
+13   shot climbing
+24   tap space          # drop the booster, about at its landing-fuel mark
+25   shot staged
+26   tap p              # prograde hold
+30   scroll -12         # zoom out
+32   shot zoomed
+33   rdrag 0 250        # look down at the planet
+36   shot planet
+44   shot space
+46   quit

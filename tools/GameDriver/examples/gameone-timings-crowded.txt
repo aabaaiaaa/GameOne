@@ -1,0 +1,39 @@
+# GameOne: the timings panel with a mission panel pushed low, where it must never cover the
+# credits. In the Satellites world, Deploy a Satellite (a long list of steps), with "Show timings"
+# on: first the panel whole (beside the mission panel, under the briefing, as the briefing reaches
+# in under the mission panel); then with "Also in this world" opened (four more lines), shortened,
+# without the GPU's passes and the world's counts; then, launched and staged (the booster and the
+# fairing's halves listed too), with no room under the mission panel even for that, beside it, to its
+# left, under the compass (or a message there). The BRUTAL logo and the whole NOTICE text show
+# in every shot.
+# Run with GAMEONE_WORLDS set to a new, empty folder, so the world made has its preset's name (a
+# new world's is made unique among those saved) and the driver's worlds stay out of yours. The
+# world list's buttons are clicked by their markers, wherever they are.
+# GAMEONE_WORLDS=<empty folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-timings-crowded.txt --out shots
+0    until Menu = Worlds
+1    click marker "New: Satellites in orbit"
+0    until Menu = Missions
+1    click marker "Mission: DEPLOY A SATELLITE"
+0    until Menu = None
+1    tap escape          # the game menu ...
+0    until Menu = Game
+0.5  move 0 71
+1    click 0 71          # ... Settings
+0    until Menu = Settings
+0.5  move -160 -16
+1    click -160 -16       # Show timings: on
+2    tap escape
+3    tap escape
+0    until Menu = None
+3    shot whole          # the whole panel, clear of the briefing
+3.5  move 396 -106
+4    click 396 -106      # Also in this world: 4 (opened)
+6    shot shortened      # no GPU passes, no world's counts
+6.5  move 0 200          # (off the panels)
+7    tap space           # light the engine ...
+7.2  tap z               # ... full throttle
+0    until Altitude >= 2500 within 90
+0    tap space           # the booster off ...
+1.5  tap space           # ... and the fairing
+4    shot beside         # this flight's vessels listed too: beside the mission panel instead
+5    quit

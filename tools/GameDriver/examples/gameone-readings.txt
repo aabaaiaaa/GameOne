@@ -1,0 +1,31 @@
+# GameOne, flown by what its HUD reads out rather than by the clock: make a world, pick the landing
+# mission, launch, cut the engine once the "Climb past 400 m" step is ticked, coast up and fall
+# back, then catch the fall with the engine well above the ground (a rough stop, not a landing), and
+# quit from the game menu. Each "until" waits for a reading; the steps after it count from then.
+# Run with GAMEONE_WORLDS set to a new, empty folder, so the world made has its preset's name (a
+# new world's is made unique among those saved) and the driver's worlds stay out of yours. The
+# world list's buttons are clicked by their markers, wherever they are.
+# GAMEONE_WORLDS=<empty folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-readings.txt --out shots
+0    until Menu = Worlds
+0.4  click marker "New: Empty world"
+0    until Menu = Missions
+0.4  click marker "Mission: LAUNCH AND LAND"
+0    until Menu = None
+0.2  tap space                      # light the engine (at 75%) ...
+0.3  tap z                          # ... and full throttle
+0    until Message = LIFT-OFF within 10
+0    shot liftoff
+0    until "Climb past 400 m" = [x] within 30
+0    tap x                          # cut the engine
+0    shot cut
+0    until Vertical < 0 within 30   # the top of the climb
+0    shot top
+0    until Ground <= 350 within 60
+0    tap z                          # full throttle, to catch the fall (it slows by about 18 m/s each second)
+0    until Vertical >= 0 within 20
+0    tap x
+0    shot caught
+0.5  tap escape
+0    until Menu = Game within 5
+0.2  move 0 109
+0.4  click 0 109                    # Quit game (it saves the world first)

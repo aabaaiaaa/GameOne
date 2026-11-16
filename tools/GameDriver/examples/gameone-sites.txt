@@ -1,0 +1,19 @@
+# GameOne: launching from another launch site. Make a world, pick Polar in the mission menu's
+# "Launch from" row, launch Launch and Land from there, and watch it lift off by Polar's white
+# tower, over the snow; then quit. Each "until" waits for a reading.
+# GAMEONE_WORLDS=<empty folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-sites.txt --out shots
+0    until Menu = Worlds
+0.4  click marker "New: Empty world"
+0    until Menu = Missions
+0.4  click marker "Site: Polar"
+1    shot menu
+1.6  click marker "Mission: LAUNCH AND LAND" # from Polar
+0    until Menu = None
+0    until Site = Polar within 5
+1    shot polar
+1.2  tap space                      # light the engine (at 75%) ...
+1.5  tap z                          # ... and full throttle
+0    until Message = LIFT-OFF within 10
+0.8  shot liftoff
+1.3  tap escape
+2.3  click 0 109                    # Quit game

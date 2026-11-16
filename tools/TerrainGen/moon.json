@@ -1,0 +1,33 @@
+// The moon's layout: see README.md ("The moon"). Positions are moon-fixed [latitude, longitude] in
+// degrees, [0, 0] the near side's middle (the face kept to the planet); sizes and heights in metres.
+{
+  "seed": 1969,
+  "resolution": 1024, // about 3.8 m a texel on a 2.5 km moon: a 15 m crater is four across
+  // The near side's two big craters, well apart a little north of its middle, so Home sees them
+  // face on: the larger a fifth of the moon's width, the smaller an eighth and higher up.
+  "craters": [
+    { "name": "Great Crater", "at": [7, -22], "diameter": 1000, "depth": 120, "rimHeight": 40, "rays": 14 },
+    { "name": "Lesser Crater", "at": [18, 23], "diameter": 625, "depth": 80, "rimHeight": 26, "rays": 10 }
+  ],
+  // The canyon: a rough crescent well south of them, its middle about 30° S (due south of its
+  // centre), its horns (at 105° and 245°, the west one tapering longer) curving up outside and
+  // below the craters.
+  "canyon": { "at": [5, 0], "radius": 1530, "wander": 90, "branches": 4, "startBearing": 105, "endBearing": 245, "width": 220, "depth": 80 },
+  // The far side's tail: a ridge about 5 km long sweeping across it in an S, from its thin tip in
+  // the north-west round to an 800 m mountain in the south-east with a crater in its top, joining
+  // its flank as a spur well below its summit. Never seen from the planet, and far from the landing
+  // spot (over 1.5 km, behind its horizon).
+  "tail": {
+    "path": [[42, 140], [30, 160], [12, 160], [0, 175], [-5, 195], [-18, 205], [-12, 228]],
+    "tipHeight": 10, "baseHeight": 320, "tipWidth": 60, "baseWidth": 500, "wander": 40,
+    "mountainHeight": 800, "mountainRadius": 1500, "craterDiameter": 300, "craterDepth": 130
+  },
+  // A crowd of smaller craters, as a real moon's: the count over a size falling as its square,
+  // overlapping where they fall together, those over 150 m with a faintly pale rim.
+  "smallCraters": { "count": 6000, "smallest": 15, "largest": 400, "paleOver": 150 },
+  // Patches of smooth plains between them, a third of the ground, a few hundred metres to a
+  // kilometre across: craters a tenth as many there, and only the smallest. A landing picks one.
+  "flats": { "share": 0.33, "wavelength": 800, "density": 0.1, "largest": 25 },
+  "plains": { "relief": 6, "wavelength": 700 },
+  "site": { "blend": 150 }
+}

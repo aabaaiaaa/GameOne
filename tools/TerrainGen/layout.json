@@ -1,0 +1,97 @@
+// The planet's layout: the large shapes, placed by hand; TerrainGen adds the detail and erodes it.
+// Positions are [latitude, longitude] in degrees (the pad at [0, 0], east +longitude, north
+// +latitude); sizes and heights in metres. See README.md for every field. After editing, run:
+//   dotnet run --project tools/TerrainGen -c Release -- tools/TerrainGen/layout.json src/GameOne/Assets/terrain.bin.gz
+{
+  "seed": 1961,
+  "resolution": 1024,
+
+  "coast": { "warp": 900, "warpWavelength": 6000, "roughness": 1300, "roughWavelength": 6000, "cliffs": 0.3, "cliffHeight": 45, "calmRadius": 4000 },
+  "relief": {
+    "coastRise": 42, "coastRiseLength": 260,
+    "hills": 90, "hillWavelength": 2200,
+    "plateaus": 240, "plateauWavelength": 7000,
+    "roughness": 0.18, "calmRadius": 1800
+  },
+
+  "land": [
+    // The launch continent: its east coast runs north-south ~330 m east of the pad.
+    { "name": "Westland", "outline": [
+      [-6, 2.3], [-2, 1.8], [0, 1.7], [3, 1.7], [7, 3.2], [12, 7], [17, 5], [20, 0], [22, -6], [27, -4],
+      [33, -2], [38, -8], [42, -16], [50, -22], [56, -30], [54, -38], [47, -42], [46, -52], [50, -62],
+      [47, -72], [40, -78], [36, -90], [30, -96], [20, -96], [14, -104], [6, -112], [-2, -108], [-4, -100],
+      [-12, -98], [-22, -94], [-30, -88], [-40, -86], [-46, -78], [-40, -74],
+      // the Amber Gulf, cut in from the south
+      [-34, -72], [-24, -70], [-14, -64], [-14, -54], [-22, -48], [-32, -46],
+      [-38, -42], [-38, -36], [-34, -28], [-30, -20], [-24, -14], [-20, -6], [-14, -2], [-10, 1] ] },
+    { "name": "Eastland", "outline": [
+      [28, 44], [32, 54], [30, 64], [34, 72], [28, 80], [22, 92], [16, 98], [18, 108], [10, 114], [6, 118],
+      [-4, 130], [-10, 140], [-18, 138], [-28, 134], [-36, 132], [-40, 124], [-48, 118], [-46, 108],
+      [-38, 104], [-40, 96], [-36, 88], [-30, 74], [-24, 70], [-20, 62], [-12, 58], [-10, 52], [0, 46],
+      [8, 44], [12, 40], [22, 40] ] },
+    { "name": "Northreach", "outline": [
+      [40, 140], [46, 132], [52, 136], [58, 142], [62, 148], [68, 165], [64, 172], [68, 182], [66, 190],
+      [62, 205], [58, 214], [54, 225], [48, 232], [44, 230], [42, 222], [38, 215], [41, 198], [36, 190],
+      [34, 182], [38, 175], [40, 165], [36, 152] ] },
+    { "name": "Southreach", "outline": [
+      [-50, -70], [-54, -58], [-50, -48], [-52, -30], [-58, -22], [-55, -10], [-50, 2], [-52, 10],
+      [-56, 28], [-64, 34], [-70, 30], [-72, 18], [-75, 0], [-74, -30], [-72, -55], [-64, -78], [-56, -82] ] },
+    { "name": "Sentinel", "outline": [
+      [-8, -160], [6, -166], [22, -164], [34, -154], [36, -140], [26, -128], [12, -124], [0, -130], [-10, -142] ] },
+    { "name": "Dawn Isle", "outline": [ [20, 18], [25, 20], [26, 26], [21, 28], [18, 23] ] },
+    { "name": "Coral Isle", "outline": [ [-14, 166], [-12, 172], [-16, 176], [-20, 172], [-19, 167] ] },
+    { "name": "Reef Isle", "outline": [ [-24, 182], [-22, 188], [-26, 192], [-30, 188], [-28, 183] ] },
+    { "name": "Lagoon Isle", "outline": [ [-18, 196], [-16, 200], [-20, 203], [-22, 198] ] }
+  ],
+
+  "seas": [
+    // Each sea's waves (from crest to trough of its biggest) and its water's colours (over the shelf
+    // and over deep water) give it its character: the warm seas calm, the icy ones roughest.
+    // The sea under the launch path: past 100 m deep 5 km east of the pad.
+    { "name": "Sunrise Sea", "at": [0, 25], "kind": "warm", "depth": 320, "shelf": 1000,
+      "waves": 1.0, "shallow": [0.18, 0.62, 0.60], "deep": [0.03, 0.15, 0.30] },
+    { "name": "Amber Gulf", "at": [-28, -58], "kind": "warm", "depth": 90, "shelf": 700, "banks": 0.6,
+      "waves": 0.6, "shallow": [0.32, 0.62, 0.50], "deep": [0.06, 0.22, 0.28] },
+    { "name": "Coral Sea", "at": [-6, 184], "kind": "warm", "depth": 160, "shelf": 800, "banks": 0.5,
+      "waves": 0.8, "shallow": [0.08, 0.76, 0.68], "deep": [0.05, 0.09, 0.42] },
+    { "name": "Western Ocean", "at": [-30, -130], "kind": "temperate", "depth": 500, "shelf": 450,
+      "waves": 1.8, "shallow": [0.22, 0.48, 0.48], "deep": [0.03, 0.10, 0.21] },
+    { "name": "Grey Sea", "at": [42, 95], "kind": "temperate", "depth": 360, "shelf": 600,
+      "waves": 1.6, "shallow": [0.30, 0.48, 0.44], "deep": [0.07, 0.12, 0.17] },
+    // The icy seas are frozen round their centres: a sheet of pack ice out to about "pack" metres,
+    // its edge ragged, then a band of floes "floes" metres wide, which damp the swell.
+    { "name": "Boreal Sea", "at": [80, 0], "kind": "icy", "depth": 420, "shelf": 400,
+      "waves": 2.4, "shallow": [0.40, 0.52, 0.56], "deep": [0.07, 0.11, 0.17], "ice": { "pack": 1100, "floes": 500 } },
+    { "name": "Austral Sea", "at": [-82, 150], "kind": "icy", "depth": 460, "shelf": 450,
+      "waves": 2.6, "shallow": [0.44, 0.55, 0.61], "deep": [0.04, 0.07, 0.13], "ice": { "pack": 1300, "floes": 600 } }
+  ],
+
+  "ranges": [
+    // Inland of the pad: its crest ~2.5 km west, tall enough to show over the horizon, and in the
+    // way of a return from orbit, which comes in from the west.
+    { "name": "Westwall", "path": [[24, -12], [12, -14], [2, -14.5], [-8, -15], [-20, -13], [-28, -10]], "height": 1650, "width": 1800 },
+    { "name": "Spine", "path": [[40, -60], [25, -72], [8, -82], [-10, -84]], "height": 1100, "width": 2600 },
+    { "name": "Highcrest", "path": [[22, 62], [10, 80], [-6, 96], [-22, 110], [-34, 116]], "height": 1700, "width": 2800 },
+    { "name": "Frostspine", "path": [[50, 150], [60, 175], [56, 205], [46, 222]], "height": 1750, "width": 2800 },
+    { "name": "Southwall", "path": [[-60, -60], [-64, -30], [-66, 0], [-64, 20]], "height": 1300, "width": 2400 },
+    { "name": "Sentinel Hills", "path": [[28, -150], [15, -145], [0, -140]], "height": 950, "width": 2000 }
+  ],
+
+  "deserts": { "maxLatitude": 30, "minDistanceFromSea": 1500, "maxHeight": 450, "coverage": 0.6 },
+  "snow": { "minLatitude": 56, "minHeight": 1150 },
+
+  // The pad, the near landing zone and the test pads take their places from Scene; only their sizes are here.
+  "sites": [
+    { "name": "Launch pad", "radius": 90, "blend": 160 },
+    { "name": "Landing zone", "radius": 60, "blend": 160 },
+    // The other launch sites' pads and zones: levelled down to the highest ground under them, no
+    // further than the map's ~15 m texels need to keep it out of their tops (a texel past the
+    // footprint), so a mountain site keeps its drop; their foundations reach down to the rest.
+    { "name": "Far pad", "radius": 40, "blend": 15 },
+    { "name": "Far zone", "radius": 35, "blend": 15 },
+    // The test range: six tilted pads in a row (see Scene.TestPads), each levelled under its plinth.
+    { "name": "Test pads", "radius": 20, "blend": 120 }
+  ],
+
+  "erosion": { "iterations": [30, 30, 20, 10], "incision": 1.5, "channelArea": 40000, "diffusion": 0.05, "talus": 40 }
+}

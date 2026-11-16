@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!--
+    BRUTAL is referenced from local source rather than the Ahwoo.BRUTAL.* NuGet packages,
+    so you can step into, edit and rebuild the framework alongside the game.
+    Equivalent to: dotnet add package Ahwoo.Brutal.Core / Ahwoo.Brutal.Glfw
+  -->
+  <ItemGroup>
+    <ProjectReference Include="$(BrutalRoot)Brutal.Core/Brutal.Core.csproj" />
+    <ProjectReference Include="$(BrutalRoot)Brutal.Glfw/Brutal.Glfw.csproj" />
+    <ProjectReference Include="$(BrutalRoot)Brutal.Vulkan/Brutal.Vulkan.csproj" />
+    <ProjectReference Include="$(BrutalRoot)Brutal.Vulkan.Abstractions/Brutal.Vulkan.Abstractions.csproj" />
+    <ProjectReference Include="$(BrutalRoot)Brutal.ShaderC/Brutal.ShaderC.csproj" />
+    <ProjectReference Include="$(BrutalRoot)Brutal.Stb/Brutal.Stb.csproj" />
+    <ProjectReference Include="$(BrutalRoot)Brutal.ImGui/Brutal.ImGui.csproj" />
+    <ProjectReference Include="$(BrutalRoot)Brutal.ImGui.Backends/Brutal.ImGui.Backends.csproj" />
+    <ProjectReference Include="$(BrutalRoot)Brutal.OpenAl/Brutal.OpenAl.csproj" />
+    <ProjectReference Include="$(BrutalRoot)Brutal.Jolt/Brutal.Jolt.csproj" />
+  </ItemGroup>
+
+  <!-- The end-to-end flight tests drive the game's own (internal) flight rules and physics. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="GameOne.Tests" />
+    <!-- The terrain generator writes the map in the game's own format, laid out round Scene's sites. -->
+    <InternalsVisibleTo Include="TerrainGen" />
+  </ItemGroup>
+
+  <!-- The planet's terrain and the moon's, made by tools/TerrainGen from layout.json and moon.json (see its README). -->
+  <ItemGroup>
+    <None Include="Assets/terrain.bin.gz" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Assets/moon.bin.gz" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- BRUTAL licence section 2.3: ship NOTICE.txt alongside the product. -->
+  <ItemGroup>
+    <None Include="$(BrutalRoot)NOTICE.txt" Link="NOTICE.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(BrutalRoot)docs/branding/LOGO_BRUTAL_WHT.png" Link="Assets/brutal-logo-white.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    BRUTAL licence section 4.0: third-party components keep their own licences, listed in each
+    library's LICENSES folder (e.g. OpenAL Soft is LGPL). Ship those for every library used.
+  -->
+  <ItemGroup>
+    <None Include="$(BrutalRoot)Brutal.Glfw/LICENSES/*;
+                   $(BrutalRoot)Brutal.Vulkan/LICENSES/*;
+                   $(BrutalRoot)Brutal.Vulkan.Abstractions/LICENSES/*;
+                   $(BrutalRoot)Brutal.ShaderC/LICENSES/*;
+                   $(BrutalRoot)Brutal.Stb/LICENSES/*;
+                   $(BrutalRoot)Brutal.ImGui/LICENSES/*;
+                   $(BrutalRoot)Brutal.OpenGl/LICENSES/*;
+                   $(BrutalRoot)Brutal.OpenAl/LICENSES/*;
+                   $(BrutalRoot)Brutal.Jolt/LICENSES/*;
+                   $(BrutalRoot)Brutal.Localization/LICENSES/*"
+          Link="LICENSES/%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
