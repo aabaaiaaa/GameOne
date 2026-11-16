@@ -135,6 +135,8 @@ internal readonly record struct Coming(Vessel Watched, SolidKind With, Vessel? O
 /// <param name="NearMisses">Whether near misses past the flown vessel and the watched are slowed for and shown ahead (the player's setting, <see cref="Settings.SlowNearMisses"/>): see <see cref="Flight.NearMissWarning"/>.</param>
 /// <param name="ToggleBayDoors">Open the flown vessel's bay doors, or close them (a vessel with a bay: <see cref="Vessel.HasBay"/>). No key does this.</param>
 /// <param name="CarryOn">Carry on flying the vessel of this id where it is, in its run or in free play (one of <see cref="Flight.CarryOnChoices"/>): a menu choice, as <paramref name="Choose"/> is.</param>
+/// <param name="CompleteRun">Complete the flown vessel's run with a bonus still open ("Complete mission"): the bonuses not done are lost.</param>
+/// <param name="AbandonRun">Give up the flown vessel's run ("Abandon mission"): its vessels stay where they are, in no run.</param>
 internal readonly record struct FlightInput(
     float Throttle = 0f,
     Vector3 Lean = default,
@@ -161,7 +163,9 @@ internal readonly record struct FlightInput(
     Vector3? Camera = null,
     bool NearMisses = false,
     bool ToggleBayDoors = false,
-    int? CarryOn = null);
+    int? CarryOn = null,
+    bool CompleteRun = false,
+    bool AbandonRun = false);
 
 /// <summary>
 /// Something the player can carry on flying where it is (<see cref="Flight.CarryOnChoices"/>):
@@ -259,7 +263,7 @@ internal sealed class Flight : IDisposable
         return choices;
 
         bool Resumable(Vessel v) => v != _placeholder && CanFly(v) && _world.Contains(v);
-        bool InRunInProgress(Vessel v) => RunOf(v) is { End: RunEnd.InProgress, Mission.HasObjectives: true, Failed: false };
+        bool InRunInProgress(Vessel v) => RunOf(v) is not null;
     }
 
     /// <summary>
@@ -274,11 +278,12 @@ internal sealed class Flight : IDisposable
         if (vessel == _placeholder || !CanFly(vessel) || !_world.Contains(vessel))
             return false;
         ChoiceMade();
+        _shownEnded = null; // a choice, as a switch is: a run ended shows no more
         if (vessel == Controlled)
             BringIn(vessel);
         else
             SwitchTo(vessel);
-        _latest = RunOf(vessel);
+        _latest = RunOf(vessel); // only a run in progress: one ended is no one's
         _latest?.LastFlownId = vessel.Id;
         return true;
     }
@@ -300,17 +305,78 @@ internal sealed class Flight : IDisposable
         }
     }
 
-    /// <summary>The flown vessel's run, while it is in memory (one in progress, or a free-play run begun this session); null for a vessel of none.</summary>
-    public MissionRun? Run => RunOf(Controlled);
+    /// <summary>
+    /// The flown vessel's run (see <see cref="RunOf"/>); or the run it was of that has just ended
+    /// (its steps and its result still shown) until another vessel is flown or something new is
+    /// begun or carried on; null for a vessel of none.
+    /// </summary>
+    public MissionRun? Run => RunOf(Controlled) ?? (_shownEnded is { } ended && ended.Vessels.Contains(Controlled) ? ended : null);
 
-    /// <summary>The run <paramref name="v"/> is one of the vessels of, if it is in memory.</summary>
+    /// <summary>
+    /// The run <paramref name="v"/> is one of the vessels of: one in progress, with objectives, that
+    /// hasn't failed (one failed is ended as its steps are judged). None for a vessel of free play,
+    /// or of a run that has ended, which belong to no run.
+    /// </summary>
     public MissionRun? RunOf(Vessel v)
     {
         foreach (var run in _runs)
-            if (run.Number == v.Flight && run.Vessels.Contains(v))
+            if (run.End == RunEnd.InProgress && run.Number == v.Flight && run.Mission.HasObjectives && run.Vessels.Contains(v) && !run.Failed)
                 return run;
         return null;
     }
+
+    /// <summary>
+    /// The last run of the flown vessel's to end, shown as <see cref="Run"/> while it is flown (see
+    /// there), so the panel and its result stay.
+    /// </summary>
+    private MissionRun? _shownEnded;
+
+    /// <summary>
+    /// A brief word of a run that ended while the flown vessel wasn't one of its own ("REACH ORBIT
+    /// (flight 5) complete: 1,800 pts"), and the real time it came (<see cref="RunFrame"/>'s clock),
+    /// for the HUD to fade; the run's world-log entry stays.
+    /// </summary>
+    public (string Text, double RealTime)? Notice { get; private set; }
+
+    /// <summary>Every run's steps by its own vessels, whichever is flown, each ended once it is over (see <see cref="MissionRun.Update"/>); those ended are let go.</summary>
+    private void UpdateRuns()
+    {
+        for (var i = 0; i < _runs.Count; i++)
+            _runs[i].Update();
+        _runs.RemoveAll(static r => r.End != RunEnd.InProgress);
+    }
+
+    /// <summary>Step <paramref name="step"/> of <paramref name="run"/> has just been done: the world's log says so, with its points.</summary>
+    internal void RunStepDone(MissionRun run, int step) =>
+        AddToLog(RunEntry(run, WorldLog.StepDone(run.Mission.Steps[step].Label, run.Progress.PointsFor(step))));
+
+    /// <summary>
+    /// <paramref name="run"/> has just ended: the world's log says how (<paramref name="how"/>, for
+    /// one abandoned), and the flown vessel shows its result if it is one of the run's, else the
+    /// player is told (<see cref="Notice"/>).
+    /// </summary>
+    internal void RunEnded(MissionRun run, string? how)
+    {
+        var name = WorldLog.Named(run);
+        AddToLog(RunEntry(run, run.End switch
+        {
+            RunEnd.Completed => WorldLog.Completed(run.Score ?? 0),
+            RunEnd.Failed => WorldLog.FailedBecause(run.EndReason ?? ""),
+            _ => how ?? WorldLog.Abandoned,
+        }));
+        if (Controlled is { } flown && run.Vessels.Contains(flown))
+            _shownEnded = run;
+        else
+            Notice = (run.End switch
+            {
+                RunEnd.Completed => $"{name} complete: {run.Score ?? 0:#,0} pts",
+                RunEnd.Failed => $"{name} {WorldLog.FailedBecause(run.EndReason ?? "")}",
+                _ => $"{name} abandoned",
+            }, _realTime);
+    }
+
+    /// <summary>An entry of <paramref name="run"/>'s in the world's log: named by its flight, at its site, now, and seen.</summary>
+    private LogEntry RunEntry(MissionRun run, string how) => new(WorldTime, WorldLog.Named(run), how, null, run.Site.Name, true);
 
     /// <summary>
     /// The flown vessel's flight's vessels: every vessel in the world with its <see cref="Vessel.Flight"/>
@@ -620,6 +686,7 @@ internal sealed class Flight : IDisposable
         _world.Clear();
         _worldChanges++;
         _runs.Clear(); // the runs were the last world's
+        (_shownEnded, Notice) = (null, null);
         ForgetCollisions(); // the map's were another world's
         Unwatched.Reset(); // nor are the formula's collisions, or who was chosen for the physics, this one's
         _askedAheadAt = double.NaN;
@@ -1424,7 +1491,7 @@ internal sealed class Flight : IDisposable
             Launch = false, Stage = false, ToggleLegs = false, FullThrottle = false, CutThrottle = false,
             ToggleProgradeHold = false, ToggleRetrogradeHold = false, Restart = false, Choose = null, From = null,
             SwitchVessel = false, SwitchTo = null, SetTarget = null, ClearTarget = false, Plan = null, ChooseFrame = null,
-            Slower = false, Faster = false, ToggleBayDoors = false, CarryOn = null,
+            Slower = false, Faster = false, ToggleBayDoors = false, CarryOn = null, CompleteRun = false, AbandonRun = false,
         };
         for (var i = 0; i < steps; i++)
         {
@@ -1450,6 +1517,10 @@ internal sealed class Flight : IDisposable
             CarryOn(carriedOn);
         else if (input.Restart)
             Load(_atStart, _latest?.Mission ?? Controlled.Mission); // as it was when the last flight started, and that flight again
+        if (input.CompleteRun)
+            RunOf(Controlled)?.Complete();
+        if (input.AbandonRun)
+            RunOf(Controlled)?.Abandon("Abandoned.");
 
         if (input.SwitchTo is { } chosenVessel)
             SwitchTo(chosenVessel);
@@ -1491,14 +1562,19 @@ internal sealed class Flight : IDisposable
                 // Landed or afloat, throttling up is all it takes to fly again; staging works there too.
                 vessel.TakeOff();
                 if (input.Stage && !launched)
+                {
+                    // Its run asked before it parts: until the part is added, the run may seem to
+                    // have lost what the part is.
+                    var run = RunOf(vessel);
                     foreach (var dropped in vessel.Separate(_nextId))
                     {
                         _nextId++;
                         dropped.ResetLandingLights(WorldTime); // its lights start where they should be, not faded in
                         _world.Add(dropped);
                         _worldChanges++;
-                        RunOf(vessel)?.Add(dropped); // a part is its vessel's run's, if that is in memory
+                        run?.Add(dropped); // a part is its vessel's run's, if it has one
                     }
+                }
                 if (vessel.State != FlightState.Flying)
                     continue;
                 vessel.Run(dt, input.Lean, input.Hold, WorldTime, FrameVelocity, HoldFloor);
@@ -1541,9 +1617,7 @@ internal sealed class Flight : IDisposable
         // witnessed: handed out and in.
         Unwatched.Update(dt, witnessed, input.Camera ?? Controlled.CentreOfMass);
         LogLosses(); // after the formula's wrecks and collisions too, not only the physics'
-        foreach (var run in _runs)
-            if (run.End == RunEnd.InProgress)
-                run.Update(); // every run's steps by its own vessels, whichever is flown
+        UpdateRuns();
         Timings.EndStep(_worlds.TileCount); // charges the rules after the physics
     }
 
@@ -1676,6 +1750,7 @@ internal sealed class Flight : IDisposable
         var from = Controlled.Body;
         BringIn(vessel);
         Controlled = vessel;
+        _shownEnded = null; // another vessel flown: the run ended shows no more
         if (RunOf(vessel) is { } run)
             run.LastFlownId = vessel.Id;
         Switched?.Invoke();
@@ -2136,9 +2211,11 @@ internal sealed class Flight : IDisposable
                 var run = RunOf(_world[i]);
                 TakeOut(i);
                 // A run whose last vessel was in the way (its rocket waiting on this pad) is given up.
-                if (run is { End: RunEnd.InProgress, Vessels.Count: 0 })
-                    (run.End, run.EndReason) = (RunEnd.Abandoned, "Its rocket was cleared from the pad.");
+                if (run is { Vessels.Count: 0 })
+                    run.Abandon("Its rocket was cleared from the pad.");
             }
+        // A run left with no vessels by the wrecks cleared away fails now, so it isn't saved again.
+        UpdateRuns();
         ForgetCollisions(); // wrecks gone, the pad cleared, and a new rocket on it
         _atStart = Capture(); // starting again comes back to this, before the new rocket
 
@@ -2148,14 +2225,20 @@ internal sealed class Flight : IDisposable
         Controlled = new Vessel(_worlds, pad, mission, _sounds, craft, [.. mission.Vehicle.Stages.Select(s => s.FuelMass)], _nextId++, _flights) { Site = Site };
         Controlled.ReadyToLaunch();
         Controlled.ResetLandingLights(WorldTime);
-        _latest = new MissionRun(this, mission, Site, _flights, WorldTime) { LastFlownId = Controlled.Id };
-        _latest.Add(Controlled);
-        // A vessel's flight number is what links it to its run: any already in the world with
-        // this one's (put there with it) are the run's too, after its rocket.
-        foreach (var vessel in _world)
-            if (vessel.Flight == _flights)
-                _latest.Add(vessel);
-        _runs.Add(_latest);
+        _shownEnded = null; // something new begun
+        // Free play makes no run: its vessels belong to none, with nothing to judge or log.
+        _latest = mission.HasObjectives ? new MissionRun(this, mission, Site, _flights, WorldTime) { LastFlownId = Controlled.Id } : null;
+        if (_latest is { } begun)
+        {
+            begun.Add(Controlled);
+            // A vessel's flight number is what links it to its run: any already in the world with
+            // this one's (put there with it) are the run's too, after its rocket.
+            foreach (var vessel in _world)
+                if (vessel.Flight == _flights)
+                    begun.Add(vessel);
+            _runs.Add(begun);
+            AddToLog(RunEntry(begun, WorldLog.Begun));
+        }
         _world.Add(Controlled);
         _worldChanges++;
         MakeRoom();

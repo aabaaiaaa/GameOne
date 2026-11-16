@@ -18,7 +18,7 @@ public sealed class WorldLogTests
         var v = sim.Flight.Controlled;
         Assert.True(sim.Run(Nobody, _ => v.State == FlightState.Crashed, maxSeconds: 10), "it never crashed");
         sim.Run(Nobody, _ => false, maxSeconds: 2); // the wreck stays: still one entry
-        var entry = Assert.Single(sim.Flight.Log);
+        var entry = Assert.Single(Losses(sim.Flight));
         Assert.Equal($"{v.Name} {v.Id}", entry.What);
         Assert.Equal("Hit the ground", entry.How);
         Assert.Equal(WorldLog.SpeedIn(v.CrashReason), entry.Speed); // its touch's
@@ -35,7 +35,7 @@ public sealed class WorldLogTests
         using var _ = sim;
         Assert.True(sim.Run(Nobody, _ => above.State == FlightState.Crashed && below.State == FlightState.Crashed, maxSeconds: 3));
         sim.Run(Nobody, _ => false, maxSeconds: 1);
-        var entry = Assert.Single(sim.Flight.Log);
+        var entry = Assert.Single(Losses(sim.Flight));
         Assert.Contains(" and ", entry.What);
         Assert.Contains($"{below.Name} {below.Id}", entry.What);
         Assert.Contains($"{above.Name} {above.Id}", entry.What);
@@ -60,19 +60,19 @@ public sealed class WorldLogTests
         var c = sim.Flight.WorldVessels.Single(v => v.Id == 2);
         a.WreckByFormula(Vessel.HitAnotherVessel(20f), a.CentreOfMass, hit: b.Craft);
         sim.Step(default);
-        var lostAt = Assert.Single(sim.Flight.Log).Time;
+        var lostAt = Assert.Single(Losses(sim.Flight)).Time;
         c.WreckByFormula(Vessel.HitAnotherVessel(9f), c.CentreOfMass, hit: null);
         sim.Step(default);
         sim.Step(default);
         b.WreckByFormula(Vessel.HitAnotherVessel(22f), b.CentreOfMass, hit: a.Craft);
         sim.Step(default);
         sim.Step(default);
-        Assert.Equal(2, sim.Flight.Log.Count);
-        var pair = sim.Flight.Log[0];
+        Assert.Equal(2, Losses(sim.Flight).Count);
+        var pair = Losses(sim.Flight)[0];
         Assert.Equal($"{a.Name} {a.Id} and {b.Name} {b.Id}", pair.What);
         Assert.Equal(lostAt, pair.Time);
         Assert.Equal(22f, pair.Speed);
-        Assert.Equal($"{c.Name} {c.Id}", sim.Flight.Log[1].What);
+        Assert.Equal($"{c.Name} {c.Id}", Losses(sim.Flight)[1].What);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public sealed class WorldLogTests
         using var _ = sim;
         FormulaTests.Fly(sim, v, watch, 90, x => x.State == FlightState.Crashed);
         Assert.Equal(FlightState.Crashed, v.State);
-        var entry = Assert.Single(sim.Flight.Log);
+        var entry = Assert.Single(Losses(sim.Flight));
         Assert.False(entry.Witnessed);
         Assert.Equal("Polar", entry.Where);
         Assert.InRange(entry.Speed!.Value, 90f, 400f);
@@ -101,7 +101,7 @@ public sealed class WorldLogTests
         // physics then, before any step has chosen who is to be there: none was seen.
         var world = WorldTests.ManySatellites(Flight.Capacity / 4 + 2);
         using var sim = new Simulation(Mission.ReachOrbit, world: world);
-        var log = sim.Flight.Log;
+        var log = Losses(sim.Flight);
         var gone = world.Vessels.Count - (Flight.Capacity - 1);
         Assert.Equal(gone, log.Count);
         Assert.Equal(gone, sim.Flight.RemovedForRoom);
@@ -126,7 +126,7 @@ public sealed class WorldLogTests
         using (var sim = new Simulation(world: new WorldState { Vessels = [StandingOn(LaunchSites.Home, 0)], NextVesselId = 1 }))
         {
             Assert.Equal(1, sim.Flight.ClearedFromPad);
-            var entry = Assert.Single(sim.Flight.Log);
+            var entry = Assert.Single(Losses(sim.Flight));
             Assert.Equal(WorldLog.ClearedFromPad, entry.How);
             Assert.EndsWith(" 0", entry.What);
             Assert.Equal("Home", entry.Where);
@@ -139,12 +139,12 @@ public sealed class WorldLogTests
         var polar = LaunchSites.Named("Polar")!;
         using (var sim = new Simulation(world: new WorldState { Vessels = [StandingOn(polar, 0)], NextVesselId = 1 }))
         {
-            Assert.Empty(sim.Flight.Log);
+            Assert.Empty(Losses(sim.Flight));
             sim.Step(new FlightInput(SwitchTo: sim.Flight.WorldVessels.Single(v => v.Id == 0)));
             sim.Step(default);
             sim.Step(new FlightInput(Choose: Mission.LaunchAndLand, From: polar));
             Assert.Equal(1, sim.Flight.ClearedFromPad);
-            var entry = Assert.Single(sim.Flight.Log);
+            var entry = Assert.Single(Losses(sim.Flight));
             Assert.Equal(WorldLog.ClearedFromPad, entry.How);
             Assert.Equal("Polar", entry.Where);
             Assert.True(entry.Witnessed);
@@ -175,7 +175,7 @@ public sealed class WorldLogTests
             vc.WreckByFormula(Vessel.HitAnotherVessel(20f), vc.CentreOfMass, hit: va.Craft);
             sim.Step(default);
             sim.Step(default);
-            var log = sim.Flight.Log.Select(e => e.What).ToArray();
+            var log = Losses(sim.Flight).Select(e => e.What).ToArray();
             Assert.Equal(2, log.Length);
             foreach (var v in three)
                 Assert.Single(log, w => w.Contains($"{v.Name} {v.Id}"));
@@ -203,7 +203,7 @@ public sealed class WorldLogTests
         Assert.True(sim.Run(Nobody, _ => four.All(v => v.State == FlightState.Crashed), maxSeconds: UnwatchedTests.HitsAt + 2f),
             string.Join("; ", four.Select(v => $"{v.Id} {v.State}")));
         Assert.True(Vector3.Distance(four[0].CrashPosition, four[2].CrashPosition) < 100f, "the pairs ended too far apart to show this");
-        var entries = sim.Flight.Log.Select(e => e.What).OrderBy(w => w).ToArray();
+        var entries = Losses(sim.Flight).Select(e => e.What).OrderBy(w => w).ToArray();
         Assert.Equal(2, entries.Length);
         string Pair(int x, int y) => $"{four[x].Name} {x} and {four[y].Name} {y}";
         Assert.Contains(entries, w => w == Pair(0, 1) || w == Pair(1, 0));
@@ -217,7 +217,7 @@ public sealed class WorldLogTests
         var old = Enumerable.Range(0, Scene.WorldLogEntries).Select(i => new LogEntry(i, $"Old {i}", "Hit the ground", 10f, "Home", true)).ToArray();
         var at = Scene.LandingZoneCentre;
         var world = new WorldState { Vessels = [Drops.Placed(at, Planet.East(at), 20f)], NextVesselId = 1, Log = old };
-        using var sim = new Simulation(world: world);
+        using var sim = new Simulation(Mission.FreePlay, world: world); // no run, so nothing in the log but the losses
         Assert.Equal(Scene.WorldLogEntries, sim.Flight.Log.Count);
         var v = sim.Flight.WorldVessels.Single(x => x.Id == 0);
         sim.Step(new FlightInput(SwitchTo: v));
@@ -226,6 +226,40 @@ public sealed class WorldLogTests
         Assert.Equal(Scene.WorldLogEntries, sim.Flight.Log.Count);
         Assert.Equal("Old 1", sim.Flight.Log[0].What);
         Assert.Equal($"{v.Name} {v.Id}", sim.Flight.Log[^1].What);
+    }
+
+    /// <summary>The log's entries of vessels lost or removed, leaving out the missions' (a run begun, a step done, a run ended), which name a flight.</summary>
+    internal static IReadOnlyList<LogEntry> Losses(Flight flight) => [.. flight.Log.Where(e => !e.What.EndsWith(')'))];
+
+    [Fact]
+    public void Missions_are_logged()
+    {
+        // A run begun, its one step done with its points, then completed with its score: each an
+        // entry of its own, in order, at its site and seen.
+        var step = false;
+        var mission = new Mission
+        {
+            Name = "TEST",
+            Briefing = "",
+            Vehicle = Vehicle.Booster,
+            Steps = [new("The step", _ => step, Points: _ => 1800)],
+        };
+        using var sim = new Simulation(mission);
+        sim.Step(default);
+        step = true;
+        sim.Step(default);
+        sim.Step(default);
+        var log = sim.Flight.Log;
+        Assert.Equal([WorldLog.Begun, WorldLog.StepDone("The step", 1800), WorldLog.Completed(1800)], log.Select(e => e.How));
+        Assert.All(log, e => Assert.Equal(("TEST (flight 1)", (float?)null, "Home", true), (e.What, e.Speed, e.Where, e.Witnessed)));
+        Assert.Contains("1,800", WorldLog.Completed(1800));
+        Assert.Empty(Losses(sim.Flight));
+
+        // Free play has no run, so nothing of it is logged.
+        using var free = new Simulation(Mission.FreePlay);
+        free.Step(new FlightInput(Launch: true, FullThrottle: true));
+        free.Step(default);
+        Assert.Empty(free.Flight.Log);
     }
 
     [Theory]

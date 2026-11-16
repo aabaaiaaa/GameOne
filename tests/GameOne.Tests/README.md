@@ -241,8 +241,8 @@ say) stalls frames and spoils the timing.
   end of its burn) onto the landing zone; a rendezvous in the target frame, closing from 1 km to
   under 50 m and holding there, under 0.5 m/s; and a hop from the pad onto the nearest test pad on
   the surface frame's line.
-- **`FreePlayTests`:** free play: the satellite launcher with no steps, never won, failed or
-  scored (on the pad, past 400 m, after staging), nothing its landing site; its booster flown down
+- **`FreePlayTests`:** free play: the satellite launcher with no steps, its vessels of no run, so
+  never won, failed or scored (on the pad, past 400 m, after staging), nothing its landing site; its booster flown down
   and landed, and still nothing won.
 - **`LegTests`:** the crush legs: a touchdown taken over a moment as they give, coming to rest on
   them without bouncing, and coming down off centre, the first feet down slowing it for the rest.
@@ -589,8 +589,14 @@ say) stalls frames and spoils the timing.
   parts staged off a rocket belonging to its run; a world restored keeping its runs and the
   vessel flown, and one left before a choice saved as it was; and carrying on
   (`Flight.CarryOnChoices`, `FlightInput.CarryOn`): a run whose vessel flown last is gone by
-  another of its own, a free-play vessel in no run, and debris and wrecks never offered.
-- **`WorldLogTests`:** the world's log: a crash on the ground, two vessels colliding (one entry; and two wrecked by one collision steps apart joined into the first's entry; two pairs colliding side by side an entry each, by who hit whom), an unwatched loss under formula (not witnessed, near its site), those removed to make room as a world loads (oldest first, unseen, no speed, printed without one), one cleared from the launch pad (unseen as a world loads; seen, flown, as a flight from its site starts), and the newest 300 kept; and each crash reason worded without its advice (or the break-up's cause after its colon), its speed taken out to be the entry's (a line never says two speeds).
+  another of its own, a free-play vessel in no run, and debris and wrecks never offered; and how
+  a run ends: completed once its steps are done with no bonus open, or by "Complete mission"
+  (`FlightInput.CompleteRun`, the bonus left open lost), failed with its lost step named, left
+  with no vessels (failed), abandoned (`FlightInput.AbandonRun`, its vessels left in no run) or
+  by its waiting rocket cleared from its pad (abandoned, logged once); an ended run's result
+  shown until a switch, a notice for one ended unflown (`Flight.Notice`), and carrying on every
+  kind of choice flying the choice's own run.
+- **`WorldLogTests`:** the world's log: a crash on the ground, two vessels colliding (one entry; and two wrecked by one collision steps apart joined into the first's entry; two pairs colliding side by side an entry each, by who hit whom), an unwatched loss under formula (not witnessed, near its site), those removed to make room as a world loads (oldest first, unseen, no speed, printed without one), one cleared from the launch pad (unseen as a world loads; seen, flown, as a flight from its site starts), and the newest 300 kept; the missions' entries (a run begun, a step done with its points, completed with its score, and nothing for free play); and each crash reason worded without its advice (or the break-up's cause after its colon), its speed taken out to be the entry's (a line never says two speeds).
 - **`WorldStoreTests`:** saving and loading, in a folder of the test's own: a world loads back
   exactly (every field of every vessel, a body targeted from the planet and from the moon
   included, each still its vessel's target once loaded) and flies on the same as the one saved; the world list

@@ -3,7 +3,9 @@ using System.Numerics;
 namespace GameOne;
 
 /// <summary>
-/// One vessel (or two lost together) lost, as the world's log has it (see <see cref="Flight.Log"/>).
+/// One vessel (or two lost together) lost, as the world's log has it (see <see cref="Flight.Log"/>);
+/// or a mission run begun, one of its steps done, or the run ended, named by its flight
+/// (<see cref="WorldLog.Named(MissionRun)"/>), at its site, with no speed, and always seen.
 /// </summary>
 /// <param name="Time">The world's time it was lost (<see cref="Flight.WorldTime"/>).</param>
 /// <param name="What">The vessel's name and number: "Booster 2", or "Sat-3 and Booster 2" for two lost to one collision.</param>
@@ -21,6 +23,27 @@ internal static class WorldLog
 
     /// <summary>Taken off the launch pad, in the way of the new rocket put there.</summary>
     public const string ClearedFromPad = "cleared from the launch pad";
+
+    /// <summary>A mission run as the log names it (<see cref="LogEntry.What"/> of its entries): its mission and its flight number.</summary>
+    public static string Named(MissionRun run) => $"{run.Mission.Name} (flight {run.Number})";
+
+    /// <summary>A mission run begun: its rocket put on its pad.</summary>
+    public const string Begun = "begun";
+
+    /// <summary>One of a run's steps done, with the points it was given then (none said if it gave none).</summary>
+    public static string StepDone(string label, int points) => points > 0 ? $"\"{label}\" done, {points:#,0} pts" : $"\"{label}\" done";
+
+    /// <summary>A run completed, with its score.</summary>
+    public static string Completed(int score) => $"completed, {score:#,0} pts";
+
+    /// <summary>A run failed, as the step <paramref name="label"/> it needed can't be done any more.</summary>
+    public static string FailedBecause(string label) => $"failed: \"{label}\" can't be done now";
+
+    /// <summary>A run given up: by the player, or as its rocket waiting on its pad was cleared away for another.</summary>
+    public const string Abandoned = "abandoned";
+
+    /// <summary>A run given up to start its mission again, a new run in its place.</summary>
+    public const string StartedAgain = "abandoned, to start it again";
 
     /// <summary>A vessel as the log names it: its name and its number, as vessels of one kind are many.</summary>
     public static string Named(Vessel v) => $"{v.Name} {v.Id}";

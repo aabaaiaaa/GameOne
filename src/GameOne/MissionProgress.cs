@@ -28,7 +28,7 @@ internal sealed class MissionProgress(Mission mission)
     /// <summary>The points the steps done so far were given, together.</summary>
     public int Points { get; private set; }
 
-    /// <summary>Ticks off each step not yet done that is done now in <paramref name="run"/>, keeping its points as they are now.</summary>
+    /// <summary>Ticks off each step not yet done that is done now in <paramref name="run"/>, keeping its points as they are now, and tells the run of each (<see cref="MissionRun.StepDone"/>).</summary>
     public void Update(MissionRun run)
     {
         var steps = mission.Steps;
@@ -39,6 +39,7 @@ internal sealed class MissionProgress(Mission mission)
             _done[i] = true;
             _points[i] = steps[i].Points?.Invoke(run) ?? 0;
             Points += _points[i];
+            run.StepDone(i); // for the world's log
         }
     }
 }

@@ -19,7 +19,7 @@ public sealed class PointOfInterestTests
         Name = "TEST POINTS",
         Briefing = "A mission with two points of interest.",
         Vehicle = Vehicle.ThreeStage,
-        Steps = [],
+        Steps = [new("Never done", _ => false)], // a mission's, so its flight is a run of it (free play's are of none)
         PointsOfInterest = [PointOfInterest.MoonLandingSpot, Second],
     };
 
