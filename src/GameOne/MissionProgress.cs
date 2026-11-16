@@ -11,6 +11,14 @@ internal sealed class MissionProgress(Mission mission)
     private readonly bool[] _done = new bool[mission.Steps.Length];
     private readonly int[] _points = new int[mission.Steps.Length];
 
+    /// <summary>As it was saved: steps <paramref name="done"/>, each with its <paramref name="points"/> as it was then (see <see cref="RunState"/>).</summary>
+    public MissionProgress(Mission mission, bool[] done, int[] points) : this(mission)
+    {
+        done.CopyTo(_done, 0);
+        points.CopyTo(_points, 0);
+        Points = _points.Sum();
+    }
+
     /// <summary>Whether step <paramref name="step"/> (by its place in the mission's steps) is done.</summary>
     public bool IsDone(int step) => _done[step];
 

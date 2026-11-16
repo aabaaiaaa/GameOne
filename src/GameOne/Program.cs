@@ -20,6 +20,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
     // Until a world is picked from the list, an empty one that isn't saved sits behind it, at the
     // launch site the player last picked.
     using var flight = new Flight(worlds, Mission.LaunchAndLand, site: LaunchSites.Named(settings.LaunchSite));
+    var lastChosen = Mission.LaunchAndLand; // the mission chosen last: what a world picked from the list starts on, behind the missions menu
     view.Follow(flight);
     var hud = view.Hud;
     hud.Worlds = store.List();
@@ -58,12 +59,12 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
             {
                 case WorldRequestKind.Play:
                     Save();
-                    flight.Load(store.Load(request.Id), flight.Mission, LaunchSites.Named(hud.Settings.LaunchSite));
+                    flight.Load(store.Load(request.Id), lastChosen, LaunchSites.Named(hud.Settings.LaunchSite));
                     hud.OpenMissions();
                     break;
                 case WorldRequestKind.New:
                     Save();
-                    flight.Load(store.Create(request.Id), flight.Mission, LaunchSites.Named(hud.Settings.LaunchSite));
+                    flight.Load(store.Create(request.Id), lastChosen, LaunchSites.Named(hud.Settings.LaunchSite));
                     hud.OpenMissions();
                     break;
                 case WorldRequestKind.Rename when request.Id == flight.WorldId:
@@ -74,7 +75,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
                     store.Rename(request.Id, request.Text);
                     break;
                 case WorldRequestKind.Reset when request.Id == flight.WorldId:
-                    flight.Load(store.Reset(request.Id), flight.Mission, LaunchSites.Named(hud.Settings.LaunchSite));
+                    flight.Load(store.Reset(request.Id), lastChosen, LaunchSites.Named(hud.Settings.LaunchSite));
                     break;
                 case WorldRequestKind.Reset:
                     store.Reset(request.Id);
@@ -82,7 +83,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
                 case WorldRequestKind.Delete:
                     store.Delete(request.Id);
                     if (request.Id == flight.WorldId)
-                        flight.Load(WorldPresets.Empty(), flight.Mission, LaunchSites.Named(hud.Settings.LaunchSite)); // gone: back to an unsaved one, until another is picked
+                        flight.Load(WorldPresets.Empty(), lastChosen, LaunchSites.Named(hud.Settings.LaunchSite)); // gone: back to an unsaved one, until another is picked
                     break;
             }
         }
@@ -161,9 +162,12 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
             // a switch to another vessel in the same input, which the flight takes first.
             var action = hud.TakeAction();
             var switching = swap is not null || input.SwitchVessel;
+            var choice = hud.TakeChoice();
+            if (choice is not null)
+                lastChosen = choice;
             var given = VesselActions.Into(input, switching ? null : action) with
             {
-                Choose = hud.TakeChoice(), From = LaunchSites.Named(hud.Settings.LaunchSite), Restart = hud.TakeRestart(), SwitchTo = swap, SetTarget = target, ClearTarget = clearTarget,
+                Choose = choice, From = LaunchSites.Named(hud.Settings.LaunchSite), Restart = hud.TakeRestart(), SwitchTo = swap, SetTarget = target, ClearTarget = clearTarget,
                 Plan = hud.TakePlan(), ChooseFrame = hud.TakeFrameChoice(),
                 Slower = controls.Take(ControlAction.Slower), Faster = controls.Take(ControlAction.Faster), Watched = watched,
                 Camera = view.Camera.Position, // last frame's: what the main view showed

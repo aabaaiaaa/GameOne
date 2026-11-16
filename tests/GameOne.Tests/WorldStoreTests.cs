@@ -102,7 +102,33 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
             Aim = Vector3.Transform(Vector3.UnitY, rotation), LegsWanted = true, LegDeploy = 1f, HasBeenAirborne = true, TouchedDown = true,
             BayDoorsWanted = true, BayDoors = 0.5f, BayDoorStops = new Vector2(RocketGeometry.DoorOpenRadians, 2.2f),
             Body = GroundBody.Moon.Name,
+            Site = "Highcrest", // launched from another site than Home, so the site is among the fields compared
         };
+    }
+
+    [Fact]
+    public void Runs_and_the_flown_vessel_round_trip()
+    {
+        var run = new RunState
+        {
+            Mission = Mission.LaunchAndLand, Site = "Highcrest", Number = 2,
+            Done = [true, false, true], Points = [0, 0, 1250], LastFlown = 4, BegunAt = 123.5,
+        };
+        var world = new WorldState { Id = "runs", Name = "Runs", Flights = 2, NextVesselId = 5, Runs = [run], Flown = 4 };
+        Store.Save(world);
+        var back = Store.Load("runs");
+        Assert.Equal(4, back.Flown);
+        var loaded = Assert.Single(back.Runs);
+        foreach (var property in typeof(RunState).GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            var (saved, got) = (property.GetValue(run), property.GetValue(loaded));
+            if (saved is bool[] done)
+                Assert.Equal(done, (bool[])got!);
+            else if (saved is int[] points)
+                Assert.Equal(points, (int[])got!);
+            else
+                Assert.True(Equals(saved, got), $"the run's {property.Name}: saved {saved}, loaded {got}");
+        }
     }
 
     /// <summary>Every field of every vessel in <paramref name="back"/> is as it was in <paramref name="world"/>.</summary>

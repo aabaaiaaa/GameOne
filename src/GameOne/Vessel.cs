@@ -104,6 +104,7 @@ internal sealed class Vessel
             (float[])state.Fuel.Clone(), state.Id, state.Flight)
     {
         State = state.State;
+        Site = LaunchSites.Named(state.Site);
         _at = now;
         // The rule by state (see AutoFrame): landed or afloat is the surface frame. No path reaches
         // this with an orbit-like periapsis today (a vessel restored so is frozen, reading no
@@ -182,6 +183,7 @@ internal sealed class Vessel
     internal VesselState Capture(IReadOnlyList<Vessel> world) => new()
     {
         Body = Body.Name,
+        Site = Site.Name,
         PartingFrom = _craft.PartingFrom is { } from ? world.FirstOrDefault(v => v._craft == from && v.State != FlightState.Crashed)?.Id : null,
         Ground = _ground,
         Id = Id,
@@ -237,6 +239,9 @@ internal sealed class Vessel
 
     /// <summary>The mission it was flown on.</summary>
     public Mission Mission => _mission;
+
+    /// <summary>The launch site its run was launched from (the parts that come off it, its own): kept after the run ends, so it can be started again there.</summary>
+    public LaunchSite Site { get; internal init; } = LaunchSites.Home;
 
     /// <summary>
     /// The physics body it is. Under formula (<see cref="OnFormula"/>) that is the body it was when
@@ -1268,6 +1273,7 @@ internal sealed class Vessel
         {
             State = FlightState.Flying,
             _at = _at, // the new vessel's time, from this one's: it was brought to the same moment
+            Site = Site,
             LegDeploy = LegDeploy,
             _legsWanted = _legsWanted,
             BayDoors = BayDoors, // its bay, if it has one, is the bottom stage's too
@@ -1316,6 +1322,7 @@ internal sealed class Vessel
             {
                 State = FlightState.Flying,
                 _at = _at, // each half's time, from this vessel's
+                Site = Site,
                 _hasBeenAirborne = true,
                 _wasTouching = false,
                 MaxAltitude = Altitude,

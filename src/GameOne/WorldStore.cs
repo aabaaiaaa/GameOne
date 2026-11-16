@@ -42,10 +42,10 @@ internal sealed class WorldStore(string directory)
 {
     /// <summary>
     /// The format files are written in. A file in any other can't be read: a newer one's may hold
-    /// what this game doesn't know, and an older one's vessels were saved with no body (in the
-    /// planet's frame, those on the moon held there by a place of their own), which isn't migrated.
+    /// what this game doesn't know, and an older one has no missions in progress, no vessel flown
+    /// and no vessel's launch site (and older still, no vessel's body), none of which is migrated.
     /// </summary>
-    public const int FormatVersion = 2;
+    public const int FormatVersion = 3;
 
     private const string Extension = ".json";
 
@@ -100,6 +100,9 @@ internal sealed class WorldStore(string directory)
         foreach (var vessel in file.World.Vessels)
             if (!Bodies.Has(vessel.Body))
                 throw new InvalidDataException($"A vessel is at an unknown body, \"{vessel.Body}\".");
+        foreach (var run in file.World.Runs)
+            if (run.Done.Length != run.Mission.Steps.Length || run.Points.Length != run.Mission.Steps.Length)
+                throw new InvalidDataException($"A run of {run.Mission.Name} was saved with another number of steps.");
         return file.World with { Id = id };
     }
 

@@ -31,6 +31,30 @@ internal sealed class MissionRun
         Progress = new MissionProgress(mission);
     }
 
+    /// <summary>A run in progress brought back as <paramref name="state"/> has it (see <see cref="Capture"/>), with none of its vessels yet: its flight adds them.</summary>
+    public MissionRun(Flight flight, RunState state)
+    {
+        _flight = flight;
+        Mission = state.Mission;
+        Site = LaunchSites.Named(state.Site);
+        Number = state.Number;
+        BegunAt = state.BegunAt;
+        LastFlownId = state.LastFlown;
+        Progress = new MissionProgress(state.Mission, state.Done, state.Points);
+    }
+
+    /// <summary>Everything about it but its vessels, to save it or bring it back later (see <see cref="WorldState.Runs"/>).</summary>
+    public RunState Capture() => new()
+    {
+        Mission = Mission,
+        Site = Site.Name,
+        Number = Number,
+        Done = [.. Mission.Steps.Select((_, i) => Progress.IsDone(i))],
+        Points = [.. Mission.Steps.Select((_, i) => Progress.PointsFor(i))],
+        LastFlown = LastFlownId,
+        BegunAt = BegunAt,
+    };
+
     public Mission Mission { get; }
 
     /// <summary>Where its rocket was launched from.</summary>

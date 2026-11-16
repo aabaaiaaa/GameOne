@@ -111,6 +111,9 @@ internal sealed record VesselState
     /// back into that body's physics, or under formula there.
     /// </summary>
     public string Body { get; init; } = GroundBody.Planet.Name;
+
+    /// <summary>The launch site its run was launched from, by name (<see cref="LaunchSite.Name"/>): kept after its run ends, so it can be started again there.</summary>
+    public string Site { get; init; } = LaunchSites.Home.Name;
 }
 
 /// <summary>
@@ -149,4 +152,37 @@ internal sealed record WorldState
 
     /// <summary>Every vessel lost in it, oldest first, the newest <see cref="Scene.WorldLogEntries"/> kept (see <see cref="WorldLog"/>). A world saved without one has none.</summary>
     public IReadOnlyList<LogEntry> Log { get; init; } = [];
+
+    /// <summary>Its mission runs in progress (those with objectives: free play has nothing to keep), oldest first. Each one's vessels are those with its flight number.</summary>
+    public IReadOnlyList<RunState> Runs { get; init; } = [];
+
+    /// <summary>The <see cref="VesselState.Id"/> of the vessel being flown, if one was: what carrying on resumes.</summary>
+    public int? Flown { get; init; }
+}
+
+/// <summary>
+/// A mission run in progress as it is at a moment (see <see cref="MissionRun"/>): everything about
+/// it but its vessels, which are the world's with its <see cref="Number"/> as their flight.
+/// </summary>
+internal sealed record RunState
+{
+    public required Mission Mission { get; init; }
+
+    /// <summary>The launch site it was launched from, by name (<see cref="LaunchSite.Name"/>).</summary>
+    public required string Site { get; init; }
+
+    /// <summary>Its flight number in its world.</summary>
+    public required int Number { get; init; }
+
+    /// <summary>Which of its mission's steps are done, one each, in the steps' order.</summary>
+    public required bool[] Done { get; init; }
+
+    /// <summary>The points each step was given when it was done (none if it isn't), in the steps' order.</summary>
+    public required int[] Points { get; init; }
+
+    /// <summary>The <see cref="VesselState.Id"/> of its vessel flown last.</summary>
+    public int LastFlown { get; init; }
+
+    /// <summary>The world's time when it began.</summary>
+    public double BegunAt { get; init; }
 }

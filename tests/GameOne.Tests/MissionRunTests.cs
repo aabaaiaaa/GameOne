@@ -111,4 +111,47 @@ public sealed class MissionRunTests
         Assert.Same(a, flight.RunOf(part));
         Assert.Equal(a.Number, part.Flight);
     }
+
+    [Fact]
+    public void A_restored_world_keeps_its_runs_and_flown_vessel()
+    {
+        using var sim = new Simulation(Mission.LandOnTheMoon);
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(Launch: true, FullThrottle: true));
+        sim.Step(default);
+        Assert.True(flight.Runs[0].Progress.IsDone(0), "the launch wasn't ticked");
+        var (flown, ids) = (flight.Controlled.Id, flight.WorldVessels.Select(v => v.Id).ToArray());
+
+        flight.Restore(flight.Capture());
+        var run = Assert.Single(flight.Runs);
+        Assert.Same(Mission.LandOnTheMoon, run.Mission);
+        for (var i = 0; i < run.Mission.Steps.Length; i++)
+            Assert.Equal(i == 0, run.Progress.IsDone(i));
+        Assert.Equal(flown, flight.Controlled.Id);
+        Assert.Same(run, flight.Run);
+        Assert.Equal(ids, flight.WorldVessels.Select(v => v.Id).ToArray()); // no new rocket
+        Assert.False(flight.Chosen);
+    }
+
+    [Fact]
+    public void A_world_left_before_a_choice_is_saved_as_it_was()
+    {
+        using var sim = new Simulation(Mission.FreePlay);
+        var flight = sim.Flight;
+        flight.Restore(new WorldState { Flights = 3, NextVesselId = 7 });
+        Assert.False(flight.Chosen);
+        Assert.Equal(FlightState.Ready, flight.Controlled.State); // the placeholder behind the menu
+        var saved = flight.Capture();
+        Assert.Empty(saved.Vessels);
+        Assert.Null(saved.Flown);
+        Assert.Equal(3, saved.Flights);
+        Assert.Equal(7, saved.NextVesselId);
+
+        // A choice made, the placeholder goes, and the new run is the world's next flight.
+        sim.Step(new FlightInput(Choose: Mission.LaunchAndLand));
+        Assert.True(flight.Chosen);
+        var vessel = Assert.Single(flight.WorldVessels);
+        Assert.Equal((4, 7), (vessel.Flight, vessel.Id));
+        Assert.Equal(4, Assert.Single(flight.Runs).Number);
+    }
 }
