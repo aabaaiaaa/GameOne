@@ -17,7 +17,9 @@ ground), merged 2026-10-29; heights
 from the sea and lit pads (every height from the sea, Altitude and Ground on the HUD, the far pads
 and zones at the highest ground under them on foundations that step back into the slope, and every
 pad, zone and drone ship lit: floor lights, floodlight masts where the ground allows, tower lights,
-far glows and floodlight shadows), merged 2026-10-29.)
+far glows and floodlight shadows), merged 2026-10-29; the solar system and a moon (the sun, the
+planet and the moon as bodies on their paths, the moon's own ground, eclipses both ways, flying
+there and landing, and the lander and its mission), merged 2026-11-16.)
 
 - **Using Jolt fully** (the user, 2026-11-02, after BRUTAL v2026.10.1: every Jolt call now works;
   see CLAUDE.md's Jolt notes). The user hopes it also helps performance: measure each against
@@ -408,102 +410,11 @@ far glows and floodlight shadows), merged 2026-10-29.)
   frames stepping the same worlds). Gain: fewer gen-0 collections over long play, and steadier frame times with
   many vessels (it may grow with them). Cost: small once found. Risk: none to the rules, if each
   fix keeps the same numbers (the flight tests check it).
-- **The solar system, and a moon: next after day and night** (the user, 2026-11-10). The sun,
-  the planet and the moon set up as a solar system: each a body with its own place in space and
-  an orbit (the planet round the sun, the moon round the planet), in place of today's sun, which
-  is only a direction worked out from the clock (`Sun.Direction`: no distance, no path, no pull,
-  the year only timing). The sun's direction, the day and the year then follow from where the
-  planet is on its path, not the other way round, and the frames this needs (one centred on the
-  sun beside the planet's own) are set up for the other planets, asteroids and the binary star
-  after it (below) to build on. Missions may come with it, but they are really an excuse for a
-  test: a rocket capable of it gets to the moon and lands on it, one way for now (no return).
-  It is built in four parts, each with its own spec, plan and screenshots (as day and night was).
-  Part 1 is built (2026-11-11): the sun, the planet and the moon are bodies on their paths
-  (`SolarSystem`: the planet round the sun once a year, 12 days, the sun's pull set from that; the
-  moon round the planet, 40 km out); the sun's direction (`Sun.Direction`) follows from them and
-  reads as it always did; the sun has its real distance and size (`Scene.SunDistance`,
-  `Scene.SunRadius`: its disc's angular radius the one over the other); the moon is in the sky as a
-  plain lit sphere (grey lit side, black dark side, seen through the haze); it has its own local
-  time (`SolarSystem.MoonLocalSeconds`, by the true sun seen from the moon, a day of about 30 min,
-  its lap against the sun, where its lap among the stars is about 27); and its orbit is tilted from
-  the equator (`Scene.MoonTiltDegrees`, 30 degrees) so eclipses come in two seasons a year, none
-  between. Part 2 is built (2026-11-12): the moon itself. Its own map from TerrainGen
-  (`--moon`, `moon.json`: two big craters, a crescent canyon, a far-side mountain with its spur,
-  and many smaller craters with flat patches between), grey and airless; its face in the sky
-  ray-cast from its map, lit by the sun with its ground's shadows, the planet's shadow and
-  planetshine; up close, its own mesh; its spin tilted so its face nods at the planet. Eclipses
-  both ways: the sun covered by the moon (the dark, the pad and landing lights, the corona, the
-  lens flare dimmed by what the moon leaves uncovered) and the moon in the planet's shadow;
-  moonlight on the planet's night, more as it is fuller. Each body in use has a physics of its own (`Worlds`),
-  and a lander can stand landed on the moon, in the moon's physics or under formula there. Left of it for later: the eclipses and the planet from the moon drawn closer to
-  life (below). Before the feature's merge, on its branch: the soak tests and the windowed
-  performance test (skipped at Part 2's end, the user, 2026-11-12, as several GPU timings had
-  just been taken); the tests' time record retaken (`--before-merge --record`: Part 2 added,
-  sped up and made long some); and a look in the running game at the moon's two shading
-  shortcuts (skipped where the planet is in front of it, and its light on the planet where
-  there is none), which should change no pixel: looked at (2026-11-16, the game's window held still, each shortcut on and off) and none changed (the light's never comes into play: the moon's light is never wholly none). Part 3 is built (2026-11-13): getting there,
-  below. Part 4, the lander and its mission, is built. Part 3's and 4's before-merge
-  list is the same list: add the second worlds' memory (the soak checks the worlds made and
-  released over play), `DriverScriptTests`' time (8.5 s against its 3.0 s record), to be retaken
-  with the record (`--before-merge --record`), and the low pass's performance test
-  (`A_very_low_pass_over_the_moon_holds_60_fps`), run (2026-11-16): about 87 fps at normal speed,
-  about 43 fps with the highest warp asked, accepted by the user with the warp's budget kept (see the
-  tests' `CLAUDE.md`). Nothing is left before the merge.
-  - Part 3, built (2026-11-13), getting there: gravity by sphere of influence (near the moon only it pulls); the
-    speed cap (`Scene.TopSpeed`, 4,000 m/s over the ground, reached only some 700 km out) kept,
-    with no far frame (the trip's tests check it stays under the cap); fast collisions with the moon
-    (`Collisions`); the moon as a target with the guides other targets get (the shaded transfer
-    window, the closest approach's mark, the predicted path bending as its pull takes it); the
-    map, zoomed all the way out, showing the whole system; positions that hold their precision
-    across it (the moon's ground on a moving body); the moon drawn in depth (the sky writes its
-    depth where it covers a pixel, the depth reversed with its far plane at infinity), so
-    whatever is beyond it (a vessel past 40 km, the planet seen from beyond the moon) is hidden
-    by it, and up close its mesh writes its own. A new flight's rocket is always put on its
-    site's pad at the planet, in the planet's physics, whatever body the flown vessel was at; the
-    sites (`LaunchSite.Pad`, `LandingZone`, `DroneShips`) are the planet's alone. Each vessel is at
-    one body, in its physics or under formula there, all played out at once (`Worlds`), handed
-    across a sphere's edge as it crosses (`Vessel.CrossTo`). The frames, the HUD's numbers
-    and the readout follow the body the flown vessel is at (the readout's `Body`). (Its landing
-    lights go by the moon's day: `Sun.IsDark` at its body.) Any body but the one the flown vessel
-    is at is a target (`TargetKind.Body`, by its marker), with its transfer window (arriving in
-    its sphere) and closest approach; each leg of a path is drawn round its own body
-    (`LegPlace`: the last placed where the path comes to it, a pass point by point). The map zoomed
-    all the way out is the whole system: the sun, each body's path round what it goes round, and
-    every vessel flying round its own body; the camera's depth is reversed, its far plane at
-    infinity, so it holds from the pad to there. The tests fly the satellite launcher's upper
-    stage there (`MoonTripTests`): from a low orbit with the fuel the satellite mission's ascent
-    leaves it (4,527 kg), across, into an orbit over the moon's poles and down onto the landing
-    spot, with some 3,210 kg to spare; and into the moon, warned of and judged a crash. Its
-    screenshots and driver script (`MoonTripWorlds`, `gameone-moon-trip.txt`) are the six worlds
-    from the trip's starts and its flight.
-    with that ascent there.
-  Discussed so far, but provisional: go back over all of it with the user before building
-  anything. Since then (2026-11-06): day and night's Parts 1 to 3 are built, and nothing below
-  needs the weather (the user, 2026-11-10: it comes after day and night, not after the weather);
-  what it needed first, the speed cap and the sphere of influence (both below), Part 3 settled
-  and built. It would be the first airless body, so "Near misses over an airless body" follows it,
-  and the first body to test fast collisions against (the user, 2026-11-06: at orbital and escape
-  speeds, with no air to slow anything):
-  - The physics caps a body's speed over the ground at `Scene.TopSpeed` (4,000 m/s,
-    `SetMaxLinearVelocity` in `RocketPhysics`), and the world is the ground's frame: something still among the stars
-    moves over the ground at ω·r, which reaches 4,000 m/s about 700 km from the centre. Escape is
-    already reachable, but the moon, 40 km out, is far inside that, and the trip to it never nears
-    the cap: Part 3 kept it, with no far frame (a moon further out, or anything sent past 700 km,
-    would need it raised, 8,000 and 16,000 m/s were tried: see "One speed range" below for what
-    holds, or far things flown in another frame).
-  - Its gravity works by sphere of influence (built in Part 3): near the moon, only the moon
-    pulls; everywhere else, only the planet, so orbits round the planet stay as stable as they are.
-  - It orbits the planet, 40 km from its centre (a lap of about 27 min), in the plane the rocket
-    launches into (east from the pad, round the equator), so the trip needs no plane change. Its
-    sphere of influence (about 6.4 km round it) stays well clear of the satellite orbits.
-  - It is like ours, scaled: radius 2.5 km, 1/6 g at its surface. It is solid: hitting it hard is
-    a crash, and coming down on it softly a landing, by the ground's rules.
-  - The test (and a mission round it, if one is wanted): a rocket able to do it launches from the
-    pad, reaches low orbit, fires to send it toward the moon, and lands on the moon, one way. What
-    rocket that takes (the satellite launcher as it is, or one built for it) is to discuss. An
-    earlier idea, kept to discuss: the satellite launcher's satellite caught into orbit round the
-    moon (lowest and highest points both 1 to 2 km above its surface, scored on its fuel left),
-    its booster landing on the drone ship and its upper stage coming back to land as a bonus.
+- **The satellite caught into orbit round the moon** (a mission idea, from the solar system,
+  2026-11-10; to discuss before building). The satellite launcher's satellite caught into orbit
+  round the moon, its lowest and highest points both 1 to 2 km above its surface, scored on its
+  fuel left; its booster landing on the drone ship and its upper stage coming back to land as a
+  bonus.
 - **To try: the crossing search in `Patched.Legs` kept or shared** (a performance idea, from the
   solar system's Part 3, 2026-11-13). On any path that crosses a sphere (a transfer) the search
   costs 0.2 to 0.27 ms a call (p99 0.6 to 0.7 ms, a worst of 8 ms), against about 3 us on the
@@ -702,11 +613,15 @@ far glows and floodlight shadows), merged 2026-10-29.)
   the crew pod and the crewed vessel all need it. To discuss before building.
 - **Near misses at orbital speed over an airless body** (the user, 2026-11-03): 6,000 m/s close
   passes and crashes over a body without air; the speed sweep (to the top speed, 4,000 m/s, now) extended to them
-  once there is one (the moon, above, would be the first).
+  now there is one: the moon (40 km out, 2.5 km round, airless) is the first.
 - **Raising the top speed** (to discuss before raising it). `Scene.TopSpeed` (4,000 m/s, a
   craft's cap, so two close at up to 8,000 m/s) is the one place the game's speed range is
   written: every limit follows from it or the speeds hit at, and the speed sweep and the paced fast
-  collisions (`ShortPerfTests`) measure it. Higher top speeds were tried (scratch runs, Release,
+  collisions (`ShortPerfTests`) measure it. The world is the ground's frame, so something still
+  among the stars moves over the ground at the planet's turn times its distance, 4,000 m/s about
+  700 km from the centre: the moon, 40 km out, is far inside that, but a body further out, or
+  anything sent past 700 km, would need the cap raised, or far things flown in another frame.
+  Higher top speeds were tried (scratch runs, Release,
   not kept: the fast collision tests' collisions scaled up to twice the top speed closing, and the
   two paced checks; frames are a frame's physics, 95th percentile, 10 ms the budget; taken with
   the slow-down's earlier shape, whose least scale is the same):
