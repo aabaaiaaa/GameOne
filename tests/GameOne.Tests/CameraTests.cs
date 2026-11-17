@@ -281,7 +281,7 @@ public sealed class CameraTests
         Assert.True(NearestGround(camera.Position, 3f) >= Scene.CameraGroundClearance * 0.8f);
         var across = camera.Position - focus;
         across -= up * Vector3.Dot(across, up);
-        Assert.True(across.Length() <= Scene.PadHalfSize, $"the camera is {across.Length():0.0} m to the side of what it looks at");
+        Assert.True(across.Length() <= Scene.RocketRadius * 2f, $"the camera is {across.Length():0.0} m to the side of what it looks at");
         Assert.True(Vector3.Dot(camera.Position - focus, up) < 0f, "it was lifted over the vessel instead of slid under it");
         Assert.True(DegreesBetween(camera.Forward, up) < 10f);
     }
@@ -326,6 +326,74 @@ public sealed class CameraTests
             Assert.True(MathF.Abs(Vector3.Dot(camera.GroundForward, Planet.Up(focus))) < 0.01f);
             Assert.True(MathF.Abs(Vector3.Dot(camera.GroundRight, camera.GroundForward)) < 0.01f);
         }
+    }
+
+    [Fact]
+    public void A_low_vessel_seen_from_below_never_has_the_camera_in_it()
+    {
+        foreach (var height in (ReadOnlySpan<float>)[1.5f, 3f])
+        foreach (var pitch in (ReadOnlySpan<float>)[-89f, -40f, -8f])
+        {
+            var camera = new ChaseCamera(null);
+            var focus = Scene.RocketStart - Planet.Up(Scene.RocketStart) * Scene.RocketBellHeight + new Vector3(0f, Scene.PadTop + height, 0f);
+            camera.Place(0.6f, float.DegreesToRadians(pitch), Scene.CameraDistance);
+            camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+            camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+            var where = $"(focus {height} m up, pitch {pitch}°)";
+            Assert.True(float.IsFinite(camera.Forward.X + camera.Forward.Y + camera.Forward.Z), "Forward " + where);
+            Assert.True(float.IsFinite(camera.Up.X + camera.Up.Y + camera.Up.Z), "Up " + where);
+            Assert.True(Vector3.Distance(camera.Position, focus) >= Scene.CameraSlideMinDistance - 0.01f, $"the camera is {Vector3.Distance(camera.Position, focus):0.00} m from the vessel " + where);
+            Assert.True(Planet.SurfaceAltitude(camera.Position) >= Scene.CameraGroundClearance - 0.01f, "clear of the ground " + where);
+        }
+    }
+
+    [Fact]
+    public void Looking_up_from_below_a_vessel_on_a_steep_slope_the_camera_keeps_clear_of_the_ground()
+    {
+        var site = LaunchSites.All.First(s => s.Name == "Polar");
+        var (spot, _) = Steepest(site);
+        var focus = spot + Planet.Up(spot) * 10f;
+        var camera = new ChaseCamera(null);
+        camera.Place(0f, float.DegreesToRadians(-80f), Scene.CameraDistance);
+        camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+        camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+        var clear = NearestGround(camera.Position, 3f);
+        Assert.True(clear >= 1.2f, $"the camera is only {clear:0.00} m from the slope");
+        Assert.True(Vector3.Distance(camera.Position, focus) >= Scene.CameraSlideMinDistance - 0.01f);
+    }
+
+    [Fact]
+    public void Free_look_after_an_extreme_chase_pitch_keeps_a_level_horizon()
+    {
+        foreach (var pitch in (ReadOnlySpan<float>)[-89f, 89f])
+        {
+            var camera = new ChaseCamera(null);
+            var focus = Scene.RocketStart + new Vector3(0, 3000f, 0);
+            camera.Place(0.6f, float.DegreesToRadians(pitch), Scene.CameraDistance);
+            camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+            // Free look, aimed up or down to the horizon from where the chase pitch had it.
+            camera.DragLook(new Vector2(float.DegreesToRadians(90f) / Scene.CameraRadiansPerDragPixel, (pitch > 0 ? -1f : 1f) * float.DegreesToRadians(89f) / Scene.CameraRadiansPerDragPixel)); // and across the way the chase view faces
+            camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+            Assert.True(camera.LookingFree);
+            var up = Planet.Up(camera.Position);
+            Assert.True(MathF.Abs(Vector3.Dot(camera.Forward, up)) < 0.05f, $"not aimed at the horizon: {Vector3.Dot(camera.Forward, up):0.000}");
+            Assert.True(float.IsFinite(camera.Up.X + camera.Up.Y + camera.Up.Z) && float.IsFinite(camera.Forward.X));
+            Assert.True(DegreesBetween(camera.Up, up) < 2f, $"the horizon is tilted {DegreesBetween(camera.Up, up):0.0}°");
+        }
+    }
+
+    [Fact]
+    public void A_view_placed_at_an_extreme_pitch_faces_by_its_own_yaw()
+    {
+        var camera = new ChaseCamera(null);
+        var focus = Scene.RocketStart + new Vector3(0, 3000f, 0);
+        camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+        camera.Place(1.2f, float.DegreesToRadians(88f), Scene.CameraDistance);
+        camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+        var expected = new ChaseCamera(null);
+        expected.Place(1.2f, 0.1f, Scene.CameraDistance);
+        expected.Update(Dt, focus, null, GroundBody.Planet, 0);
+        Assert.True(DegreesBetween(camera.GroundForward, expected.GroundForward) < 0.1f);
     }
 
     [Fact]

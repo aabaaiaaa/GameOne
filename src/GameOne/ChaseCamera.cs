@@ -441,7 +441,7 @@ internal sealed class ChaseCamera
     /// <summary>Looks from these angles and this far, as a drag and the wheel would leave it: for a view set up without the mouse.</summary>
     internal void Place(float yaw, float pitch, float distance)
     {
-        _yaw = yaw;
+        _yaw = _facingYaw = yaw;
         _pitch = Math.Clamp(pitch, MinPitch, MaxPitch);
         _distance = Math.Clamp(distance, Scene.CameraMinDistance, Scene.CameraMaxDistance);
         (_free, _snap) = (false, true);
@@ -549,7 +549,9 @@ internal sealed class ChaseCamera
         var (sinPitch, cosPitch) = MathF.SinCos(_pitch);
         var offset = (_east * sinYaw + _south * cosYaw) * cosPitch + _up * sinPitch;
         var position = _seen + offset * _distance;
-        position = same ? KeepClear(around, position, _seen) : across.Point(KeepClear(around, back.Point(position).ToSingle(), seenThere)).ToSingle();
+        var side = _east * sinYaw + _south * cosYaw; // the way it lies from the vessel, flat
+        position = same ? KeepClear(around, position, _seen, side)
+            : across.Point(KeepClear(around, back.Point(position).ToSingle(), seenThere, back.Direction(side).ToSingle())).ToSingle();
 
         Position = position;
         Target = _seen;
@@ -562,7 +564,7 @@ internal sealed class ChaseCamera
         // Near straight down or up its up is the yaw's own (straight down the way it faces, straight
         // up the way behind it), whatever the ground makes it slide to: it is the ground's up
         // turned by the pitch, which is what the view's up works out to anyway at any pitch, so no jump.
-        _worldUp = MathF.Abs(_pitch) < float.DegreesToRadians(Scene.CameraFacingPitchDegrees)
+        _worldUp = _free || MathF.Abs(_pitch) < float.DegreesToRadians(Scene.CameraFacingPitchDegrees)
             ? _up : Vector3.Normalize(_up * cosPitch - (_east * sinYaw + _south * cosYaw) * sinPitch);
         if (_out > 0f)
         {
@@ -719,21 +721,27 @@ internal sealed class ChaseCamera
     /// <summary>
     /// <paramref name="position"/>, kept <see cref="Scene.CameraGroundClearance"/> from
     /// <paramref name="body"/>'s ground (or a pad) and its waves: it looks up at the rocket from just above
-    /// them instead. Seen from below the vessel's own height (<paramref name="focus"/>), the ground it would
-    /// be under is slid along instead of lifted through (straight up from below, lifting would put it
-    /// over the vessel looking the wrong way): it comes in along its line to the vessel to where the
-    /// ground leaves it clear, so looking up at a landed vessel it is under it, close to the ground.
+    /// them instead. Seen from below the vessel's own height (<paramref name="focus"/>), at any pitch
+    /// below level (so a moderate one too comes in nearer than its distance), the ground it would be under
+    /// is slid along instead of lifted through (straight up from below, lifting would put it over the
+    /// vessel looking the wrong way): it comes in along its line to the vessel to where the ground leaves
+    /// it clear, so looking up at a landed vessel it is under it, close to the ground. Never nearer the
+    /// vessel than <see cref="Scene.CameraSlideMinDistance"/>: where no clear ground is found that far
+    /// out it is put there and lifted clear, and, if the lift brings it nearer than that, moved out
+    /// along <paramref name="side"/> (how it lies from the vessel, flat) and lifted again.
     /// </summary>
-    private static Vector3 KeepClear(GroundBody body, Vector3 position, Vector3 focus)
+    private static Vector3 KeepClear(GroundBody body, Vector3 position, Vector3 focus, Vector3 side)
     {
         if (Lift(body, position) <= 0f)
             return position;
         var up = body.Up(position);
         if (Vector3.Dot(position - focus, up) < 0f)
         {
-            // Nearest its full distance along the line that is clear (the vessel's own end is taken as clear).
-            float lo = 0f, hi = 1f;
-            for (var i = 0; i < 24; i++)
+            // The furthest it can be along the line that is clear (the near end, the least distance, is taken as clear).
+            var length = (position - focus).Length();
+            var near = MathF.Min(Scene.CameraSlideMinDistance / length, 1f);
+            float lo = near, hi = 1f;
+            for (var i = 0; i < 10 && lo < hi; i++)
             {
                 var mid = (lo + hi) / 2f;
                 if (Lift(body, focus + (position - focus) * mid) > 0f)
@@ -744,7 +752,19 @@ internal sealed class ChaseCamera
             position = focus + (position - focus) * lo;
         }
         var lift = Lift(body, position);
-        return lift > 0f ? position + body.Up(position) * lift : position;
+        if (lift > 0f)
+            position += body.Up(position) * lift;
+        if (Vector3.Distance(position, focus) < Scene.CameraSlideMinDistance)
+        {
+            var upHere = body.Up(position);
+            var flat = side - upHere * Vector3.Dot(side, upHere);
+            flat = flat.LengthSquared() > 1e-6f ? Vector3.Normalize(flat) : Vector3.Normalize(Vector3.Cross(upHere, Vector3.UnitX));
+            position = focus + flat * Scene.CameraSlideMinDistance;
+            lift = Lift(body, position);
+            if (lift > 0f)
+                position += body.Up(position) * lift;
+        }
+        return position;
     }
 
     /// <summary>
