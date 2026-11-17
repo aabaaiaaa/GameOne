@@ -114,7 +114,8 @@ internal sealed class Simulation : IDisposable
         // flown once it has been switched to), then the rest, in the frame its link-up ends in and
         // of no time, so that the pair take the one frame's time.
         RunOne(new FlightInput(SwitchTo: input.SwitchTo, SwitchVessel: input.SwitchVessel, CarryOn: input.CarryOn, Rewind: input.Rewind,
-            Watched: input.Watched, Camera: input.Camera, NearMisses: input.NearMisses, View: input.View));
+            Watched: input.Watched, Camera: input.Camera, NearMisses: input.NearMisses, View: input.View,
+            Watching: input.Watching, CameraBody: input.CameraBody));
         Flight.RunFrame(0f, input with { SwitchTo = null, SwitchVessel = false, CarryOn = null, Rewind = false, View = null });
     }
 

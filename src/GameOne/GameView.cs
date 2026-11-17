@@ -164,15 +164,17 @@ internal sealed class GameView : IDisposable
                 _effects.Splash(sound.Body, sound.Position, time);
         _effects.Update(time, _frames);
 
-        // The camera follows the middle of the rocket, or after a crash, where it blew up: in its
-        // body's frame, by its up there and clear of its ground, changed across first if that body
-        // has changed (a crossing, or a vessel at another body flown).
+        // The camera follows the middle of the rocket, or after a crash, where it blew up, or
+        // whatever else it has been put on: in the flown vessel's body's frame, by its subject's up
+        // and clear of its subject's ground, changed across first if the flown vessel's body has
+        // changed (a crossing, or a vessel at another body flown).
         if (_cameraBody != flight.Body)
         {
             Camera.Rebase(Bodies.Change(_cameraBody, flight.Body, flight.WorldTime));
             _cameraBody = flight.Body;
         }
-        Camera.Update(dt, Views.Focus(vessel), realDt, vessel.Body, flight.WorldTime);
+        (Watching, _subjectBody) = Aim(Camera, flight, dt, realDt);
+        _subjectAt = flight.WorldTime;
         Views.Update(dt, flight, Camera, realDt);
 
         // Every vessel as drawn, in the scene's frame; and every engine firing, for the plumes and the smoke they leave behind.
@@ -291,6 +293,44 @@ internal sealed class GameView : IDisposable
         if (Timings.Enabled)
             Timings.CountWorld(flight.Worlds, flight.Unwatched.UnderFormula);
         Timings.EndFrame(Hud.TimeScale, paused ? 0f : realDt is { } real && real > 0f ? dt / real : Hud.TimeScale);
+    }
+
+    /// <summary>
+    /// The vessel the main camera is on, if it isn't the flown one, as of the last frame drawn
+    /// (<see cref="Aim"/>): watched, so witnessed (<see cref="FlightInput.Watching"/>).
+    /// </summary>
+    public Vessel? Watching { get; private set; }
+
+    /// <summary>
+    /// Where the main camera is, as of the last frame drawn, in the frame of the body what it is on
+    /// is at (<see cref="FlightInput.Camera"/> and <see cref="FlightInput.CameraBody"/>): the vessels
+    /// near it there are the main view's witnessed. The camera itself is in the flown vessel's body's
+    /// frame, changed back across in double for one on something at another body.
+    /// </summary>
+    public (GroundBody Body, Vector3 Position) CameraPlace => _subjectBody == _cameraBody
+        ? (_cameraBody, Camera.Position)
+        : (_subjectBody, Bodies.Change(_cameraBody, _subjectBody, _subjectAt).Point(Camera.Position).ToSingle());
+
+    private GroundBody _subjectBody = GroundBody.Planet; // the body what the camera is on is at, as of the last frame drawn
+    private double _subjectAt;                            // and that frame's world time
+
+    /// <summary>
+    /// Points <paramref name="camera"/> (in the flown vessel's body's frame) at what it is on, for a
+    /// frame <paramref name="dt"/> on (<paramref name="realDt"/> of real time): its centre kept, or
+    /// given back to the flown vessel if what it was on is gone (<see cref="CameraSubject.Kept"/>),
+    /// then that followed, its focus changed into the camera's frame (<see cref="CameraSubject.Seen"/>).
+    /// Returns the vessel it is on if that isn't the flown one (the main view's watched), and the
+    /// body what it is on is at.
+    /// </summary>
+    internal static (Vessel? Watching, GroundBody Body) Aim(ChaseCamera camera, Flight flight, float dt, float? realDt)
+    {
+        var centre = CameraSubject.Kept(flight, camera.Centre);
+        if (centre != camera.Centre)
+            camera.CentreOn(centre);
+        // (Kept has found it there, so it is seen.)
+        var (body, focus, across, _) = CameraSubject.Seen(flight, centre)!.Value;
+        camera.Update(dt, focus, realDt, flight.Body, flight.WorldTime, body, across);
+        return (centre.Kind == CentreKind.Vessel ? CameraSubject.VesselOf(flight, centre) : null, body);
     }
 
     /// <summary>

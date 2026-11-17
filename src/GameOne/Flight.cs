@@ -132,13 +132,15 @@ internal readonly record struct Coming(Vessel Watched, SolidKind With, Vessel? O
 /// <param name="Slower">Run time a rate slower (see <see cref="Flight.Rates"/>): taken by <see cref="Flight.RunFrame"/>.</param>
 /// <param name="Faster">Run time a rate faster: taken by <see cref="Flight.RunFrame"/>.</param>
 /// <param name="Watched">The vessels the player is watching besides the one flown (those in the small views).</param>
-/// <param name="Camera">Where the main view's camera is, which the vessels near it in that view are witnessed by (see <see cref="Scene.MainViewWitnessed"/>); without it, the flown vessel, which the camera follows.</param>
+/// <param name="Camera">Where the main view's camera is, in the frame of <paramref name="CameraBody"/>, which the vessels near it in that view are witnessed by (see <see cref="Scene.MainViewWitnessed"/>); without it, the flown vessel, which the camera follows.</param>
 /// <param name="NearMisses">Whether near misses past the flown vessel and the watched are slowed for and shown ahead (the player's setting, <see cref="Settings.SlowNearMisses"/>): see <see cref="Flight.NearMissWarning"/>.</param>
 /// <param name="ToggleBayDoors">Open the flown vessel's bay doors, or close them (a vessel with a bay: <see cref="Vessel.HasBay"/>). No key does this.</param>
 /// <param name="CarryOn">Carry on flying the vessel of this id where it is, in its run or in free play (any vessel in the world that can be flown: the carry-on screen offers <see cref="Flight.CarryOnChoices"/>): a menu choice, as <paramref name="Choose"/> is.</param>
 /// <param name="CompleteRun">Complete the flown vessel's run with a bonus still open ("Complete mission"): the bonuses not done are lost.</param>
 /// <param name="AbandonRun">Give up the flown vessel's run ("Abandon mission"): its vessels stay where they are, in no run.</param>
 /// <param name="View">How the main view's camera is set up now: kept with the flown vessel, before anything in the step switches vessels or carries on (see <see cref="Vessel.View"/>).</param>
+/// <param name="Watching">The vessel the main view's camera is on, if it isn't the flown one: watched as a small view's vessel is (witnessed, in its body's physics, with a link-up if that isn't made: see <see cref="Flight.WatchLink"/>).</param>
+/// <param name="CameraBody">The body whose frame <paramref name="Camera"/> is given in, the body what the camera is on is at: the flown vessel's if none. Only vessels there are near the camera.</param>
 internal readonly record struct FlightInput(
     float Throttle = 0f,
     Vector3 Lean = default,
@@ -169,7 +171,9 @@ internal readonly record struct FlightInput(
     int? CarryOn = null,
     bool CompleteRun = false,
     bool AbandonRun = false,
-    CameraView? View = null);
+    CameraView? View = null,
+    Vessel? Watching = null,
+    GroundBody? CameraBody = null);
 
 /// <summary>
 /// Something the player can carry on flying where it is (<see cref="Flight.CarryOnChoices"/>):
@@ -668,8 +672,19 @@ internal sealed class Flight : IDisposable
         return null;
     }
 
-    // The witnessed for a step (see Witnessed): the watched less any whose view's link-up is still waiting.
-    private readonly List<Vessel> _witnessed = new(Scene.MaxSmallViews);
+    /// <summary>
+    /// The link-up over the main view as its camera is put on a vessel at a body whose physics isn't
+    /// made (<see cref="FlightInput.Watching"/>), as a small view's is over it (<see cref="OpenView"/>):
+    /// the physics made and the vessel brought in behind its static, the frame after it is first
+    /// drawn. The readout's <c>Camera link</c>.
+    /// </summary>
+    public LinkUp WatchLink { get; } = new();
+
+    private Vessel? _watching; // the vessel the main camera was on at the last frame run (FlightInput.Watching)
+
+    // The witnessed for a step (see Witnessed): the watched less any whose view's link-up is still
+    // waiting, with the vessel a switch waits on and the one the main camera is on.
+    private readonly List<Vessel> _witnessed = new(Scene.MaxSmallViews + 2);
 
     private int _frames;     // real frames run (RunFrame), for the link-up's frame after
     private double _realTime; // and their real seconds, its clock
@@ -732,6 +747,8 @@ internal sealed class Flight : IDisposable
         LinkUp.Cancel(); // a vessel being switched to, or its link clearing, is the last world's
         foreach (var link in _viewLinks)
             link.Cancel(); // and so is a view's
+        WatchLink.Cancel(); // and the main camera's, the camera taken afresh from the next input
+        _watching = null;
         var before = Controlled;
         var flown = Revive(world, flightStarts);
         Chosen = false;
@@ -981,7 +998,8 @@ internal sealed class Flight : IDisposable
     /// the watched (<see cref="ComingAt"/>). Asked again at the same time, it changes nothing (the
     /// tests count what it costs so).
     /// </summary>
-    internal void LookAhead(IReadOnlyList<Vessel>? watched = null, Vector3? camera = null, bool nearMisses = false)
+    /// <param name="cameraBody">The body whose frame <paramref name="camera"/> is in (the flown vessel's if none): only vessels there are near it.</param>
+    internal void LookAhead(IReadOnlyList<Vessel>? watched = null, Vector3? camera = null, bool nearMisses = false, GroundBody? cameraBody = null)
     {
         var soonest = _collisions.Soonest(Controlled, _world, Scene.CollisionHorizonSeconds, TimeScale);
         Warn(soonest);
@@ -992,7 +1010,7 @@ internal sealed class Flight : IDisposable
         var miss = nearMisses ? NearMisses(watched) : null;
         if (!nearMisses)
             NearMissWarning = null;
-        InView(camera ?? Controlled.CentreOfMass, watched);
+        InView(camera ?? Controlled.CentreOfMass, camera is null ? Controlled.Body : cameraBody ?? Controlled.Body, watched);
         Slow(flown, watched, miss);
         _coming.Keep(Controlled, soonest, NearMissWarning, watched);
     }
@@ -1092,21 +1110,22 @@ internal sealed class Flight : IDisposable
 
     /// <summary>
     /// Chooses the vessels the main view witnesses (<see cref="_inView"/>): those not wrecked
-    /// within <see cref="Scene.NearByDistance"/> of its camera at <paramref name="camera"/>, those on
+    /// within <see cref="Scene.NearByDistance"/> of its camera at <paramref name="camera"/> (in
+    /// <paramref name="cameraBody"/>'s frame, the body what the camera is on is at: only vessels there are near it), those on
     /// the move first and then those held by what they are on, each nearest first, but the flown
     /// one and any <paramref name="watched"/> (already witnessed).
     /// Witnessed means any vessel shown in the main view or a small view: the main view
     /// draws every vessel, but one far off is a marker, not seen hitting anything.
     /// </summary>
-    private void InView(Vector3 camera, IReadOnlyList<Vessel>? watched)
+    private void InView(Vector3 camera, GroundBody cameraBody, IReadOnlyList<Vessel>? watched)
     {
         _inViewCount = 0;
         const float Reach = Scene.NearByDistance * Scene.NearByDistance;
         for (var i = 0; i < _world.Count; i++)
         {
             var v = _world[i];
-            if (v == Controlled || v.State == FlightState.Crashed || v.Body != Controlled.Body)
-                continue; // the camera is at the flown vessel's body, in its frame
+            if (v == Controlled || v.State == FlightState.Crashed || v.Body != cameraBody)
+                continue; // the camera is given at that body, in its frame
             var apart = Vector3.DistanceSquared(v.CentreOfMass, camera);
             if (apart > Reach)
                 continue;
@@ -1558,6 +1577,21 @@ internal sealed class Flight : IDisposable
                 else
                     link.Cancel();
             }
+        // And the main camera's, likewise; then the camera put on another vessel since the last frame.
+        if (WatchLink.Due(_frames))
+        {
+            var vessel = WatchLink.Vessel!;
+            if (vessel.State != FlightState.Crashed && _world.Contains(vessel))
+            {
+                _worlds.Need(vessel.Body);
+                BringIn(vessel);
+                WatchLink.Ready(_realTime);
+            }
+            else
+                WatchLink.Cancel();
+        }
+        if (input.Watching != _watching)
+            Watch(input.Watching);
         // Slowed, the game's rate is the slow-down's, not the player's to change.
         if (input.Slower && Slowed is null)
             _rate = Math.Max(0, _rate - 1);
@@ -1579,6 +1613,7 @@ internal sealed class Flight : IDisposable
         LinkUp.Step(_realTime);
         foreach (var link in _viewLinks)
             link.Step(_realTime);
+        WatchLink.Step(_realTime);
         return dt;
     }
 
@@ -1741,11 +1776,20 @@ internal sealed class Flight : IDisposable
         AskAhead(WorldTime);
         ResolveTarget(); // where it has moved to, or whether it has been destroyed or removed
         KeepFrame(); // and Auto may have switched
-        var witnessed = Witnessed(input.Watched);
-        LookAhead(witnessed, input.Camera, input.NearMisses); // charged to the rules, as everything after the physics is
+        var witnessed = Witnessed(input.Watched, input.Watching);
+        // The main camera, at the body what it is on is at (the flown vessel's, if it isn't given);
+        // while its link-up waits, as at the flown vessel, so nothing near it is brought into a
+        // physics made in the step before its static is on the screen (see Watch).
+        var (camera, cameraBody) = input.Camera is { } at && WatchLink is not { Waiting: true }
+            ? (at, input.CameraBody ?? Controlled.Body) : (Controlled.CentreOfMass, Controlled.Body);
+        LookAhead(witnessed, camera, input.NearMisses, cameraBody); // charged to the rules, as everything after the physics is
         // Who is in the physics for the next step, once the look ahead has chosen the main view's
-        // witnessed: handed out and in.
-        Unwatched.Update(dt, witnessed, input.Camera ?? Controlled.CentreOfMass);
+        // witnessed: handed out and in. The camera moves as the vessel it is on does: the watched
+        // one, or the flown one at its body (a place there is taken to move with it, which only
+        // keeps more near the camera); a place at another body stays put over its ground.
+        var cameraVelocity = input.Watching is { } watching && watching.Body == cameraBody ? watching.Velocity
+            : cameraBody == Controlled.Body ? Controlled.Velocity : Vector3.Zero;
+        Unwatched.Update(dt, witnessed, camera, cameraBody, cameraVelocity);
         LogLosses(); // after the formula's wrecks and collisions too, not only the physics'
         UpdateRuns();
         Timings.EndStep(_worlds.TileCount); // charges the rules after the physics
@@ -2170,12 +2214,34 @@ internal sealed class Flight : IDisposable
     public void CloseView(Vessel vessel) => ViewLink(vessel)?.Cancel();
 
     /// <summary>
-    /// The vessels the player watches for a step (<paramref name="watched"/>: the small views'), but
-    /// for any whose view's link-up still waits for its body's physics: <see cref="Unwatched"/> and the
-    /// look ahead leave that one where it is, under formula, until its link-up's frame brings it in
-    /// (<see cref="OpenView"/>), so its body's physics is never made in a step meanwhile.
+    /// The main camera put on <paramref name="vessel"/> (none: back on the flown one), taken from the
+    /// input at the start of the frame (<see cref="FlightInput.Watching"/>): as for a new small view
+    /// (<see cref="OpenView"/>), the vessel back in the physics now if its body's is made, else its
+    /// link-up begun over the main view (<see cref="WatchLink"/>), drawn at the end of this frame and
+    /// due in the next, the vessel left under formula and witnessed by nothing until then. A link-up
+    /// for a vessel the camera is no longer on is let go, and nothing is made for it.
     /// </summary>
-    private IReadOnlyList<Vessel>? Witnessed(IReadOnlyList<Vessel>? watched)
+    private void Watch(Vessel? vessel)
+    {
+        _watching = vessel;
+        if (WatchLink.Vessel is { } linked && linked != vessel)
+            WatchLink.Cancel();
+        if (vessel is null || vessel == Controlled || WatchLink.Vessel == vessel)
+            return;
+        if (!vessel.OnFormula || !_world.Contains(vessel) || _worlds.At(vessel.Body) is not null)
+            BringIn(vessel);
+        else
+            WatchLink.Begin(vessel, _realTime, _frames);
+    }
+
+    /// <summary>
+    /// The vessels the player watches for a step (<paramref name="watched"/>: the small views'; and
+    /// <paramref name="watching"/>, the one the main camera is on, as a small view's is), but for any
+    /// whose link-up still waits for its body's physics: <see cref="Unwatched"/> and the look ahead
+    /// leave that one where it is, under formula, until its link-up's frame brings it in
+    /// (<see cref="OpenView"/>, <see cref="Watch"/>), so its body's physics is never made in a step meanwhile.
+    /// </summary>
+    private IReadOnlyList<Vessel>? Witnessed(IReadOnlyList<Vessel>? watched, Vessel? watching)
     {
         var waiting = false;
         foreach (var link in _viewLinks)
@@ -2183,7 +2249,9 @@ internal sealed class Flight : IDisposable
         // The vessel a switch waits on, its physics made, was brought in by the switch and is kept
         // in it (watched) until it is flown, so it isn't handed back to the formula meanwhile.
         var pending = LinkUp is { Waiting: true, Vessel: { } to } && _worlds.At(to.Body) is not null ? to : null;
-        if (!waiting && pending is null)
+        var camera = watching is not null && watching != Controlled && watching.State != FlightState.Crashed
+            && WatchLink is not { Waiting: true } && !IsWatched(watching, watched) ? watching : null;
+        if (!waiting && pending is null && camera is null)
             return watched;
         _witnessed.Clear();
         for (var i = 0; watched is not null && i < watched.Count; i++)
@@ -2191,6 +2259,8 @@ internal sealed class Flight : IDisposable
                 _witnessed.Add(watched[i]);
         if (pending is not null && !_witnessed.Contains(pending))
             _witnessed.Add(pending);
+        if (camera is not null && !_witnessed.Contains(camera))
+            _witnessed.Add(camera);
         return _witnessed;
     }
 
@@ -2320,6 +2390,8 @@ internal sealed class Flight : IDisposable
         LinkUp.Cancel(); // a vessel being switched to, or its link clearing, is the last flight's
         foreach (var link in _viewLinks)
             link.Cancel(); // and so is a view's
+        WatchLink.Cancel(); // and the main camera's, the camera taken afresh from the next input
+        _watching = null;
         // Wrecks are gone, bodies and all: one still playing out its hit (see RocketPhysics.Wreck)
         // goes now, as the menu that chose this mission paused the game, and one wrecked on the
         // pad would be left lying unseen inside the new rocket.

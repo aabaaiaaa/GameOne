@@ -176,6 +176,8 @@ internal sealed class Readout
         foreach (var viewLink in flight.ViewLinks)
             if (viewLink is { Vessel: { } linked, Reading: { } reading })
                 Show($"Link {WorldLog.Named(linked)}", reading); // a small view's link-up, given to a vessel at a body with no physics yet
+        if (flight.WatchLink.Reading is { } watchLink)
+            Show("Camera link", watchLink); // the link-up over the main view as its camera is put on a vessel at a body with no physics yet
 
         Show("State", flight.Controlled.State.ToString()); // Ready, Flying, Landed, Floating or Crashed
         if (flight.Warning is { } collision)

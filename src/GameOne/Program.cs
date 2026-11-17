@@ -177,7 +177,8 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
                 SwitchTo = swap, SetTarget = target, ClearTarget = clearTarget,
                 Plan = hud.TakePlan(), ChooseFrame = hud.TakeFrameChoice(),
                 Slower = controls.Take(ControlAction.Slower), Faster = controls.Take(ControlAction.Faster), Watched = watched,
-                Camera = view.Camera.Position, // last frame's: what the main view showed
+                // Last frame's: what the main view showed, at the body what the camera is on is at, and the vessel it is on.
+                Camera = view.CameraPlace.Position, CameraBody = view.CameraPlace.Body, Watching = view.Watching,
                 NearMisses = hud.Settings.SlowNearMisses,
                 View = view.Camera.View,
             };

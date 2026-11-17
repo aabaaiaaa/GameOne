@@ -1081,6 +1081,9 @@ internal static class Scene
     public const float CameraVerticalFovDegrees = 55f;
     public const float CameraDistance = 48f, CameraMinDistance = 20f, CameraMaxDistance = 3000f; // far out, to see the planet from orbit
     public const float CameraPitchDegrees = 10f;      // above the booster's middle, to start with
+    // Where the camera starts when put on a place (a site or a point of interest): this high over
+    // its top and this far to one side, looking at it, as if watching from beside it.
+    public const float PlaceViewHeight = 30f, PlaceViewAside = 60f; // metres
 
     public const float CameraFollowRate = 10f;        // per second: how tightly it keeps up
     public const float CameraMaxLag = 2f;              // metres: never further behind than this (fast, or a stage dropped, it would trail far off)

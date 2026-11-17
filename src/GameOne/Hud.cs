@@ -709,7 +709,7 @@ internal sealed class Hud : IDisposable
         else
             _timingsRect = RectangleF.Empty;
         var strip = Strip(flight, views, display, frames);
-        LinkUp(flight.LinkUp, display, strip);
+        LinkUp(flight.LinkUp.On ? flight.LinkUp : flight.WatchLink, display, strip); // (a switch's covers the camera's)
         Actions(flight, camera, new Vector2(display.X, display.Y));
         LastMessage = default;
         // (Kept for the timings panel's next frame, as each is drawn after it: empty unless drawn.)

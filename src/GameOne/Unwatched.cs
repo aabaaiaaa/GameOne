@@ -240,9 +240,11 @@ internal sealed class Unwatched(Flight flight)
     /// flown one, <paramref name="watched"/> and the main view's near <paramref name="camera"/>; and
     /// what could come near them, or near the camera, soon), and hands the others out and those
     /// wanted back in, within the budget. <paramref name="dt"/> is the step's (unused: the reach
-    /// goes by speeds and the lead, not steps).
+    /// goes by speeds and the lead, not steps). The camera is at <paramref name="cameraBody"/>, in its
+    /// frame, moving over its ground at <paramref name="cameraVelocity"/> (as what it is on moves):
+    /// by default the flown vessel's body, moving as the flown vessel does, which it follows.
     /// </summary>
-    public void Update(float dt, IReadOnlyList<Vessel>? watched, Vector3 camera)
+    public void Update(float dt, IReadOnlyList<Vessel>? watched, Vector3 camera, GroundBody? cameraBody = null, Vector3? cameraVelocity = null)
     {
         var world = _flight.WorldVessels;
         var now = _flight.WorldTime;
@@ -253,6 +255,7 @@ internal sealed class Unwatched(Flight flight)
 
         // Those that must be in the physics, whatever is near them.
         var flown = _flight.Controlled;
+        var atBody = cameraBody ?? flown.Body; // the camera's
         var inView = _flight.InViewVessels;
         _viewHeldNowCount = 0;
         const float ViewHold = Scene.HandoverHysteresis * Scene.NearByDistance;
@@ -267,7 +270,7 @@ internal sealed class Unwatched(Flight flight)
             // within the hysteresis times its reach, so one at its edge (by distance, or by rank
             // among the few) isn't handed out and back in as it crosses it.
             var viewed = Contains(inView, v)
-                || (!v.OnFormula && Vector3.DistanceSquared(v.CentreOfMass, camera) <= ViewHold * ViewHold && WasViewHeld(v));
+                || (!v.OnFormula && v.Body == atBody && Vector3.DistanceSquared(v.CentreOfMass, camera) <= ViewHold * ViewHold && WasViewHeld(v));
             if (viewed)
                 _viewHeldNow[_viewHeldNowCount++] = v;
             if (viewed || v == flown || Flight.IsWatched(v, watched) || MustStay(v))
@@ -276,11 +279,11 @@ internal sealed class Unwatched(Flight flight)
         (_viewHeld, _viewHeldNow, _viewHeldCount) = (_viewHeldNow, _viewHeld, _viewHeldNowCount);
 
         // Then what could come near them, grown out from them, pass by pass until one finds none
-        // (one found in a pass may come after a vessel near it in the list). The camera, which
-        // follows the flown vessel, moves over the ground as it does (among the stars, as the
-        // ground turns where the camera is); it is asked in the first pass only (it doesn't move
-        // between passes). The camera is at the flown vessel's body, so only what is there is near it.
-        var cameraStars = flown.Body.AmongStars(camera, flown.Velocity);
+        // (one found in a pass may come after a vessel near it in the list). The camera moves over
+        // the ground as what it is on does (among the stars, as the ground turns where the camera
+        // is); it is asked in the first pass only (it doesn't move between passes). Only what is at
+        // the camera's body is near it.
+        var cameraStars = atBody.AmongStars(camera, cameraVelocity ?? flown.Velocity);
         for (var pass = 0; ; pass++)
         {
             var before = _keptCount;
@@ -290,7 +293,7 @@ internal sealed class Unwatched(Flight flight)
                 if (_wanted[i] || v.State == FlightState.Crashed)
                     continue;
                 var due = float.PositiveInfinity;
-                var near = pass == 0 && Near(v, _stars[i], flown.Body, camera, cameraStars, 0f, ref due);
+                var near = pass == 0 && Near(v, _stars[i], atBody, camera, cameraStars, 0f, ref due);
                 near |= NearKept(v, _stars[i], ref due);
                 if (near)
                     Keep(i, v, due);

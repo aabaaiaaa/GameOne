@@ -26,6 +26,9 @@ namespace GameOne;
 /// angles and distance the player last set in it by hand (kept as its vessel's view, <see cref="Apply"/>),
 /// or, if they have not, on a view of its own, fitted afresh each time (from a little to the vessel's side of
 /// the pole, far enough out for its orbit).</para>
+/// <para>It can be put on something other than its vessel (<see cref="CentreOn"/>: another vessel,
+/// a place or a body, <see cref="CameraSubject"/>), followed and turned round the same way, its
+/// angles in the local frame of the body that is at.</para>
 /// </remarks>
 internal sealed class ChaseCamera
 {
@@ -387,7 +390,28 @@ internal sealed class ChaseCamera
     }
 
     /// <summary>How it is set up now: the chase and map angles and distances, and whether it is the map.</summary>
-    internal CameraView View => new(_zoomedOut, _yaw, _pitch, _distance, _outYaw, _outPitch, _outDistance, _mapSet, CameraCentre.Own);
+    internal CameraView View => new(_zoomedOut, _yaw, _pitch, _distance, _outYaw, _outPitch, _outDistance, _mapSet, Centre);
+
+    /// <summary>
+    /// What it is on (see <see cref="CameraSubject"/>): its own vessel, or something else it has been
+    /// put on (<see cref="CentreOn"/>), which whoever drives it finds and hands to <see cref="Update(float, Vector3, float?, GroundBody, double, GroundBody, in FrameChange)"/>.
+    /// </summary>
+    public CameraCentre Centre { get; private set; } = CameraCentre.Own;
+
+    /// <summary>
+    /// Puts it on <paramref name="centre"/> in the same mode (the map or the chase view), jumping
+    /// there rather than flying across. A place (<see cref="CameraSubject.IsPlace"/>) is looked at
+    /// from <see cref="Scene.PlaceViewHeight"/> over it and <see cref="Scene.PlaceViewAside"/> to the
+    /// side it is looked at from now, to be turned and zoomed round as the chase view is.
+    /// </summary>
+    internal void CentreOn(CameraCentre centre)
+    {
+        Centre = centre;
+        if (CameraSubject.IsPlace(centre.Kind))
+            Place(_yaw, MathF.Atan2(Scene.PlaceViewHeight, Scene.PlaceViewAside), MathF.Sqrt(Scene.PlaceViewHeight * Scene.PlaceViewHeight + Scene.PlaceViewAside * Scene.PlaceViewAside));
+        else
+            (_free, _snap) = (false, true);
+    }
 
     /// <summary>
     /// Sets up as <paramref name="view"/> says and snaps there, the map (if it shows it) fully out at
@@ -399,6 +423,7 @@ internal sealed class ChaseCamera
         (_outYaw, _outPitch, _outDistance) = (view.MapYaw, Math.Clamp(view.MapPitch, -ZoomedOutMaxPitch, ZoomedOutMaxPitch),
             Math.Clamp(view.MapDistance, Scene.ZoomOutMinDistance, Scene.ZoomOutMaxDistance));
         _mapSet = view.MapSet;
+        Centre = view.Centre;
         _zoomedOut = view.Map;
         _out = _zoomedOut ? 1f : 0f;
     }
@@ -435,15 +460,27 @@ internal sealed class ChaseCamera
     }
 
     /// <summary>
-    /// Follows <paramref name="focus"/> (the middle of the rocket). Call once per frame, with the
+    /// Follows <paramref name="focus"/> (the middle of the rocket) at <paramref name="body"/>, whose
+    /// frame it is in, as the overload below does for a focus at the same body.
+    /// </summary>
+    public void Update(float dt, Vector3 focus, float? realDt, GroundBody body, double worldTime) =>
+        Update(dt, focus, realDt, body, worldTime, body, FrameChange.Identity);
+
+    /// <summary>
+    /// Follows <paramref name="focus"/> (the middle of the rocket, or whatever else it is on). Call once per frame, with the
     /// game time <paramref name="dt"/> since the last (for following the vessel) and the real time
     /// <paramref name="realDt"/> (for zooming out and back, and a rebase's ease, which take as long whatever the time
     /// warp; the game time if null). <paramref name="body"/> is the body the vessel is at:
     /// <paramref name="focus"/> is in its frame, and up, east and north are its
     /// there, and the camera keeps clear of its ground; zoomed out, it keeps clear of the sun where
-    /// it is at <paramref name="worldTime"/> (<see cref="Scene.ZoomOutSunClearance"/>).
+    /// it is at <paramref name="worldTime"/> (<see cref="Scene.ZoomOutSunClearance"/>). What it
+    /// follows may be at another body, <paramref name="around"/>, whose frame
+    /// <paramref name="across"/> changes into <paramref name="body"/>'s (<paramref name="focus"/> is
+    /// given changed already): then its up, east and north, its pole zoomed out and the ground it
+    /// keeps clear of are that body's, changed across, so a vessel on the moon is looked at as from
+    /// the moon's ground.
     /// </summary>
-    public void Update(float dt, Vector3 focus, float? realDt, GroundBody body, double worldTime)
+    public void Update(float dt, Vector3 focus, float? realDt, GroundBody body, double worldTime, GroundBody around, in FrameChange across)
     {
         Judge();
         TurnLook();
@@ -476,15 +513,23 @@ internal sealed class ChaseCamera
 
         _lastFocus = focus;
         _seen = Seen(focus);
-        (_up, _east, _south) = (body.Up(_seen), body.East(_seen), -body.North(_seen));
-        (_poleUp, _poleEast, _poleSouth) = PoleFrame(body);
-        _zoomCentre = body.Centre;
+        // The subject's own body's frames, changed across into the camera's (none to change at the same body).
+        var same = around == body;
+        var c = across;
+        var back = same ? FrameChange.Identity : across.Inverse;
+        Vector3 Way(Vector3 d) => same ? d : Vector3.Normalize(c.Direction(d).ToSingle());
+        var seenThere = same ? _seen : back.Point(_seen).ToSingle();
+        (_up, _east, _south) = (Way(around.Up(seenThere)), Way(around.East(seenThere)), Way(-around.North(seenThere)));
+        var pole = PoleFrame(around);
+        (_poleUp, _poleEast, _poleSouth) = (Way(pole.Up), Way(pole.East), Way(pole.South));
+        _zoomCentre = same ? around.Centre : across.Point(around.Centre).ToSingle();
         Ease(realDt ?? dt);
 
         var (sinYaw, cosYaw) = MathF.SinCos(_yaw);
         var (sinPitch, cosPitch) = MathF.SinCos(_pitch);
         var offset = (_east * sinYaw + _south * cosYaw) * cosPitch + _up * sinPitch;
-        var position = KeepClear(body, _seen + offset * _distance);
+        var position = _seen + offset * _distance;
+        position = same ? KeepClear(around, position) : across.Point(KeepClear(around, back.Point(position).ToSingle())).ToSingle();
 
         Position = position;
         Target = _seen;

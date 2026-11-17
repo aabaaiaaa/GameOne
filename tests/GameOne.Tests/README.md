@@ -918,6 +918,16 @@ say) stalls frames and spoils the timing.
   short half way. In `PathTests`, zoomed out (M): the vessel looked at from far enough to fit the orbit, and back to just where it
   was, in the same real time in a warp; the map looking down from the pole's side; and the map
   opening on the view its vessel left (turned or zoomed by hand, or given with a view brought back).
+- **`CameraSubjectTests`:** the main camera on something other than the flown vessel
+  (`CameraSubject`, `GameView.Aim`): each kind of subject found at its body (a vessel's middle, a
+  body's centre, a site's top, a point of interest), and none for a number naming nothing; a
+  vessel it is on kept in its body's physics (`FlightInput.Watching`), and let go once it is off;
+  a stage round the moon followed from the planet's frame within 1 cm, each frame's step within
+  1 cm of its own motion; one lost (crashed, or no such vessel) giving the camera back to the
+  flown one (`CameraSubject.Kept`); one at a body with no physics shown its link-up over the main
+  view (`Flight.WatchLink`, the readout's `Camera link`), the physics made behind it the frame
+  after; and a place (Home's pad) looked at from `Scene.PlaceViewHeight` over it and
+  `Scene.PlaceViewAside` aside, turned and zoomed round it.
 - **`BodiesInPlayTests`:** a physics at each body in use (`Worlds`), every vessel at its own body,
   all played out at once: flying a lander in a moon orbit (the moon's physics), a small view's
   booster flies its landing burn down onto Home's zone by its retrograde hold (the planet's
