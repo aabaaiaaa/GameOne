@@ -621,7 +621,7 @@ public sealed class FrameTests(ITestOutputHelper output)
         sim.Step(new FlightInput(SetTarget: NavTarget.OfVessel(next)));
         foreach (var choice in new[] { FrameChoice.Orbit, FrameChoice.Surface })
         {
-            sim.Step(new FlightInput(ChooseFrame: choice, Plan: []));
+            sim.Step(new FlightInput(ChooseFrame: choice, Plan: ManoeuvreChain.Empty));
             var paths = Built(flight);
             Assert.Equal(2, paths.Marks.Count);
             foreach (var mark in paths.Marks)
@@ -636,7 +636,7 @@ public sealed class FrameTests(ITestOutputHelper output)
             Assert.InRange(mine, 0f, 2f);
             Assert.InRange(theirs, 0f, 2f);
 
-            sim.Step(new FlightInput(Plan: [new ManoeuvreNode(flight.WorldTime + 200, Prograde: -150f)]));
+            sim.Step(new FlightInput(Plan: NodeTests.Chain(flight.Controlled, flight.WorldTime, flight.WorldTime + 200, new ManoeuvreNode(0, Prograde: -150f))));
             paths = Built(flight);
             Assert.Single(paths.Nodes);
             Assert.Contains(paths.Marks, m => m.Label == "Air");
@@ -1359,7 +1359,7 @@ public sealed class FrameTests(ITestOutputHelper output)
     {
         var vessel = flight.Controlled;
         var plan = new ManoeuvrePlan();
-        plan.Update(GroundBody.Planet, vessel.CentreOfMass, Planet.AmongStars(vessel.CentreOfMass, vessel.Velocity), flight.WorldTime, vessel.Nodes, null);
+        plan.Update(vessel, vessel.Chain, flight.WorldTime);
         return plan;
     }
 

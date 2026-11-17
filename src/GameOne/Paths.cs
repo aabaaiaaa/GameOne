@@ -58,7 +58,7 @@ internal sealed class Paths
     /// <summary>Pieces a collision's lead-in is drawn in: two minutes of a lap of nine or so, smooth enough at this.</summary>
     private const int LeadSegments = 24;
 
-    private readonly List<Vector3> _line = [], _theirLine = [], _nodes = [];
+    private readonly List<Vector3> _line = [], _toFirst = [], _theirLine = [], _nodes = [];
     private readonly List<List<Vector3>> _legs = [], _legPool = [];
     private readonly List<Mark> _marks = [];
     // The map's collisions as drawn (see BuildCollisions): each one's cross, and the lead-ins into it
@@ -93,9 +93,11 @@ internal sealed class Paths
     private readonly double[] _apLabelsFor = [.. Enumerable.Repeat(double.NaN, Scene.PatchedLegs)], _peLabelsFor = [.. Enumerable.Repeat(double.NaN, Scene.PatchedLegs)];
     private string _closestLabel = "";
     private double _closestLabelFor = double.NaN;
-    // The path as it is, patched (with nodes: without, the plan's legs are it); a flying target's,
-    // round the body it is at; a straight up and down leg's few points among the stars.
+    // The path as it is, patched (with a chain: without, the plan's legs are it), and the legs
+    // the last Build drew it from; a flying target's, round the body it is at; a straight up and
+    // down leg's few points among the stars.
     private readonly List<PathLeg> _current = new(Scene.PatchedLegs), _theirLegs = new(Scene.PatchedLegs);
+    private IReadOnlyList<PathLeg> _present = [];
     private readonly List<Vector3> _radial = [];
     private int _firstNodeLeg = -1; // the leg the first node's burn is made at the end of (-1 none): up to it, the path as it is
     private bool _targetIsBody;
@@ -152,7 +154,13 @@ internal sealed class Paths
     /// </summary>
     internal IReadOnlyList<Vector3> Line => _line;
 
-    /// <summary>With nodes planned, each leg of the plan as drawn (the path to the first node with the engine off, then each node's on, each patched leg round its own body); none without.</summary>
+    /// <summary>The legs of the path the vessel is on now (each patched leg round its own body), from the last <see cref="Build"/>: what <see cref="Line"/> is drawn from.</summary>
+    internal IReadOnlyList<PathLeg> Present => _present;
+
+    /// <summary>With a chain, the vessel's own path as it is up to its first node's time, as drawn over <see cref="Line"/>; none without.</summary>
+    internal IReadOnlyList<Vector3> ToFirst => _toFirst;
+
+    /// <summary>With nodes planned, each leg of the plan as drawn (from its anchor to the first node with the engine off, then each node's on, each patched leg round its own body); none without.</summary>
     internal IReadOnlyList<IReadOnlyList<Vector3>> Legs => _legs;
 
     /// <summary>The marks on the path after the last node (Ap, Pe, Air: each leg's that it reaches, round its own body), as drawn.</summary>
@@ -226,6 +234,7 @@ internal sealed class Paths
         var pathColor = ((byte)(Scene.PathColor.X * 255), (byte)(Scene.PathColor.Y * 255), (byte)(Scene.PathColor.Z * 255));
         // With a plan: the orbit as it is, faintly; over it, the path to the first node, then the plan.
         DrawLine(draw, _line, pathColor, _planned ? 0.3f : 0.9f, Scene.PathWidth);
+        DrawLine(draw, _toFirst, pathColor, 0.9f, Scene.PathWidth);
         for (var i = 0; i < _legs.Count; i++)
             DrawLine(draw, _legs[i], i <= _firstNodeLeg ? pathColor : PlanColor, 0.9f, Scene.PathWidth);
         Window(draw);
@@ -299,25 +308,35 @@ internal sealed class Paths
         var frame = flight.LineFrame;
         var now = flight.WorldTime;
         var view = flight.Body; // the frame everything is drawn in: the flown vessel's body's
-        var mine = plan.Legs[0].Orbit; // the orbit it is on now, round the body it is at
         _planned = plan.NodeLeg(0) is not null;
         var last = plan.Last;
         var final = last.Orbit;
         var finalFrom = last.Start - now; // how far ahead the last leg starts
         _firstNodeLeg = plan.NodeLeg(0) ?? -1;
 
-        // The path as it is, patched at the spheres of influence: with no node reached, the plan's
-        // legs are just that; with one, it is patched again from the orbit it is on now.
+        // The path as it is, patched at the spheres of influence: without a chain, the plan's legs
+        // are just that; a chain's are from its anchor, so it is patched from where the vessel is.
         IReadOnlyList<PathLeg> current = plan.Legs;
-        if (_planned)
+        if (plan.Chained)
         {
-            var (position, velocity) = mine.StateAfter(0);
-            Patched.Legs(mine.Body, position, velocity, now, _current);
+            var vessel = flight.Controlled;
+            Patched.Legs(vessel.Body, vessel.CentreOfMass, vessel.Body.AmongStars(vessel.CentreOfMass, vessel.Velocity), now, _current);
             current = _current;
         }
+        _present = current;
+        var mine = current[0].Orbit; // the orbit it is on now, round the body it is at
         _line.Clear();
         for (var i = 0; i < current.Count; i++)
             Fill(_line, current[i], view, now, frame, last: i == current.Count - 1);
+        // And its own path to the first node, drawn over the line as it is (the chain's own legs up to
+        // the node are from its anchor, which is the node itself for one set where it is).
+        _toFirst.Clear();
+        if (_planned)
+        {
+            var firstAt = plan.Legs[_firstNodeLeg].End;
+            for (var i = 0; i < current.Count && current[i].Start < firstAt; i++)
+                Fill(_toFirst, current[i] with { End = Math.Min(current[i].End, firstAt) }, view, now, frame, last: i == current.Count - 1);
+        }
 
         // The target: on a path of its own (a body round its parent, a vessel flying round the
         // body it is at), or staying put (a place, or a vessel on the ground), as the body it is at

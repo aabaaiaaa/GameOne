@@ -239,7 +239,7 @@ internal sealed class Readout
             Show("Delta-v left", $"{guide.Left.Length():0.0} m/s{(guide.Overshot ? "  past it" : "")}");
             Show("Burn", guide.Short ? "more than the fuel left" : $"{guide.BurnSeconds:0.0} s at full");
         }
-        Show("Nodes", $"{flight.Controlled.Nodes.Count}");
+        Show("Nodes", $"{flight.Controlled.Chain?.Nodes.Length ?? 0}");
 
         Show("Site", flight.Site.Name);
         Show("Mission", flight.Mission.Name);

@@ -5,9 +5,11 @@ using Xunit.Abstractions;
 namespace GameOne.Tests;
 
 /// <summary>
-/// Manoeuvre nodes (<see cref="ManoeuvreNode"/>): the path a plan of them makes, flying one by its
-/// guide (the delta-v left, counting down, and the overshoot), how they go once flown past, that a
-/// later one keeps its time when an earlier burn changes the orbit, and that they are kept per vessel.
+/// Manoeuvre nodes (<see cref="ManoeuvreNode"/>, a <see cref="ManoeuvreChain"/> of them): the path
+/// a plan of them makes, flying one by its guide (the delta-v left, counting down, and the
+/// overshoot), how they go once flown past, that they stay where they were set whatever the vessel
+/// does meanwhile, how changing, moving and deleting one redoes the chain after it, and that they
+/// are kept per vessel.
 /// </summary>
 public sealed class NodeTests(ITestOutputHelper output)
 {
@@ -27,17 +29,35 @@ public sealed class NodeTests(ITestOutputHelper output)
         return sim;
     }
 
+    /// <summary><paramref name="nodes"/> anchored on <paramref name="v"/>'s path as it is now, the first at world time <paramref name="first"/> (its gap from there: 0 puts it there).</summary>
+    internal static ManoeuvreChain Chain(Vessel v, double now, double first, params ManoeuvreNode[] nodes) =>
+        ManoeuvreChain.AnchoredOn(v, first, [.. nodes], now);
+
+    /// <summary>A chain of three on the satellite's orbit: the first 100 s on, the others 300 s and 400 s after the one before.</summary>
+    private static ManoeuvreChain Three(Vessel satellite, double now) =>
+        Chain(satellite, now, now + 100, new ManoeuvreNode(0, Prograde: 20f), new ManoeuvreNode(300, Prograde: 3f), new ManoeuvreNode(400, Radial: 2f, Normal: -1f));
+
+    private static ManoeuvrePlan PlanOf(ManoeuvreChain chain, double now)
+    {
+        var plan = new ManoeuvrePlan();
+        plan.Update(chain, now, null);
+        return plan;
+    }
+
+    /// <summary>Where <paramref name="satellite"/>'s own orbit (the engine off) has it <paramref name="seconds"/> from now, as the ground is now.</summary>
+    private static Vector3 OnItsOrbit(Vessel satellite, double seconds) =>
+        new Orbit(GroundBody.Planet, satellite.CentreOfMass, Planet.AmongStars(satellite.CentreOfMass, satellite.Velocity)).StateAfter(seconds).Position;
+
     [Fact]
     public void A_prograde_node_raises_the_far_side_of_the_planned_path()
     {
         using var sim = Satellite(out var satellite);
         var flight = sim.Flight;
-        var node = new ManoeuvreNode(flight.WorldTime + 100, Prograde: RaiseFrom(9000f, 10000f));
-        var plan = new ManoeuvrePlan();
-        plan.Update(GroundBody.Planet, satellite.CentreOfMass, Planet.AmongStars(satellite.CentreOfMass, satellite.Velocity), flight.WorldTime, [node], null);
+        var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 100, new ManoeuvreNode(0, Prograde: RaiseFrom(9000f, 10000f)));
+        var plan = PlanOf(chain, flight.WorldTime);
 
         Assert.Equal(2, plan.Legs.Count);
-        Assert.Equal(node.Time, plan.Legs[0].End, 6);
+        Assert.Equal(chain.TimeOf(0), plan.Legs[0].End, 6);
         var after = plan.Last.Orbit;
         var far = after.NextApoapsis!.Value;
         var top = after.Distance(far) - Planet.SeaRadius;
@@ -53,12 +73,10 @@ public sealed class NodeTests(ITestOutputHelper output)
     {
         using var sim = Satellite(out var satellite);
         var flight = sim.Flight;
-        var node = new ManoeuvreNode(flight.WorldTime + 60, Prograde: RaiseFrom(9000f, 10000f));
-        sim.Step(new FlightInput(Plan: [node]));
-        Assert.Single(satellite.Nodes);
-        var plan = new ManoeuvrePlan();
-        plan.Update(GroundBody.Planet, satellite.CentreOfMass, Planet.AmongStars(satellite.CentreOfMass, satellite.Velocity), flight.WorldTime, satellite.Nodes, null);
-        var planned = plan.Last.Orbit;
+        var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 60, new ManoeuvreNode(0, Prograde: RaiseFrom(9000f, 10000f)));
+        sim.Step(new FlightInput(Plan: chain));
+        Assert.Single(satellite.Chain!.Nodes);
+        var planned = PlanOf(satellite.Chain, flight.WorldTime).Last.Orbit;
         var plannedTop = planned.Distance(planned.NextApoapsis!.Value) - Planet.SeaRadius;
 
         // As a pilot would: point along the burn (prograde hold, here), light the engine half the
@@ -80,7 +98,7 @@ public sealed class NodeTests(ITestOutputHelper output)
         }, f =>
         {
             timeWhenGone = f.WorldTime;
-            return satellite.Nodes.Count == 0;
+            return satellite.Chain is null;
         }, maxSeconds: 120), "the node should go once flown past");
         output.WriteLine($"delta-v left from {startLeft:0.00} m/s down to {lowest:0.000}; overshot: {overshot}");
         Assert.InRange(startLeft, RaiseFrom(9000f, 10000f) - 0.05f, RaiseFrom(9000f, 10000f) + 0.05f);
@@ -88,8 +106,8 @@ public sealed class NodeTests(ITestOutputHelper output)
 
         // It went once its time was past with the engine off: no sooner (the burn, either side of
         // its time, finished half a second or so after it).
-        output.WriteLine($"gone {timeWhenGone - node.Time:0.00} s after its time");
-        Assert.InRange(timeWhenGone, node.Time, node.Time + 1.5);
+        output.WriteLine($"gone {timeWhenGone - chain.TimeOf(0):0.00} s after its time");
+        Assert.InRange(timeWhenGone, chain.TimeOf(0), chain.TimeOf(0) + 1.5);
         Assert.False(flight.EngineLit);
         Assert.Null(flight.Guide);
         var top = Orbit.OverGround(GroundBody.Planet, satellite.CentreOfMass, satellite.Velocity) is var now ? now.Distance(now.NextApoapsis!.Value) - Planet.SeaRadius : 0;
@@ -102,7 +120,7 @@ public sealed class NodeTests(ITestOutputHelper output)
     {
         using var sim = Satellite(out var satellite);
         var flight = sim.Flight;
-        sim.Step(new FlightInput(Plan: [new ManoeuvreNode(flight.WorldTime + 5, Prograde: 2f)], ToggleProgradeHold: true));
+        sim.Step(new FlightInput(Plan: Chain(satellite, flight.WorldTime, flight.WorldTime + 5, new ManoeuvreNode(0, Prograde: 2f)), ToggleProgradeHold: true));
         sim.Run((_, _) => default, f => f.Guide!.Value.Seconds < 0.5, maxSeconds: 10);
         var before = flight.Guide!.Value;
         Assert.False(before.Overshot);
@@ -118,21 +136,222 @@ public sealed class NodeTests(ITestOutputHelper output)
         output.WriteLine($"left {before.Left.Length():0.00}, then {during.Left.Length():0.00}, then {after.Left.Length():0.00} m/s, overshot {after.Overshot}");
         Assert.True(after.Overshot);
         Assert.InRange(after.Left.Length(), 3f, 5f);
-        Assert.Single(satellite.Nodes); // the engine is still lit: it stays until that stops
+        Assert.Single(satellite.Chain!.Nodes); // the engine is still lit: it stays until that stops
     }
 
     [Fact]
-    public void A_later_node_keeps_its_time_when_an_earlier_burn_changes_the_orbit()
+    public void A_node_stays_where_it_was_set_when_the_path_changes_before_it()
     {
         using var sim = Satellite(out var satellite);
         var flight = sim.Flight;
-        var later = new ManoeuvreNode(flight.WorldTime + 200, Radial: 1f);
-        sim.Step(new FlightInput(Plan: [new ManoeuvreNode(flight.WorldTime + 2, Prograde: 3f), later]));
-        Assert.Equal(2, satellite.Nodes.Count);
+        var set = flight.WorldTime;
+        var chain = Chain(satellite, set, set + 120, new ManoeuvreNode(0, Prograde: 20f));
+        sim.Step(new FlightInput(Plan: chain, ToggleProgradeHold: true));
+        var before = PlanOf(satellite.Chain!, set);
+        var node = before.NodeAt(0)!.Value.Position;
+        var path = before.Last.Orbit.StateAfter(300).Position;
+        var ownBefore = OnItsOrbit(satellite, chain.TimeOf(0) - set);
+
+        // A little prograde, well before the node: its own path is somewhere else now.
+        sim.Run((_, _) => new FlightInput(FullThrottle: true), _ => false, maxSeconds: 1);
+        sim.Run((_, _) => new FlightInput(CutThrottle: true), _ => false, maxSeconds: 1);
+        var now = flight.WorldTime;
+        Assert.True(now < chain.TimeOf(0) - 100);
+        var ownAfter = Planet.Turned(OnItsOrbit(satellite, chain.TimeOf(0) - now), now - set); // as the ground was when it was set
+        output.WriteLine($"its own path at the node's time moved {Vector3.Distance(ownBefore, ownAfter):0.0} m");
+        Assert.True(Vector3.Distance(ownBefore, ownAfter) > 10f, "the burn should have changed its own path");
+
+        // The node and the path it plans are where they were: the chain is as it was set, and its
+        // plan depends on it and the time alone.
+        Assert.Equal(chain, satellite.Chain);
+        var after = PlanOf(satellite.Chain!, set);
+        output.WriteLine($"the node moved {Vector3.Distance(node, after.NodeAt(0)!.Value.Position) * 1000:0.000} mm, its path {Vector3.Distance(path, after.Last.Orbit.StateAfter(300).Position) * 1000:0.000} mm");
+        Assert.True(Vector3.Distance(node, after.NodeAt(0)!.Value.Position) < 1e-3f);
+        Assert.True(Vector3.Distance(path, after.Last.Orbit.StateAfter(300).Position) < 1e-3f);
+        // Planned now, it is the same place among the stars (turned on by the ground's turn since).
+        var later = PlanOf(satellite.Chain!, now);
+        var turnedBack = Planet.Turned(later.NodeAt(0)!.Value.Position, now - set);
+        output.WriteLine($"planned now, the node is {Vector3.Distance(node, turnedBack) * 1000:0.0} mm from where it was");
+        Assert.True(Vector3.Distance(node, turnedBack) < 0.02f);
+    }
+
+    [Fact]
+    public void Changing_a_node_redoes_the_chain_after_it_keeping_their_gaps_and_amounts()
+    {
+        using var sim = Satellite(out var satellite);
+        var now = sim.Flight.WorldTime;
+        var chain = Three(satellite, now);
+        var changed = chain.WithNode(1, chain.Nodes[1] with { Prograde = 10f });
+        Assert.Equal(chain.Anchor, changed.Anchor);
+        Assert.Equal(chain.Nodes[0], changed.Nodes[0]);
+        Assert.Equal(chain.Nodes[2], changed.Nodes[2]);
+        Assert.Equal(chain.TimeOf(2), changed.TimeOf(2));
+
+        var (before, after) = (PlanOf(chain, now), PlanOf(changed, now));
+        // The nodes up to it are where they were; the one after it is at the same time, on its new path.
+        Assert.True(Vector3.Distance(before.NodeAt(0)!.Value.Position, after.NodeAt(0)!.Value.Position) < 1e-3f);
+        Assert.True(Vector3.Distance(before.NodeAt(1)!.Value.Position, after.NodeAt(1)!.Value.Position) < 1e-3f);
+        var moved = Vector3.Distance(before.NodeAt(2)!.Value.Position, after.NodeAt(2)!.Value.Position);
+        output.WriteLine($"the third node moved {moved:0} m");
+        Assert.True(moved > 10f, "the third node should be on the second's new path");
+        var leg = after.Legs[after.NodeLeg(2)!.Value];
+        Assert.Equal(changed.TimeOf(2), leg.End, 6);
+        // Its burn is its own amounts, measured on that path.
+        var (at, velocity) = after.NodeAt(2)!.Value;
+        var (_, burned) = after.Legs[after.NodeLeg(2)!.Value + 1].Orbit.StateAfter(0);
+        Assert.True(Vector3.Distance(burned - velocity, changed.Nodes[2].DeltaV(leg.Body, at, velocity)) < 1e-3f);
+    }
+
+    [Fact]
+    public void Moving_a_node_moves_the_later_ones_with_it()
+    {
+        using var sim = Satellite(out var satellite);
+        var now = sim.Flight.WorldTime;
+        var chain = Three(satellite, now);
+        var moved = chain.MoveTo(1, chain.TimeOf(1) + 50, satellite, now);
+        Assert.Equal(chain.Anchor, moved.Anchor);
+        Assert.Equal(chain.TimeOf(0), moved.TimeOf(0));
+        Assert.Equal(chain.TimeOf(1) + 50, moved.TimeOf(1), 9);
+        Assert.Equal(chain.TimeOf(2) + 50, moved.TimeOf(2), 9);
+        Assert.Equal(chain.Nodes[1] with { Gap = 350 }, moved.Nodes[1]);
+        Assert.Equal(chain.Nodes[2], moved.Nodes[2]);
+    }
+
+    [Fact]
+    public void A_node_cannot_be_moved_before_the_one_before_it()
+    {
+        using var sim = Satellite(out var satellite);
+        var now = sim.Flight.WorldTime;
+        var chain = Three(satellite, now);
+        var moved = chain.MoveTo(1, chain.TimeOf(0) - 100, satellite, now);
+        Assert.Equal(chain.TimeOf(0) + ManoeuvreChain.MinimumGap, moved.TimeOf(1), 9);
+        Assert.Equal(moved.TimeOf(1) + chain.Nodes[2].Gap, moved.TimeOf(2), 9);
+        // Nor the first before now.
+        var first = chain.MoveTo(0, now - 100, satellite, now);
+        Assert.Equal(now + ManoeuvreChain.MinimumGap, first.TimeOf(0), 9);
+    }
+
+    [Fact]
+    public void Deleting_a_middle_node_joins_its_neighbours()
+    {
+        using var sim = Satellite(out var satellite);
+        var now = sim.Flight.WorldTime;
+        var chain = Three(satellite, now);
+        var joined = chain.Delete(1, satellite, now);
+        Assert.Equal(2, joined.Nodes.Length);
+        Assert.Equal(chain.Anchor, joined.Anchor);
+        Assert.Equal(chain.Nodes[0], joined.Nodes[0]);
+        Assert.Equal(chain.TimeOf(2), joined.TimeOf(1), 9);
+        Assert.Equal(chain.TimeOf(2) - chain.TimeOf(0), joined.Nodes[1].Gap, 9);
+        Assert.Equal(chain.Nodes[2] with { Gap = joined.Nodes[1].Gap }, joined.Nodes[1]);
+        // It is on the first's path now: where that one alone plans it at its time.
+        var firstAlone = PlanOf(chain with { Nodes = [chain.Nodes[0]] }, now);
+        var onFirst = firstAlone.Last.Orbit.StateAfter(chain.TimeOf(2) - firstAlone.Last.Start).Position;
+        Assert.True(Vector3.Distance(onFirst, PlanOf(joined, now).NodeAt(1)!.Value.Position) < 1e-3f);
+    }
+
+    [Fact]
+    public void Deleting_the_first_node_anchors_the_second_on_the_vessels_path()
+    {
+        using var sim = Satellite(out var satellite);
+        var now = sim.Flight.WorldTime;
+        var chain = Three(satellite, now);
+        var rest = chain.Delete(0, satellite, now);
+        Assert.Equal(2, rest.Nodes.Length);
+        Assert.Equal(chain.TimeOf(1), rest.Anchor.Time, 9);
+        Assert.Equal(chain.TimeOf(1), rest.TimeOf(0), 9);
+        Assert.Equal(chain.TimeOf(2), rest.TimeOf(1), 9);
+        Assert.Equal(chain.Nodes[1] with { Gap = 0 }, rest.Nodes[0]);
+        Assert.Equal(chain.Nodes[2], rest.Nodes[1]);
+        // Its anchor is where the vessel's own orbit has it then, not where the first node's burn would have.
+        var anchored = rest.StartAt(now).Position;
+        var own = OnItsOrbit(satellite, chain.TimeOf(1) - now);
+        var planned = PlanOf(chain, now).NodeAt(1)!.Value.Position;
+        output.WriteLine($"anchored {Vector3.Distance(anchored, own) * 1000:0.0} mm from its own orbit, {Vector3.Distance(anchored, planned):0} m from the first's planned path");
+        Assert.True(Vector3.Distance(anchored, own) < 0.02f);
+        Assert.True(Vector3.Distance(anchored, planned) > 100f);
+    }
+
+    [Fact]
+    public void Moving_the_first_node_snaps_it_onto_the_vessels_present_orbit()
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        var set = flight.WorldTime;
+        sim.Step(new FlightInput(Plan: Chain(satellite, set, set + 200, new ManoeuvreNode(0, Prograde: 5f), new ManoeuvreNode(100, Radial: 1f)), ToggleProgradeHold: true));
+        sim.Run((_, _) => new FlightInput(FullThrottle: true), _ => false, maxSeconds: 1);
+        sim.Run((_, _) => new FlightInput(CutThrottle: true), _ => false, maxSeconds: 1);
+        var now = flight.WorldTime;
+        var chain = satellite.Chain!;
+        var to = chain.TimeOf(0) + 20;
+        var moved = chain.MoveTo(0, to, satellite, now);
+        Assert.Equal(to, moved.TimeOf(0), 9);
+        Assert.Equal(chain.TimeOf(1) + 20, moved.TimeOf(1), 9);
+        Assert.Equal(chain.Nodes[0] with { Gap = 0 }, moved.Nodes[0]);
+        Assert.Equal(chain.Nodes[1], moved.Nodes[1]);
+        // Onto the orbit it is on now, off the one it was set on.
+        var anchored = moved.StartAt(now).Position;
+        var own = OnItsOrbit(satellite, to - now);
+        var (position, velocity) = chain.StartAt(now);
+        var wasOn = new Orbit(GroundBody.Planet, position, velocity, from: chain.Anchor.Time - now).StateAfter(20).Position;
+        output.WriteLine($"anchored {Vector3.Distance(anchored, own) * 1000:0.0} mm from its orbit now, {Vector3.Distance(anchored, wasOn):0.0} m from the one it was set on");
+        Assert.True(Vector3.Distance(anchored, own) < 0.02f);
+        Assert.True(Vector3.Distance(anchored, wasOn) > 10f);
+    }
+
+    [Fact]
+    public void A_chain_anchored_at_the_moon_is_planned_round_the_moon()
+    {
+        var moon = GroundBody.Moon;
+        var state = InOrbit.Round(moon, 0, 400f);
+        using var sim = new Simulation(Mission.FreePlay, world: new WorldState { Time = 0.0, Vessels = [state], NextVesselId = 1, Flights = 1 });
+        var v = sim.Flight.WorldVessels.Single(w => w.Id == 0);
+        sim.Step(new FlightInput(SwitchTo: v));
+        sim.Step(default);
+        Assert.Same(moon, v.Body);
+        var now = sim.Flight.WorldTime;
+        var chain = Chain(v, now, now + 60, new ManoeuvreNode(0, Prograde: 5f));
+        Assert.Equal(moon.Name, chain.Anchor.Body);
+        Assert.Same(moon, chain.Body);
+
+        var plan = PlanOf(chain, now);
+        Assert.All(plan.Legs, leg => Assert.Same(moon, leg.Body));
+        var (at, before) = plan.NodeAt(0)!.Value;
+        var height = Vector3.Distance(at, moon.Centre) - moon.SeaRadius;
+        output.WriteLine($"the node is {height:0.0} m over the moon's datum");
+        Assert.InRange(height, moon.OrbitFloor + 390f, moon.OrbitFloor + 410f);
+        Assert.True(Vector3.Distance(at, OnItsOrbitRound(moon, v, 60)) < 0.02f, "the node should be on its orbit round the moon");
+        var (_, after) = plan.Legs[plan.NodeLeg(0)!.Value + 1].Orbit.StateAfter(0);
+        Assert.True(Vector3.Distance(after - before, Manoeuvres.Frame(moon, at, before).Prograde * 5f) < 1e-3f);
+
+        // Set on it, its guide is that burn.
+        sim.Step(new FlightInput(Plan: chain));
+        Assert.InRange(sim.Flight.Guide!.Value.Left.Length(), 4.99f, 5.01f);
+
+        static Vector3 OnItsOrbitRound(GroundBody body, Vessel v, double seconds) =>
+            new Orbit(body, v.CentreOfMass, body.AmongStars(v.CentreOfMass, v.Velocity)).StateAfter(seconds).Position;
+    }
+
+    [Fact]
+    public void The_next_node_keeps_its_time_and_amounts_when_the_first_is_flown_past()
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        var later = new ManoeuvreNode(198, Radial: 1f);
+        var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 2, new ManoeuvreNode(0, Prograde: 3f), later);
+        sim.Step(new FlightInput(Plan: chain));
+        Assert.Equal(2, satellite.Chain!.Nodes.Length);
         sim.Step(new FlightInput(ToggleProgradeHold: true));
         sim.Run((_, _) => new FlightInput(FullThrottle: true), _ => false, maxSeconds: 3);
         sim.Run((_, _) => new FlightInput(CutThrottle: true), _ => false, maxSeconds: 1);
-        Assert.Equal([later], satellite.Nodes); // the first, flown past, has gone; the second is as it was
+        // The first, flown past, has gone; the second is at its time with its amounts, anchored on
+        // the path the vessel is on now.
+        var rest = Assert.Single(satellite.Chain!.Nodes);
+        Assert.Equal(later with { Gap = 0 }, rest);
+        Assert.Equal(chain.TimeOf(1), satellite.Chain.TimeOf(0), 9);
+        var now = flight.WorldTime;
+        output.WriteLine($"anchored {Vector3.Distance(satellite.Chain.StartAt(now).Position, OnItsOrbit(satellite, chain.TimeOf(1) - now)):0.000} m from its orbit now");
+        Assert.True(Vector3.Distance(satellite.Chain.StartAt(now).Position, OnItsOrbit(satellite, chain.TimeOf(1) - now)) < 5f); // (the physics' step is not quite the orbit's, over the second since)
     }
 
     [Fact]
@@ -141,14 +360,48 @@ public sealed class NodeTests(ITestOutputHelper output)
         using var sim = Satellite(out var first);
         var flight = sim.Flight;
         var second = flight.WorldVessels.Where(v => v.Flight == 0).ElementAt(1);
-        var node = new ManoeuvreNode(flight.WorldTime + 300, Normal: -4f);
-        sim.Step(new FlightInput(Plan: [node]));
+        var chain = Chain(first, flight.WorldTime, flight.WorldTime + 300, new ManoeuvreNode(0, Normal: -4f));
+        sim.Step(new FlightInput(Plan: chain));
         sim.Step(new FlightInput(SwitchTo: second));
-        Assert.Empty(second.Nodes);
+        Assert.Null(second.Chain);
         Assert.Null(flight.Guide);
         sim.Step(new FlightInput(SwitchTo: first));
-        Assert.Equal([node], first.Nodes);
+        Assert.Equal(chain, first.Chain);
         Assert.NotNull(flight.Guide);
+    }
+
+    [Fact]
+    public void An_empty_chain_clears_the_plan()
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(Plan: Chain(satellite, flight.WorldTime, flight.WorldTime + 300, new ManoeuvreNode(0, Normal: -4f))));
+        Assert.NotNull(satellite.Chain);
+        sim.Step(new FlightInput(Plan: satellite.Chain!.Delete(0, satellite, flight.WorldTime)));
+        Assert.Null(satellite.Chain);
+        Assert.Null(flight.Guide);
+    }
+
+    [Fact]
+    public void A_node_inserted_before_the_first_is_anchored_on_the_vessels_path()
+    {
+        using var sim = Satellite(out var satellite);
+        var now = sim.Flight.WorldTime;
+        var chain = Three(satellite, now);
+        var earlier = chain.Insert(now + 40, satellite, now);
+        Assert.Equal(4, earlier.Nodes.Length);
+        Assert.Equal(new ManoeuvreNode(0), earlier.Nodes[0]);
+        Assert.Equal(now + 40, earlier.TimeOf(0), 9);
+        for (var i = 0; i < 3; i++)
+            Assert.Equal(chain.TimeOf(i), earlier.TimeOf(i + 1), 9);
+        Assert.True(Vector3.Distance(earlier.StartAt(now).Position, OnItsOrbit(satellite, 40)) < 0.02f);
+        // Between two, it takes its place among them, the one after keeping its time.
+        var between = chain.Insert(chain.TimeOf(1) + 10, satellite, now);
+        Assert.Equal(chain.Anchor, between.Anchor);
+        Assert.Equal(new ManoeuvreNode(10), between.Nodes[2]);
+        Assert.Equal(chain.Nodes[2] with { Gap = 390 }, between.Nodes[3]);
+        Assert.Equal(chain.TimeOf(2), between.TimeOf(3), 9);
+        Assert.Equal(2, chain.SlotFor(chain.TimeOf(1) + 10));
     }
 
     [Fact]

@@ -236,16 +236,16 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
         var (position, velocity) = Transfer(PassLead);
         var legs = new List<PathLeg>();
         Patched.Legs(Planet, position, velocity, Now, legs);
-        var node = new ManoeuvreNode(legs[0].End + 30, Prograde: 10f);
+        var chain = ManoeuvreChain.AnchoredOn(Planet, position, velocity, Now, [new ManoeuvreNode(legs[0].End + 30 - Now, Prograde: 10f)], Now);
         var plan = new ManoeuvrePlan();
-        plan.Update(Planet, position, velocity, Now, [node], null);
+        plan.Update(chain, Now, null);
         foreach (var leg in plan.Legs)
             output.WriteLine($"{leg.Body.Name}: {leg.Start - Now:0.000} to {leg.End - Now:0.000} s");
 
         Assert.True(plan.Legs.Count >= 3, $"only {plan.Legs.Count} legs");
         Assert.Equal(new[] { Planet, Moon, Moon }, plan.Legs.Take(3).Select(l => l.Body));
         Assert.Equal(1, plan.NodeLeg(0));
-        Assert.Equal(node.Time, plan.Legs[1].End, 6);
+        Assert.Equal(chain.TimeOf(0), plan.Legs[1].End, 6);
         var (at, before) = plan.NodeAt(0)!.Value;
         Assert.True(Vector3.Distance(at, Moon.Centre) < Moon.SphereRadius * Scene.SphereLeaveFactor, "the node isn't round the moon");
 
@@ -266,9 +266,10 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
         var (position, velocity) = Transfer(PassLead);
         var legs = new List<PathLeg>();
         Patched.Legs(Planet, position, velocity, Now, legs);
-        var node = new ManoeuvreNode(legs[0].End + 30, Prograde: 2f, Radial: 6f, Normal: -8f);
+        var chain = ManoeuvreChain.AnchoredOn(Planet, position, velocity, Now, [new ManoeuvreNode(legs[0].End + 30 - Now, Prograde: 2f, Radial: 6f, Normal: -8f)], Now);
+        var node = chain.Nodes[0];
         var plan = new ManoeuvrePlan();
-        plan.Update(Planet, position, velocity, Now, [node], null);
+        plan.Update(chain, Now, null);
         Assert.Equal(1, plan.NodeLeg(0));
         Assert.Same(Moon, plan.Legs[1].Body);
         var (at, before) = plan.NodeAt(0)!.Value;
@@ -310,11 +311,12 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
         var legs = new List<PathLeg>();
         Patched.Legs(Planet, v.CentreOfMass, stars, Now, legs);
         Assert.Same(Moon, legs[1].Body);
-        var node = new ManoeuvreNode(legs[0].End + 30, Prograde: 2f, Radial: 6f, Normal: -8f);
-        v.Replan([node], Now);
+        var chain = ManoeuvreChain.AnchoredOn(v, Now, [new ManoeuvreNode(legs[0].End + 30 - Now, Prograde: 2f, Radial: 6f, Normal: -8f)], Now);
+        var node = chain.Nodes[0];
+        v.Replan(chain, Now);
 
         var plan = new ManoeuvrePlan();
-        plan.Update(Planet, v.CentreOfMass, stars, Now, [node], null);
+        plan.Update(chain, Now, null);
         Assert.Same(Moon, plan.Legs[plan.NodeLeg(0)!.Value].Body);
         var (_, before) = plan.NodeAt(0)!.Value;
         var (_, after) = plan.Legs[plan.NodeLeg(0)!.Value + 1].Orbit.StateAfter(0);
@@ -324,7 +326,7 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
         Assert.True(Vector3.Distance(guide.Left, expected) < 0.01f, $"the guide is {Vector3.Distance(guide.Left, expected):0.000} m/s off the plan's burn round the moon");
         Assert.InRange(guide.Left.Length(), node.Size - 0.01f, node.Size + 0.01f);
         // Measured on the planet's orbit alone, as though it never crossed, it would be off by metres a second.
-        var (p, u) = Orbit.OverGround(Planet, v.CentreOfMass, v.Velocity, findEnd: false).StateAfter(node.Time - Now);
+        var (p, u) = Orbit.OverGround(Planet, v.CentreOfMass, v.Velocity, findEnd: false).StateAfter(chain.TimeOf(0) - Now);
         Assert.True(Vector3.Distance(node.DeltaV(Planet, p, u), expected) > 1f);
 
         // The guide is asked every frame: once warm it allocates nothing.
@@ -344,13 +346,13 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
         var (position, velocity) = Transfer(PassLead);
         var legs = new List<PathLeg>();
         Patched.Legs(Planet, position, velocity, Now, legs);
-        ManoeuvreNode[] nodes = [new(legs[0].End + 30, Prograde: 2f, Radial: 6f, Normal: -8f), new(legs[0].End + 400, Prograde: -5f)];
+        var chain = ManoeuvreChain.AnchoredOn(Planet, position, velocity, Now, [new(legs[0].End + 30 - Now, Prograde: 2f, Radial: 6f, Normal: -8f), new(370, Prograde: -5f)], Now);
         var plan = new ManoeuvrePlan();
         var left = new Vector3(1f, 2f, 3f);
         for (var i = 0; i < 3; i++)
         {
-            plan.Update(Planet, position, velocity, Now, nodes, null);
-            plan.Update(Planet, position, velocity, Now, nodes, left);
+            plan.Update(chain, Now, null);
+            plan.Update(chain, Now, left);
         }
         Assert.Equal(Moon, plan.Legs[plan.NodeLeg(0)!.Value].Body);
 
@@ -358,8 +360,8 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
         {
             for (var i = 0; i < 10; i++)
             {
-                plan.Update(Planet, position, velocity, Now, nodes, null);
-                plan.Update(Planet, position, velocity, Now, nodes, left);
+                plan.Update(chain, Now, null);
+                plan.Update(chain, Now, left);
                 _ = plan.NodeAt(0);
                 _ = plan.NodeLeg(1);
             }

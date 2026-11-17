@@ -65,7 +65,7 @@ internal sealed record VesselState
     public bool FairingOn { get; init; }
     public NavTarget? Target { get; init; }
     public CameraView? View { get; init; } // how it was last looked at (see Vessel.View)
-    public ManoeuvreNode[] Nodes { get; init; } = [];
+    public ManoeuvreChain? Chain { get; init; } // its planned burns (see Vessel.Chain), none with null
     public Vector3? BurnAim { get; init; }
     public Vector3 Burned { get; init; }
     public double BurnStart { get; init; }

@@ -43,9 +43,10 @@ internal sealed class WorldStore(string directory)
     /// <summary>
     /// The format files are written in. A file in any other can't be read: a newer one's may hold
     /// what this game doesn't know, and an older one has no missions in progress, no vessel flown
-    /// and no vessel's launch site (and older still, no vessel's body), none of which is migrated.
+    /// and no vessel's launch site or view, and its nodes are each a time, not a chain (and older
+    /// still, no vessel's body), none of which is migrated.
     /// </summary>
-    public const int FormatVersion = 4;
+    public const int FormatVersion = 5;
 
     private const string Extension = ".json";
 

@@ -610,10 +610,21 @@ say) stalls frames and spoils the timing.
   the vessel flown letting its ended run's result go; a world loaded over its capacity losing
   debris, then vessels of no run, then runs', never the one flown; and the readout's runs, rewind,
   vessel id and position.
+- **`NodeTests`:** manoeuvre nodes as a chain (`ManoeuvreChain`): a prograde node raising the far
+  side, one flown by its guide giving the orbit it planned and going, the guide counting down and
+  saying when it goes past; a node staying where it was set (to a millimetre) when the vessel burns
+  before it; changing a node redoing the chain after it, each later one keeping its gap and
+  amounts; moving one moving the later ones with it, never before the one before it (nor the first
+  before now); deleting a middle one joining its neighbours, and the first anchoring the second on
+  the vessel's path; moving the first snapping it onto the orbit the vessel is on now; inserting
+  one before the first or between two; a chain round the moon planned round it; the next node kept,
+  at its time, when the first is flown past; an empty chain clearing the plan; and each vessel
+  keeping its own.
 - **`WorldLogTests`:** the world's log: a crash on the ground, two vessels colliding (one entry; and two wrecked by one collision steps apart joined into the first's entry; two pairs colliding side by side an entry each, by who hit whom), an unwatched loss under formula (not witnessed, near its site), those removed to make room as a world loads (oldest first, unseen, no speed, printed without one), one cleared from the launch pad (unseen as a world loads; seen, flown, as a flight from its site starts), and the newest 300 kept; the missions' entries (a run begun, a step done with its points, completed with its score, and nothing for free play); and each crash reason worded without its advice (or the break-up's cause after its colon), its speed taken out to be the entry's (a line never says two speeds).
 - **`WorldStoreTests`:** saving and loading, in a folder of the test's own: a world loads back
   exactly (every field of every vessel, a body targeted from the planet and from the moon
-  included, each still its vessel's target once loaded) and flies on the same as the one saved; the world list
+  included, each still its vessel's target once loaded) and flies on the same as the one saved; a node chain
+  anchored round the moon loading back as it was; the world list
   (the latest first, what is in each, a file it can't read listed with why); a file from a newer
   version refused; a world flown in free play saved and loaded; worlds made from presets with names of their own, renamed, reset and deleted; a vessel afloat saving and coming back floating (and one saved while still settling in the water, coming back and floating with nobody near); vessels saved while out of the physics, under formula, saved where the formula had them and loading back there.
 - **`CreditsTests`:** the BRUTAL credits panel (licence §2.1 and §2.2): shown before play and in

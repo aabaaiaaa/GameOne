@@ -127,7 +127,7 @@ internal readonly record struct Coming(Vessel Watched, SolidKind With, Vessel? O
 /// <param name="SwitchTo">Fly this vessel instead, if it can be flown (e.g. one clicked in its view).</param>
 /// <param name="SetTarget">Make this the flown vessel's target (its marker clicked), if it is something else that is there.</param>
 /// <param name="ClearTarget">The flown vessel's target is no longer wanted.</param>
-/// <param name="Plan">The flown vessel's planned burns from now on (its nodes placed, moved, changed or deleted).</param>
+/// <param name="Plan">The flown vessel's planned burns from now on, as a chain (its nodes placed, moved, changed or deleted); one with no nodes clears them.</param>
 /// <param name="ChooseFrame">The frame of reference the player picks on the selector (see <see cref="Flight.FrameChoice"/>).</param>
 /// <param name="Slower">Run time a rate slower (see <see cref="Flight.Rates"/>): taken by <see cref="Flight.RunFrame"/>.</param>
 /// <param name="Faster">Run time a rate faster: taken by <see cref="Flight.RunFrame"/>.</param>
@@ -161,7 +161,7 @@ internal readonly record struct FlightInput(
     Vessel? SwitchTo = null,
     NavTarget? SetTarget = null,
     bool ClearTarget = false,
-    ManoeuvreNode[]? Plan = null,
+    ManoeuvreChain? Plan = null,
     FrameChoice? ChooseFrame = null,
     bool Slower = false,
     bool Faster = false,

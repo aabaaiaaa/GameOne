@@ -400,10 +400,9 @@ public sealed class SpinTests(ITestOutputHelper output)
         sim.Step(new FlightInput(SwitchTo: satellite));
         float r1 = Planet.SeaRadius + 9000f, r2 = Planet.SeaRadius + 10000f;
         var raise = MathF.Sqrt(Planet.Mu / r1) * (MathF.Sqrt(2f * r2 / (r1 + r2)) - 1f);
-        var node = new ManoeuvreNode(flight.WorldTime + 30, Prograde: raise);
-        sim.Step(new FlightInput(Plan: [node], ToggleProgradeHold: true));
+        sim.Step(new FlightInput(Plan: NodeTests.Chain(satellite, flight.WorldTime, flight.WorldTime + 30, new ManoeuvreNode(0, Prograde: raise)), ToggleProgradeHold: true));
         var plan = new ManoeuvrePlan();
-        plan.Update(GroundBody.Planet, satellite.CentreOfMass, Planet.AmongStars(satellite.CentreOfMass, satellite.Velocity), flight.WorldTime, satellite.Nodes, null);
+        plan.Update(satellite, satellite.Chain, flight.WorldTime);
         var planned = plan.Last.Orbit;
         var plannedTop = planned.Distance(planned.NextApoapsis!.Value) - Planet.SeaRadius;
 
@@ -431,7 +430,7 @@ public sealed class SpinTests(ITestOutputHelper output)
             if (f.EngineLit)
                 return guide.Overshot || guide.Left.Length() < 0.05f ? new FlightInput(CutThrottle: true) : default;
             return guide.Seconds <= guide.BurnSeconds / 2 && lowest > 0.05f ? new FlightInput(FullThrottle: true) : default;
-        }, _ => satellite.Nodes.Count == 0, maxSeconds: 60), "the node should go once flown past");
+        }, _ => satellite.Chain is null, maxSeconds: 60), "the node should go once flown past");
         var top = satellite.Apoapsis;
         output.WriteLine($"over {flight.WorldTime - start:0.0} s (the planet turning {float.RadiansToDegrees(Planet.SpinRate * (float)(flight.WorldTime - start)):0.0}°) " +
             $"the guide among the stars was at most {wandered:0.000}° off what was left; delta-v left down to {lowest:0.000} m/s; top planned {plannedTop:0.0} m, flown {top:0.0} m");

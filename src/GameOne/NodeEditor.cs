@@ -8,11 +8,12 @@ namespace GameOne;
 /// <summary>
 /// Planning burns on the zoomed-out path: the flown vessel's manoeuvre nodes, drawn where they are
 /// on it, and what the mouse does to them. A click on the path places one there (the pointer over
-/// it shows where); drag a node along the path to move it in time; right-click it (or click its
-/// small x) to delete it. The selected node (the last placed or clicked) has six handles, for
-/// speed along the way it is going or against it, out from the planet or in, and to either side of
-/// its orbit's plane: pull one out and hold it, and that speed builds the farther out it is held,
-/// stopping when it is let go. The path after the burn follows as it changes (see <see cref="Paths"/>).
+/// it shows where); drag a node along the path it is on to move it in time (the nodes after it
+/// move with it); right-click it (or click its small x) to delete it, joining the chain round it.
+/// The selected node (the last placed or clicked) has six handles, for speed along the way it is
+/// going or against it, out from the planet or in, and to either side of its orbit's plane: pull
+/// one out and hold it, and that speed builds the farther out it is held, stopping when it is let go.
+/// The path after the burn follows as it changes (see <see cref="Paths"/>).
 /// </summary>
 /// <remarks>
 /// What is planned goes to the flight as its input (<see cref="TakePlan"/>), as everything the
@@ -34,12 +35,11 @@ internal sealed class NodeEditor
     private const float HandleRest = 44f;     // how far out the handles sit, in pixels
     private const float HandlePull = 70f;     // and how much farther one can be pulled
     private const float FastestRate = 40f;    // m/s added each second, pulled all the way out
-    private const double MinimumGap = 1.0;    // a node can't be placed or moved closer than this to now, seconds
 
     private static readonly (byte R, byte G, byte B) ProgradeColor = (200, 255, 90), RadialColor = (90, 220, 255), NormalColor = (240, 120, 255);
     private static readonly string[] HandleNames = ["Prograde", "Retrograde", "Radial out", "Radial in", "Normal", "Antinormal"];
 
-    private readonly List<ManoeuvreNode> _pending = [];
+    private ManoeuvreChain? _pending;
     private readonly List<(Vector3 At, double Seconds)> _samples = [];
     private Vessel? _vessel;
     private int _selected = -1;
@@ -74,22 +74,21 @@ internal sealed class NodeEditor
         window.OnCursorPos += (_, pos) => _cursor = new Vector2((float)pos.X, (float)pos.Y);
     }
 
-    /// <summary>The nodes as planned here: the vessel's, or as they are being changed.</summary>
-    public IReadOnlyList<ManoeuvreNode> Nodes => _pending;
+    /// <summary>The nodes as planned here: the vessel's chain, or as it is being changed (null, or with no nodes, for none).</summary>
+    public ManoeuvreChain? Chain => _pending;
 
-    /// <summary>Whether the planned first node is the vessel's own next node, unchanged (so its burn, if it has begun, is still the vessel's).</summary>
-    public bool FirstUnchanged => _vessel is { } vessel && vessel.Nodes.Count > 0 && _pending.Count > 0 && vessel.Nodes[0] == _pending[0];
+    private int Count => _pending?.Nodes.Length ?? 0;
 
     /// <summary>Whether the pointer is on a node, a handle or the path, or dragging: a click then is for planning, not the steering rings or the markers.</summary>
     public bool PointerOver { get; private set; }
 
     /// <summary>The plan, if it changed since the last call: the flown vessel's nodes from now on, for the flight's input.</summary>
-    public ManoeuvreNode[]? TakePlan()
+    public ManoeuvreChain? TakePlan()
     {
         if (!_changed)
             return null;
         _changed = false;
-        return [.. _pending];
+        return _pending ?? ManoeuvreChain.Empty;
     }
 
     /// <summary>Before the plan is worked out each frame: the flown vessel's nodes, unless they are being changed here.</summary>
@@ -97,12 +96,9 @@ internal sealed class NodeEditor
     {
         if (vessel != _vessel)
             (_vessel, _selected, _grab, _changed) = (vessel, -1, Grab.None, false);
-        if (_grab == Grab.None && !_changed && !_pending.SequenceEqual(vessel.Nodes))
-        {
-            _pending.Clear();
-            _pending.AddRange(vessel.Nodes);
-        }
-        if (_selected >= _pending.Count)
+        if (_grab == Grab.None && !_changed && !Equals(_pending, vessel.Chain))
+            _pending = vessel.Chain;
+        if (_selected >= Count)
             _selected = -1;
     }
 
@@ -142,16 +138,32 @@ internal sealed class NodeEditor
         var rightClicked = interact && rightPressed;
         var alpha = Math.Clamp((paths.Fade - 0.5f) * 2f, 0f, 1f);
 
-        // Dragging: the node along its leg of the path, or a handle out from it.
-        if (_grab == Grab.Node && _selected >= 0 && plan.NodeLeg(_selected) is { } nodeLeg)
+        // Dragging: the node along the path it is on (the first, the vessel's own as it is now, so
+        // it snaps there; a later one, the path the one before it plans), the nodes after it
+        // moving with it; or a handle out from it.
+        if (_grab == Grab.Node && _pending is { } chain && _selected >= 0 && _selected < chain.Nodes.Length)
         {
-            var leg = plan.Legs[nodeLeg];
-            var until = _selected + 1 < _pending.Count ? _pending[_selected + 1].Time - MinimumGap : double.PositiveInfinity;
-            SampleLeg(leg, until - leg.Start, frame, flight.Body, now, last: false);
-            if (Nearest(paths, pointer, float.MaxValue) is { } nearest)
+            double? time = null;
+            var best = float.MaxValue;
+            if (_selected == 0)
+                for (var i = 0; i < paths.Present.Count; i++)
+                {
+                    var leg = paths.Present[i];
+                    SampleLeg(leg, leg.End - leg.Start, frame, flight.Body, now, last: i == paths.Present.Count - 1);
+                    if (Nearest(paths, pointer, best, out var distance) is { } nearest)
+                        (time, best) = (leg.Start + nearest.Seconds, distance);
+                }
+            else if (plan.NodeLeg(_selected) is { } nodeLeg)
             {
-                var time = Math.Max(leg.Start + nearest.Seconds, Math.Max(now + MinimumGap, _selected > 0 ? _pending[_selected - 1].Time + MinimumGap : 0));
-                _pending[_selected] = _pending[_selected] with { Time = time };
+                // On along that path past the node too, as far as its orbit goes: the later nodes move with it.
+                var leg = plan.Legs[nodeLeg];
+                SampleLeg(leg, double.PositiveInfinity, frame, flight.Body, now, last: false);
+                if (Nearest(paths, pointer, best, out _) is { } nearest)
+                    time = leg.Start + nearest.Seconds;
+            }
+            if (time is { } to)
+            {
+                _pending = chain.MoveTo(_selected, to, flight.Controlled, now);
                 _changed = true;
             }
         }
@@ -159,9 +171,10 @@ internal sealed class NodeEditor
         var selectedAtStart = _selected; // its handles, worked out below, are drawn only if it is still the one
 
         // Where each node is on the screen, if the plan reaches it.
-        Span<float2> onScreen = stackalloc float2[_pending.Count];
-        Span<bool> shown = stackalloc bool[_pending.Count];
-        for (var i = 0; i < _pending.Count; i++)
+        var count = Count;
+        Span<float2> onScreen = stackalloc float2[count];
+        Span<bool> shown = stackalloc bool[count];
+        for (var i = 0; i < count; i++)
             shown[i] = i < paths.Nodes.Count && paths.InView(paths.Nodes[i], out onScreen[i]);
 
         // The selected node's handles: each a way to add speed, pointing that way on the screen.
@@ -194,13 +207,13 @@ internal sealed class NodeEditor
                     // Faster the farther out it is held: fine near the rest, quick at the end.
                     var rate = 0.3f + FastestRate * (pull / HandlePull) * (pull / HandlePull);
                     var add = rate * dt * (k % 2 == 0 ? 1f : -1f);
-                    var node = _pending[_selected];
-                    _pending[_selected] = (k / 2) switch
+                    var node = _pending!.Nodes[_selected];
+                    _pending = _pending.WithNode(_selected, (k / 2) switch
                     {
                         0 => node with { Prograde = node.Prograde + add },
                         1 => node with { Radial = node.Radial + add },
                         _ => node with { Normal = node.Normal + add },
-                    };
+                    });
                     _changed = true;
                 }
                 if (_grab == Grab.None && Distance(pointer, handleAt[k]) < GrabPixels)
@@ -210,30 +223,42 @@ internal sealed class NodeEditor
                 hovered = Hover.Delete;
         }
         if (_grab == Grab.None && hovered == Hover.None)
-            for (var i = 0; i < _pending.Count; i++)
+            for (var i = 0; i < count; i++)
                 if (shown[i] && Distance(pointer, onScreen[i]) < GrabPixels)
                     (hovered, hoveredIndex) = (Hover.Node, i);
 
-        // Over the path, away from the nodes: where a click would place one.
+        // Over the path, away from the nodes: where a click would place one. On the vessel's own path
+        // up to the first node (all of it, with none), then on the plan after the first node's burn.
         (Vector3 At, double Time)? ghost = null;
         if (_grab == Grab.None && hovered == Hover.None && interact)
-            for (var i = 0; i < plan.Legs.Count && ghost is null; i++)
+        {
+            var firstAt = Count > 0 ? _pending!.TimeOf(0) : double.PositiveInfinity;
+            var present = paths.Present;
+            for (var i = 0; i < present.Count && ghost is null && present[i].Start < firstAt; i++)
+            {
+                var leg = present[i];
+                SampleLeg(leg, Math.Min(leg.End, firstAt) - leg.Start, frame, flight.Body, now, last: i == present.Count - 1);
+                if (Nearest(paths, pointer, PathPixels) is { } point && leg.Start + point.Seconds > now + ManoeuvreChain.MinimumGap)
+                    ghost = (point.At, leg.Start + point.Seconds);
+            }
+            for (var i = plan.NodeLeg(0) is { } firstLeg ? firstLeg + 1 : plan.Legs.Count; i < plan.Legs.Count && ghost is null; i++)
             {
                 var leg = plan.Legs[i];
                 SampleLeg(leg, leg.End - leg.Start, frame, flight.Body, now, last: i == plan.Legs.Count - 1);
-                if (Nearest(paths, pointer, PathPixels) is { } point && leg.Start + point.Seconds > now + MinimumGap)
+                if (Nearest(paths, pointer, PathPixels) is { } point && leg.Start + point.Seconds > now + ManoeuvreChain.MinimumGap)
                     ghost = (point.At, leg.Start + point.Seconds);
             }
+        }
         PointerOver = interact && (_grab != Grab.None || hovered != Hover.None || ghost is not null);
 
         if (rightClicked && hovered == Hover.Node)
-            Delete(hoveredIndex);
+            Delete(hoveredIndex, flight.Controlled, now);
         else if (clicked)
         {
             switch (hovered)
             {
                 case Hover.Delete:
-                    Delete(_selected);
+                    Delete(_selected, flight.Controlled, now);
                     break;
                 case Hover.Handle:
                     (_grab, _handle) = (Grab.Handle, hoveredIndex);
@@ -244,10 +269,9 @@ internal sealed class NodeEditor
                 default:
                     if (ghost is { } place)
                     {
-                        var node = new ManoeuvreNode(place.Time);
-                        _pending.Add(node);
-                        _pending.Sort((a, b) => a.Time.CompareTo(b.Time));
-                        _selected = _pending.IndexOf(node);
+                        var into = _pending ?? ManoeuvreChain.Empty;
+                        _selected = into.SlotFor(place.Time);
+                        _pending = into.Insert(place.Time, flight.Controlled, now);
                         _changed = true;
                     }
                     else
@@ -261,7 +285,7 @@ internal sealed class NodeEditor
         if (ghost is { } g && paths.InView(g.At, out var ghostAt))
             draw.AddCircle(ghostAt, 5f, Color(color, alpha * 0.9f), 0, 1.5f);
         // (Only those there were at the start of the frame: one placed or deleted just now shows from the next.)
-        for (var i = 0; i < shown.Length && i < _pending.Count; i++)
+        for (var i = 0; i < shown.Length && i < Count; i++)
         {
             if (!shown[i])
                 continue;
@@ -269,10 +293,10 @@ internal sealed class NodeEditor
             var hot = i == _selected || (hovered == Hover.Node && hoveredIndex == i);
             draw.AddCircleFilled(at, hot ? NodePixels + 1.5f : NodePixels, Color(color, alpha));
             draw.AddCircle(at, (hot ? NodePixels + 1.5f : NodePixels) + 1f, Color((0, 0, 0), alpha * 0.6f), 0, 1.5f);
-            var node = _pending[i];
-            Label(draw, at + new float2(10f, 8f), color, alpha, $"{node.Size:0.0} m/s  in {Clock(node.Time - now)}");
+            var node = _pending!.Nodes[i];
+            Label(draw, at + new float2(10f, 8f), color, alpha, $"{node.Size:0.0} m/s  in {Clock(_pending.TimeOf(i) - now)}");
         }
-        if (_selected >= 0 && _selected == selectedAtStart && _selected < shown.Length && _selected < _pending.Count && shown[_selected])
+        if (_selected >= 0 && _selected == selectedAtStart && _selected < shown.Length && _selected < Count && shown[_selected])
         {
             var at = onScreen[_selected];
             draw.AddCircle(at, NodePixels + 5f, Color(color, alpha), 0, 1.5f);
@@ -289,7 +313,7 @@ internal sealed class NodeEditor
                     draw.AddCircle(handleAt[k], hot ? 7f : 5.5f, Color(handleColor, alpha), 0, 2f);
                 if (hot)
                 {
-                    var node = _pending[_selected];
+                    var node = _pending!.Nodes[_selected];
                     var amount = (k / 2) switch { 0 => node.Prograde, 1 => node.Radial, _ => node.Normal };
                     Label(draw, handleAt[k] + new float2(10f, -8f), handleColor, alpha, $"{HandleNames[k & ~1]} {amount:0.0} m/s");
                 }
@@ -309,11 +333,11 @@ internal sealed class NodeEditor
         Delete,
     }
 
-    private void Delete(int index)
+    private void Delete(int index, Vessel vessel, double now)
     {
-        if (index < 0 || index >= _pending.Count)
+        if (_pending is not { } chain || index < 0 || index >= chain.Nodes.Length)
             return;
-        _pending.RemoveAt(index);
+        _pending = chain.Delete(index, vessel, now);
         _selected = -1;
         _grab = Grab.None;
         _changed = true;
@@ -334,11 +358,13 @@ internal sealed class NodeEditor
             _samples[i] = (place.Point(frame, _samples[i].At, leg.Start - now + _samples[i].Seconds), _samples[i].Seconds);
     }
 
-    /// <summary>The sample (of <see cref="_samples"/>) nearest <paramref name="pointer"/> on the screen, if within <paramref name="within"/> pixels.</summary>
-    private (Vector3 At, double Seconds)? Nearest(Paths paths, float2 pointer, float within)
+    /// <summary>The sample (of <see cref="_samples"/>) nearest <paramref name="pointer"/> on the screen, if within <paramref name="within"/> pixels, and how far it is.</summary>
+    private (Vector3 At, double Seconds)? Nearest(Paths paths, float2 pointer, float within) => Nearest(paths, pointer, within, out _);
+
+    private (Vector3 At, double Seconds)? Nearest(Paths paths, float2 pointer, float within, out float bestDistance)
     {
         (Vector3 At, double Seconds)? best = null;
-        var bestDistance = within;
+        bestDistance = within;
         var hasLast = false;
         var last = default(float2);
         var lastSample = default((Vector3 At, double Seconds));

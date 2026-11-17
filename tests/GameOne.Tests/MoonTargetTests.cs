@@ -39,7 +39,7 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
     {
         var vessel = flight.Controlled;
         var plan = new ManoeuvrePlan();
-        plan.Update(vessel.Body, vessel.CentreOfMass, vessel.Body.AmongStars(vessel.CentreOfMass, vessel.Velocity), flight.WorldTime, vessel.Nodes, null);
+        plan.Update(vessel, vessel.Chain, flight.WorldTime);
         return plan;
     }
 
@@ -559,7 +559,7 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
         using (sim)
         {
             var flight = sim.Flight;
-            sim.Step(new FlightInput(SetTarget: NavTarget.OfBody(Moon), Plan: [new ManoeuvreNode(flight.WorldTime + 60, Prograde: 2f)]));
+            sim.Step(new FlightInput(SetTarget: NavTarget.OfBody(Moon), Plan: NodeTests.Chain(flight.Controlled, flight.WorldTime, flight.WorldTime + 60, new ManoeuvreNode(0, Prograde: 2f))));
             var orbiter = flight.WorldVessels.Single(v => v.Id == 1);
             foreach (var target in new[] { NavTarget.OfBody(Moon), NavTarget.OfVessel(orbiter) })
             {

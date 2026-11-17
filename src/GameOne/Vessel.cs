@@ -57,13 +57,12 @@ internal sealed class Vessel
     // is where its centre of mass is in its own space (what places its origin from that).
     private Quaternion _rotation = Quaternion.Identity;
     private Vector3 _angularVelocity, _centreOffset;
-    private readonly List<ManoeuvreNode> _nodes = [];  // planned burns, in time order
     private Vector3? _burnAim;                         // the next node's burn once it has begun, among the stars (as the ground was then)
     private Vector3 _burned;                           // and how much of it the engine has given since, the same way
     private double _burnStart;                         // the world time it began: how far the ground has turned from that since
     private bool _wasLit;
-    private List<PathLeg>? _toNode;                    // the patched path to the next node, kept for Planned (made with its first node)
-    private (double Now, ManoeuvreNode Node, GroundBody Body, Vector3 Burn)? _planned; // Planned's last answer, and what it was asked
+    private List<PathLeg>? _toNode;                    // the patched path from the anchor to the next node, kept for Planned (made with its first node)
+    private (double Now, ManoeuvreChain Chain, GroundBody Body, Vector3 Burn)? _planned; // Planned's last answer, and what it was asked
     private double _at;                                // the world time its state was last brought to (AfterPhysics, a crossing)
 
     /// <summary>A new vessel, <paramref name="craft"/> in <paramref name="physics"/> (its body's, one of <paramref name="worlds"/>).</summary>
@@ -136,7 +135,7 @@ internal sealed class Vessel
         _ground = state.Ground;
         Target = state.Target;
         View = state.View;
-        _nodes.AddRange(state.Nodes);
+        Chain = state.Chain;
         _burnAim = state.BurnAim;
         _burned = state.Burned;
         _burnStart = state.BurnStart;
@@ -227,7 +226,7 @@ internal sealed class Vessel
         WetParts = _wetParts,
         Target = Target,
         View = View,
-        Nodes = [.. _nodes],
+        Chain = Chain,
         BurnAim = _burnAim,
         Burned = _burned,
         BurnStart = _burnStart,
@@ -878,13 +877,13 @@ internal sealed class Vessel
     /// <summary>How the camera last looked at it (set from the flown vessel's view each step, see <see cref="FlightInput.View"/>), or none if it has not been looked at.</summary>
     public CameraView? View { get; internal set; }
 
-    /// <summary>Its pilot's planned burns, in time order: the next one first. Each goes once its time is past and the engine is off.</summary>
-    public IReadOnlyList<ManoeuvreNode> Nodes => _nodes;
+    /// <summary>Its pilot's planned burns, the next one first, fixed once set (see <see cref="ManoeuvreChain"/>); null with none. Each goes once its time is past and the engine is off.</summary>
+    public ManoeuvreChain? Chain { get; private set; }
 
     /// <summary>
     /// The next node's burn still needed, as a change of velocity in the world (the ground's frame,
-    /// now): until the burn begins (the engine lighting), the node's amounts measured from how it
-    /// will be moving then, on the orbit it is on now; from then on, fixed among the stars as it was
+    /// now): until the burn begins (the engine lighting), the node's amounts measured where its chain
+    /// has it, from how its planned path moves there; from then on, fixed among the stars as it was
     /// when it began, less what the engine has given since. Null without a node.
     /// </summary>
     /// <remarks>
@@ -894,7 +893,7 @@ internal sealed class Vessel
     /// time it is asked for, never turned frame by frame, so nothing turns it twice.
     /// </remarks>
     public Vector3? BurnLeft(double now) =>
-        _nodes.Count == 0 ? null : _burnAim is { } aim ? Body.TurnedDirection(aim - _burned, -(now - _burnStart)) : Planned(_nodes[0], now);
+        Chain is not { } chain ? null : _burnAim is { } aim ? Body.TurnedDirection(aim - _burned, -(now - _burnStart)) : Planned(chain, now);
 
     /// <summary>Whether the next node's burn has begun (so it is fixed among the stars: see <see cref="BurnLeft"/>).</summary>
     public bool BurnBegun => _burnAim is not null;
@@ -914,70 +913,72 @@ internal sealed class Vessel
             needed = Mass * (1f - MathF.Exp(-left.Length() / stage.ExhaustVelocity));
             seconds = needed / stage.FuelFlow;
         }
-        return new NodeGuide(_nodes[0].Time - now, left, overshot, seconds, needed > _fuel[Stage] || stage.FuelFlow <= 0f);
+        return new NodeGuide(Chain!.TimeOf(0) - now, left, overshot, seconds, needed > _fuel[Stage] || stage.FuelFlow <= 0f);
     }
 
     /// <summary>
-    /// The pilot's new plan: these nodes, from now on. If the next node has changed while its burn
-    /// was under way, the rest of the burn is the new one's, measured from now.
+    /// The pilot's new plan: this chain (one with no nodes, none). If the next node has changed
+    /// (its amounts, its time or its anchor) while its burn was under way, the rest of the burn is
+    /// the new one's, measured from now.
     /// </summary>
-    internal void Replan(IReadOnlyList<ManoeuvreNode> nodes, double now)
+    internal void Replan(ManoeuvreChain chain, double now)
     {
-        var next = _nodes.Count > 0 ? _nodes[0] : (ManoeuvreNode?)null;
-        _nodes.Clear();
-        _nodes.AddRange(nodes);
-        _nodes.Sort((a, b) => a.Time.CompareTo(b.Time));
-        if (_nodes.Count == 0)
+        var next = Chain is { } old ? (old.Anchor, old.TimeOf(0), old.Nodes[0]) : default((ChainAnchor, double, ManoeuvreNode)?);
+        Chain = chain.Nodes.IsEmpty ? null : chain;
+        if (Chain is not { } planned)
             (_burnAim, _burned, _burnStart) = (null, Vector3.Zero, 0);
-        else if (_nodes[0] != next && _burnAim is not null)
-            (_burnAim, _burned, _burnStart) = (Planned(_nodes[0], now), Vector3.Zero, now);
+        else if ((planned.Anchor, planned.TimeOf(0), planned.Nodes[0]) != next && _burnAim is not null)
+            (_burnAim, _burned, _burnStart) = (Planned(planned, now), Vector3.Zero, now);
     }
 
     /// <summary>
-    /// Node <paramref name="node"/>'s burn, on the path it is on now (patched at the spheres of
-    /// influence, as its plan is: <see cref="ManoeuvrePlan"/>), measured round the body it will be
-    /// at by the node's time, from how it will be moving among that body's stars then; changed into
-    /// its own body's frame, as that matches its ground now.
+    /// <paramref name="chain"/>'s first node's burn, where the chain has it (its anchored path,
+    /// patched at the spheres of influence, as its plan is: <see cref="ManoeuvrePlan"/>), measured
+    /// round the body it is at there, from how that path moves among its stars; changed into this
+    /// vessel's own body's frame, as that matches its ground now.
     /// </summary>
-    private Vector3 Planned(in ManoeuvreNode node, double now)
+    private Vector3 Planned(ManoeuvreChain chain, double now)
     {
         // Asked several times a frame (the guide is read by the view, the HUD and the readout), and
-        // the same at the same time, node and body: worked out once.
-        if (_planned is { } kept && kept.Now == now && kept.Node == node && kept.Body == Body)
+        // the same at the same time, chain and body: worked out once.
+        if (_planned is { } kept && kept.Now == now && ReferenceEquals(kept.Chain, chain) && kept.Body == Body)
             return kept.Burn;
-        var burn = PlannedAfresh(node, now);
-        _planned = (now, node, Body, burn);
+        var burn = PlannedAfresh(chain, now);
+        _planned = (now, chain, Body, burn);
         return burn;
     }
 
-    private Vector3 PlannedAfresh(in ManoeuvreNode node, double now)
+    private Vector3 PlannedAfresh(ManoeuvreChain chain, double now)
     {
         var legs = _toNode ??= new List<PathLeg>(Scene.PatchedLegs);
-        var at = Math.Max(node.Time, now);
-        Patched.Legs(Body, CentreOfMass, Body.AmongStars(CentreOfMass, Velocity), now, legs, horizon: at);
+        var (start, at) = (chain.Anchor.Time, Math.Max(chain.TimeOf(0), chain.Anchor.Time));
+        var (anchored, moving) = chain.StartAt(now);
+        Patched.Legs(chain.Body, anchored, moving, now, legs, horizon: at, from: start - now);
         var last = legs[^1];
         var (position, velocity) = last.Orbit.StateAfter(at - last.Start);
-        var burn = node.DeltaV(last.Body, position, velocity);
+        var burn = chain.Nodes[0].DeltaV(last.Body, position, velocity);
         return last.Body == Body ? burn : Bodies.Change(last.Body, Body, now).Direction((Vector3Double)burn).ToSingle();
     }
 
     /// <summary>
     /// The next node, as the engine runs: lighting it begins the burn (fixing it among the stars),
     /// and what it gives is counted against it (turned to how the ground was when it began); once
-    /// the node's time is past with the engine off, it goes.
+    /// the node's time is past with the engine off, it goes, and the next is anchored afresh on the
+    /// path it is on now, at its own time (<see cref="ManoeuvreChain.Delete"/>).
     /// </summary>
     private void FollowNodes(float dt, double now)
     {
         var lit = EngineLit;
-        if (_nodes.Count > 0)
+        if (Chain is { } chain)
         {
             if (lit && !_wasLit && _burnAim is null)
-                (_burnAim, _burnStart) = (Planned(_nodes[0], now), now);
+                (_burnAim, _burnStart) = (Planned(chain, now), now);
             if (lit && _burnAim is not null)
                 _burned += Body.TurnedDirection(Up, now - _burnStart) * (Throttle * MaxAcceleration * dt);
-            if (!lit && now >= _nodes[0].Time)
+            if (!lit && now >= chain.TimeOf(0))
             {
-                _nodes.RemoveAt(0);
+                var rest = chain.Delete(0, this, now);
+                Chain = rest.Nodes.IsEmpty ? null : rest;
                 (_burnAim, _burned, _burnStart) = (null, Vector3.Zero, 0);
             }
         }

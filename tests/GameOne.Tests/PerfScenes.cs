@@ -675,7 +675,7 @@ internal static class PerfScenes
                 {
                     // The map's frame, as the game draws it zoomed out: it asks the search for passes.
                     var start = Stopwatch.GetTimestamp();
-                    plan.Update(GroundBody.Planet, flight.CentreOfMass, Planet.AmongStars(flight.CentreOfMass, flight.Velocity), flight.WorldTime, [], null);
+                    plan.Update(GroundBody.Planet, flight.CentreOfMass, Planet.AmongStars(flight.CentreOfMass, flight.Velocity), flight.WorldTime);
                     paths.Build(flight, plan);
                     if (timed)
                         mapFrames.Add(Stopwatch.GetElapsedTime(start).TotalMilliseconds);

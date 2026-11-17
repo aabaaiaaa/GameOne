@@ -15,7 +15,7 @@ internal static class FrameReadings
     {
         var vessel = flight.Controlled;
         var plan = new ManoeuvrePlan();
-        plan.Update(vessel.Body, vessel.CentreOfMass, vessel.Body.AmongStars(vessel.CentreOfMass, vessel.Velocity), flight.WorldTime, vessel.Nodes, null);
+        plan.Update(vessel, vessel.Chain, flight.WorldTime);
         paths.Build(flight, plan);
         return paths;
     }

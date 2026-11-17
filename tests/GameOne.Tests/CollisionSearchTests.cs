@@ -357,7 +357,7 @@ public sealed class CollisionSearchTests(ITestOutputHelper output)
     /// <summary>One frame's map, from the flown vessel's path as it is (no nodes).</summary>
     private static void Build(Paths paths, Flight flight)
     {
-        Plan.Update(GroundBody.Planet, flight.CentreOfMass, Planet.AmongStars(flight.CentreOfMass, flight.Velocity), flight.WorldTime, [], null);
+        Plan.Update(GroundBody.Planet, flight.CentreOfMass, Planet.AmongStars(flight.CentreOfMass, flight.Velocity), flight.WorldTime);
         paths.Build(flight, Plan);
     }
 

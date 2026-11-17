@@ -37,7 +37,7 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
         Assert.True(sim.Run(orbit.Fly, f => f.AchievedOrbit, maxSeconds: 300));
         var orbiter = sim.Flight.Controlled;
         sim.Step(new FlightInput(SetTarget: new NavTarget(TargetKind.Site, 1),
-            Plan: [new ManoeuvreNode(sim.Flight.WorldTime + 400, 5f, -1f, 2f), new ManoeuvreNode(sim.Flight.WorldTime + 900, -3f)]));
+            Plan: NodeTests.Chain(orbiter, sim.Flight.WorldTime, sim.Flight.WorldTime + 400, new ManoeuvreNode(0, 5f, -1f, 2f), new ManoeuvreNode(500, -3f))));
         sim.Step(new FlightInput(Choose: Mission.DeploySatellite));
         sim.Step(new FlightInput(SetTarget: NavTarget.OfVessel(orbiter)));
         Assert.NotNull(sim.Flight.Target);
@@ -152,6 +152,26 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
         }
     }
 
+    [Fact]
+    public void A_chain_round_trips()
+    {
+        // A vessel round the moon with a chain anchored there, and one with none.
+        var chain = new ManoeuvreChain(new ChainAnchor(GroundBody.Moon.Name, 123.25, new Vector3(1.5f, -2f, 3f), new Vector3(400f, 5f, -6f)),
+            [new ManoeuvreNode(0, 5f, -1f, 2f), new ManoeuvreNode(500.5, Normal: -3f)]);
+        WorldState world;
+        using (var sim = new Simulation(Mission.FreePlay, world: new WorldState
+        {
+            Time = 100.0, NextVesselId = 2, Flights = 1, Vessels = [InOrbit.Round(GroundBody.Moon, 0, 400f), InOrbit.Round(GroundBody.Moon, 1, 900f)],
+        }))
+            world = sim.Flight.Capture() with { Id = "chain", Name = "A chain" };
+        world = world with { Vessels = [world.Vessels[0] with { Chain = chain }, .. world.Vessels.Skip(1)] };
+        Store.Save(world);
+        var back = Store.Load("chain");
+        Assert.Equal(chain, back.Vessels[0].Chain);
+        Assert.Equal(chain.TimeOf(1), back.Vessels[0].Chain!.TimeOf(1));
+        Assert.Null(back.Vessels[1].Chain);
+    }
+
     /// <summary>Every field of every vessel in <paramref name="back"/> is as it was in <paramref name="world"/>.</summary>
     private static void AssertSameVessels(WorldState world, WorldState back)
     {
@@ -164,8 +184,6 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
                 var (saved, loaded) = (property.GetValue(world.Vessels[i]), property.GetValue(back.Vessels[i]));
                 if (saved is float[] fuel)
                     Assert.Equal(fuel, (float[])loaded!);
-                else if (saved is ManoeuvreNode[] nodes)
-                    Assert.Equal(nodes, (ManoeuvreNode[])loaded!);
                 else
                     Assert.True(Equals(saved, loaded), $"vessel {world.Vessels[i].Id}'s {property.Name}: saved {saved}, loaded {loaded}");
             }

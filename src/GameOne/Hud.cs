@@ -458,7 +458,7 @@ internal sealed class Hud : IDisposable
     public void Rebase(FrameChange _) => _paths.Rebase();
 
     /// <summary>The flown vessel's nodes, if they were placed, moved, changed or deleted since the last call: for the flight's input.</summary>
-    public ManoeuvreNode[]? TakePlan() => _nodes.TakePlan();
+    public ManoeuvreChain? TakePlan() => _nodes.TakePlan();
 
     /// <summary>Whether the game menu's Quit has been clicked: the game saves and closes.</summary>
     public bool QuitAsked { get; private set; }
@@ -691,8 +691,7 @@ internal sealed class Hud : IDisposable
         // whatever their settings), which give way to whichever has the pointer.
         var vessel = flight.Controlled;
         _nodes.Follow(vessel);
-        var firstLeft = _nodes.FirstUnchanged && vessel.BurnBegun ? vessel.BurnLeft(flight.WorldTime) : null;
-        _plan.Update(vessel.Body, vessel.CentreOfMass, vessel.Body.AmongStars(vessel.CentreOfMass, vessel.Velocity), flight.WorldTime, _nodes.Nodes, firstLeft);
+        _plan.Update(vessel, _nodes.Chain, flight.WorldTime);
         _paths.Labels.Clear();
         _paths.Draw(ImGui.GetBackgroundDrawList(), flight, camera, new Vector2(display.X, display.Y), _plan, frames);
         _nodes.Update(ImGui.GetBackgroundDrawList(), flight, camera, _plan, _paths, blocked: MenuOpen || _markers.PointerOver || navigation.InUse);

@@ -931,14 +931,15 @@ public sealed class FormulaTests(ITestOutputHelper output)
             Rotation = UnwatchedTests.RotationTo(up), Aim = up, Throttle = 1f,
             Fuel = [.. vehicle.Stages.Select((s, i) => i == 0 ? 0f : s.FuelMass * 0.5f)],
             CentreOfMassOffset = RocketGeometry.CentreOfMassOffset(vehicle, 0, vehicle.Stages.Length - 1),
-            Nodes = [new ManoeuvreNode(5.0, Prograde: 20f)],
+            // Anchored where it is now (only that the node is kept is asked, not where it is).
+            Chain = new ManoeuvreChain(new ChainAnchor(GroundBody.Planet.Name, 5.0, centre, Planet.AmongStars(centre, velocity)), [new ManoeuvreNode(0, Prograde: 20f)]),
         };
         var (sim, v, watch) = Start(rocket, watched: false);
         using var _ = sim;
         Fly(sim, v, watch, 10);
         Assert.True(sim.Flight.WorldTime > 5.0);
-        Assert.Single(v.Nodes);
-        Assert.Equal(5.0, v.Nodes[0].Time);
+        Assert.Single(v.Chain!.Nodes);
+        Assert.Equal(5.0, v.Chain.TimeOf(0));
         Assert.Equal(0, v.Stage);
         Assert.False(v.EngineLit);
         Assert.Equal(FlightState.Flying, v.State);
