@@ -55,8 +55,7 @@ internal sealed record VesselState
     // Its last inputs, which it carries on with.
     public float Throttle { get; init; }
     public required Vector3 Aim { get; init; }
-    public bool ProgradeHold { get; init; }
-    public bool RetrogradeHold { get; init; }
+    public HoldMode Hold { get; init; }
     public bool LegsWanted { get; init; }
     public float LegDeploy { get; init; }
     public bool BayDoorsWanted { get; init; }

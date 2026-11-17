@@ -28,7 +28,7 @@ public sealed class BodiesInPlayTests(ITestOutputHelper output)
     private static VesselState OnItsLandingBurn(int id)
     {
         var zone = LaunchSites.Home.LandingZone!.Value;
-        return Drops.Placed(zone, Planet.East(zone), 3f, clearance: 8f, fuel: 0.02f, id: id) with { Throttle = 0.26f, RetrogradeHold = true };
+        return Drops.Placed(zone, Planet.East(zone), 3f, clearance: 8f, fuel: 0.02f, id: id) with { Throttle = 0.26f, Hold = HoldMode.Retrograde };
     }
 
     /// <summary>A booster landed on Home's landing zone, still, standing on its legs (its feet half their stroke in).</summary>

@@ -169,7 +169,7 @@ internal sealed class HoldLanding
             {
                 var (reach, low) = Stopping(across.Length(), vy, above, a * BrakeAt, g, drag);
                 if (reach < togo && low > 0f && flight.Ground > StopAbove)
-                    return new FlightInput(ToggleLegs: legs, ToggleRetrogradeHold: !flight.RetrogradeHold, CutThrottle: flight.Throttle > 0f);
+                    return new FlightInput(ToggleLegs: legs, ChooseHold: flight.Holding == HoldMode.Retrograde ? null : HoldMode.Retrograde, CutThrottle: flight.Throttle > 0f);
                 BrakedAt = (flight.WorldTime, togo, velocity.Length());
                 _track = across.Length() > 1f ? Vector3.Normalize(across) : Vector3.Normalize(Pilots.Across(target - flight.CentreOfMass, up));
                 Now = Phase.Brake;
@@ -241,7 +241,7 @@ internal sealed class HoldLanding
                 lean = Vector3.Normalize(lean) * MaxSideLean;
         }
         if (lean.Length() < 0.003f)
-            return input with { ToggleRetrogradeHold = !flight.RetrogradeHold };
+            return input with { ChooseHold = flight.Holding == HoldMode.Retrograde ? null : HoldMode.Retrograde };
         var back = velocity.Length() > 1f ? -Vector3.Normalize(velocity) : up;
         return input with { Hold = Vector3.Normalize(back + lean) };
     }
@@ -352,7 +352,7 @@ internal sealed class ComingHomePilot
                 return new FlightInput(SetTarget: new NavTarget(TargetKind.Site, Site));
             case Phase.Hold:
                 _phase = Phase.Wait;
-                return new FlightInput(ToggleRetrogradeHold: !flight.RetrogradeHold);
+                return new FlightInput(ChooseHold: flight.Holding == HoldMode.Retrograde ? null : HoldMode.Retrograde);
             case Phase.Land:
                 return Landing.Fly(flight, dt);
         }

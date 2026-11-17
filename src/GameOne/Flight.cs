@@ -117,8 +117,7 @@ internal readonly record struct Coming(Vessel Watched, SolidKind With, Vessel? O
 /// <param name="ToggleLegs">Deploy the legs, or stow them.</param>
 /// <param name="FullThrottle">Throttle straight to full.</param>
 /// <param name="CutThrottle">Cut the engine.</param>
-/// <param name="ToggleProgradeHold">Keep the nose pointed the way the rocket is moving, or stop doing so.</param>
-/// <param name="ToggleRetrogradeHold">Keep the nose pointed against the way it is moving (to slow down, as for a landing burn), or stop doing so.</param>
+/// <param name="ChooseHold">Keep the nose pointed by a hold (<see cref="HoldMode"/>: along the way the rocket is moving, against it to slow down as for a landing burn, or along the burn left), or, choosing the one already on, stop doing so. The manoeuvre hold is refused without a node.</param>
 /// <param name="StartAgain">Start the flown vessel's mission again ("Start the mission again"): its run abandoned if it is in progress, and a new run of that mission begun at its site, a fresh rocket on its pad; nothing else in the world changes. A menu choice, as <paramref name="Choose"/> is.</param>
 /// <param name="Rewind">Bring the world back as it was at the last menu choice this session and make that choice again (see <see cref="Flight.CanRewind"/>); nothing, if none has been made.</param>
 /// <param name="Choose">Start a flight of this mission (a new run), whatever is happening.</param>
@@ -151,8 +150,7 @@ internal readonly record struct FlightInput(
     bool ToggleLegs = false,
     bool FullThrottle = false,
     bool CutThrottle = false,
-    bool ToggleProgradeHold = false,
-    bool ToggleRetrogradeHold = false,
+    HoldMode? ChooseHold = null,
     bool StartAgain = false,
     bool Rewind = false,
     Mission? Choose = null,
@@ -569,8 +567,7 @@ internal sealed class Flight : IDisposable
     public bool BayDoorsWanted => Controlled.BayDoorsWanted;
     public bool HasBay => Controlled.HasBay;
     public Vector3 Aim => Controlled.Aim;
-    public bool ProgradeHold => Controlled.ProgradeHold;
-    public bool RetrogradeHold => Controlled.RetrogradeHold;
+    public HoldMode Holding => Controlled.Hold;
     public float TurnRate => Controlled.TurnRate;
     public float Altitude => Controlled.Altitude;
     public float Ground => Controlled.Ground;
@@ -1653,7 +1650,7 @@ internal sealed class Flight : IDisposable
         var held = input with
         {
             Launch = false, Stage = false, ToggleLegs = false, FullThrottle = false, CutThrottle = false,
-            ToggleProgradeHold = false, ToggleRetrogradeHold = false, StartAgain = false, Rewind = false, Choose = null, From = null,
+            ChooseHold = null, StartAgain = false, Rewind = false, Choose = null, From = null,
             SwitchVessel = false, SwitchTo = null, SetTarget = null, ClearTarget = false, Plan = null, ChooseFrame = null,
             Slower = false, Faster = false, ToggleBayDoors = false, CarryOn = null, CompleteRun = false, AbandonRun = false,
             View = null, // taken once, in the first step, before a switch there changes which vessel is flown

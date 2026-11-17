@@ -5,6 +5,9 @@ namespace GameOne;
 /// <summary>What a velocity is measured against: the ground, the stars, or a target.</summary>
 public enum Frame { Surface, Orbital, Target }
 
+/// <summary>Which way the steering keeps the nose pointed: along the velocity in the frame in use, against it, along the burn left, or along the rings' set angles (steered in a later part).</summary>
+public enum HoldMode { None, Prograde, Retrograde, Manoeuvre, Rings }
+
 /// <summary>What the player picks for a hold or the readout: a frame, or Auto (the vessel's own).</summary>
 public enum FrameChoice { Auto, Surface, Orbit, Target }
 

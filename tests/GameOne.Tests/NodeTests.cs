@@ -104,12 +104,56 @@ public sealed class NodeTests(ITestOutputHelper output)
         Orbit.OverGround(GroundBody.Planet, v.CentreOfMass, v.Velocity) is var o ? o.Distance(o.NextApoapsis!.Value) - Planet.SeaRadius : 0;
 
     [Fact]
+    public void The_manoeuvre_hold_points_the_nose_along_the_burn_left()
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 60, new ManoeuvreNode(0, Prograde: 20f, Normal: 10f));
+        sim.Step(new FlightInput(Plan: chain, ChooseHold: HoldMode.Manoeuvre));
+        Assert.Equal(HoldMode.Manoeuvre, flight.Holding);
+        sim.Run((_, _) => default, f => f.WorldTime >= chain.TimeOf(0) - 49, maxSeconds: 20);
+
+        var left = satellite.BurnLeft(flight.WorldTime)!.Value;
+        var off = float.RadiansToDegrees(MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(satellite.Up), Vector3.Normalize(left)), -1f, 1f)));
+        output.WriteLine($"nose {off:0.0}° off the burn left");
+        Assert.True(off < 2f, $"the nose is {off:0.0}° off the burn left");
+        Assert.Equal(HoldMode.Manoeuvre, flight.Holding);
+    }
+
+    [Fact]
+    public void The_manoeuvre_hold_cannot_be_chosen_without_a_node()
+    {
+        using var sim = Satellite(out _);
+        sim.Step(new FlightInput(ChooseHold: HoldMode.Manoeuvre));
+        Assert.Equal(HoldMode.None, sim.Flight.Holding);
+
+        // Nor does it displace a hold already on.
+        sim.Step(new FlightInput(ChooseHold: HoldMode.Prograde));
+        sim.Step(new FlightInput(ChooseHold: HoldMode.Manoeuvre));
+        Assert.Equal(HoldMode.Prograde, sim.Flight.Holding);
+    }
+
+    [Fact]
+    public void The_manoeuvre_hold_turns_off_when_the_last_node_goes()
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(Plan: Chain(satellite, flight.WorldTime, flight.WorldTime + 60, new ManoeuvreNode(0, Prograde: 5f)), ChooseHold: HoldMode.Manoeuvre));
+        Assert.Equal(HoldMode.Manoeuvre, flight.Holding);
+
+        sim.Step(new FlightInput(Plan: Chain(satellite, flight.WorldTime, flight.WorldTime + 60)));
+        Assert.Null(satellite.Chain);
+        sim.Step(new FlightInput());
+        Assert.Equal(HoldMode.None, flight.Holding);
+    }
+
+    [Fact]
     public void A_node_flown_by_its_guide_turns_matched_and_goes_when_the_engine_is_cut()
     {
         using var sim = Satellite(out var satellite);
         var flight = sim.Flight;
         var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 60, new ManoeuvreNode(0, Prograde: RaiseFrom(9000f, 10000f)));
-        sim.Step(new FlightInput(Plan: chain, ToggleProgradeHold: true));
+        sim.Step(new FlightInput(Plan: chain, ChooseHold: HoldMode.Prograde));
         Assert.Single(satellite.Chain!.Nodes);
         var planned = PlanOf(satellite.Chain, flight.WorldTime).Last.Orbit;
         var plannedTop = planned.Distance(planned.NextApoapsis!.Value) - Planet.SeaRadius;
@@ -161,7 +205,7 @@ public sealed class NodeTests(ITestOutputHelper output)
         using var sim = Satellite(out var satellite);
         var flight = sim.Flight;
         var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 10, new ManoeuvreNode(0, Prograde: 10f));
-        sim.Step(new FlightInput(Plan: chain, ToggleProgradeHold: true));
+        sim.Step(new FlightInput(Plan: chain, ChooseHold: HoldMode.Prograde));
         // Turned prograde by half a second before its time, about 3 m/s of the 10 either side of
         // it, then cut.
         sim.Run((_, _) => default, f => f.Guide!.Value.Seconds < 0.5, maxSeconds: 10);
@@ -195,7 +239,7 @@ public sealed class NodeTests(ITestOutputHelper output)
         using var sim = Satellite(out var satellite);
         var flight = sim.Flight;
         var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 20, new ManoeuvreNode(0, Prograde: RaiseFrom(9000f, 10000f)));
-        sim.Step(new FlightInput(Plan: chain, ToggleProgradeHold: true));
+        sim.Step(new FlightInput(Plan: chain, ChooseHold: HoldMode.Prograde));
         while (flight.PlayerRate < 4f)
             sim.Step(new FlightInput(Faster: true));
 
@@ -213,7 +257,7 @@ public sealed class NodeTests(ITestOutputHelper output)
         using var sim = Satellite(out var satellite);
         var flight = sim.Flight;
         var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 2, new ManoeuvreNode(0, Prograde: RaiseFrom(9000f, 10000f)));
-        sim.Step(new FlightInput(Plan: chain, ToggleProgradeHold: true));
+        sim.Step(new FlightInput(Plan: chain, ChooseHold: HoldMode.Prograde));
         sim.Run((_, _) => default, f => f.WorldTime > chain.TimeOf(0) + 10, maxSeconds: 15);
 
         // The planned path after the burn, sampled finely: the point on it nearest the vessel, and
@@ -365,7 +409,7 @@ public sealed class NodeTests(ITestOutputHelper output)
         using var sim = Satellite(out var satellite);
         var flight = sim.Flight;
         var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 30, new ManoeuvreNode(0, Prograde: RaiseFrom(9000f, 10000f)));
-        sim.Step(new FlightInput(Plan: chain, ToggleProgradeHold: true));
+        sim.Step(new FlightInput(Plan: chain, ChooseHold: HoldMode.Prograde));
         // The whole burn well before its time.
         double? cut = null, gone = null;
         Assert.True(sim.Run((f, _) =>
@@ -415,7 +459,7 @@ public sealed class NodeTests(ITestOutputHelper output)
         var flight = sim.Flight;
         var node = new ManoeuvreNode(0, Prograde: 10f);
         var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 15, node);
-        sim.Step(new FlightInput(Plan: chain, ToggleProgradeHold: true));
+        sim.Step(new FlightInput(Plan: chain, ChooseHold: HoldMode.Prograde));
         sim.Run((_, _) => default, f => f.Guide!.Value.Seconds < f.Guide!.Value.BurnSeconds / 2, maxSeconds: 15);
 
         // Burned on past it until well over: each frame lit, what is left and whether it is matched.
@@ -448,7 +492,7 @@ public sealed class NodeTests(ITestOutputHelper output)
         var flight = sim.Flight;
         var node = new ManoeuvreNode(0, Prograde: 10f);
         var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 15, node);
-        sim.Step(new FlightInput(Plan: chain, ToggleProgradeHold: true));
+        sim.Step(new FlightInput(Plan: chain, ChooseHold: HoldMode.Prograde));
         sim.Run((_, _) => default, f => f.Guide!.Value.Seconds < f.Guide!.Value.BurnSeconds / 2, maxSeconds: 15);
 
         // Burned past it, and cut while it is shown matched only by the hold.
@@ -544,7 +588,7 @@ public sealed class NodeTests(ITestOutputHelper output)
     {
         using var sim = Satellite(out var satellite);
         var flight = sim.Flight;
-        sim.Step(new FlightInput(Plan: Chain(satellite, flight.WorldTime, flight.WorldTime + 5, new ManoeuvreNode(0, Prograde: 2f)), ToggleProgradeHold: true));
+        sim.Step(new FlightInput(Plan: Chain(satellite, flight.WorldTime, flight.WorldTime + 5, new ManoeuvreNode(0, Prograde: 2f)), ChooseHold: HoldMode.Prograde));
         sim.Run((_, _) => default, f => f.Guide!.Value.Seconds < 0.5, maxSeconds: 10);
         var before = flight.Guide!.Value;
         Assert.False(before.Overshot);
@@ -570,7 +614,7 @@ public sealed class NodeTests(ITestOutputHelper output)
         var flight = sim.Flight;
         var set = flight.WorldTime;
         var chain = Chain(satellite, set, set + 120, new ManoeuvreNode(0, Prograde: 20f));
-        sim.Step(new FlightInput(Plan: chain, ToggleProgradeHold: true));
+        sim.Step(new FlightInput(Plan: chain, ChooseHold: HoldMode.Prograde));
         var before = PlanOf(satellite.Chain!, set);
         var node = before.NodeAt(0)!.Value.Position;
         var path = before.Last.Orbit.StateAfter(300).Position;
@@ -710,7 +754,7 @@ public sealed class NodeTests(ITestOutputHelper output)
         using var sim = Satellite(out var satellite);
         var flight = sim.Flight;
         var set = flight.WorldTime;
-        sim.Step(new FlightInput(Plan: Chain(satellite, set, set + 200, new ManoeuvreNode(0, Prograde: 5f), new ManoeuvreNode(100, Radial: 1f)), ToggleProgradeHold: true));
+        sim.Step(new FlightInput(Plan: Chain(satellite, set, set + 200, new ManoeuvreNode(0, Prograde: 5f), new ManoeuvreNode(100, Radial: 1f)), ChooseHold: HoldMode.Prograde));
         sim.Run((_, _) => new FlightInput(FullThrottle: true), _ => false, maxSeconds: 1);
         sim.Run((_, _) => new FlightInput(CutThrottle: true), _ => false, maxSeconds: 1);
         var now = flight.WorldTime;
@@ -771,7 +815,7 @@ public sealed class NodeTests(ITestOutputHelper output)
         var flight = sim.Flight;
         var (later, last) = (new ManoeuvreNode(198, Radial: 1f), new ManoeuvreNode(150, Normal: -2f));
         var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 15, new ManoeuvreNode(0, Prograde: 3f), later, last);
-        sim.Step(new FlightInput(Plan: chain, ToggleProgradeHold: true)); // turned prograde well before it
+        sim.Step(new FlightInput(Plan: chain, ChooseHold: HoldMode.Prograde)); // turned prograde well before it
         Assert.Equal(3, satellite.Chain!.Nodes.Length);
         var seen = new Seen();
         Assert.True(sim.Run(ByTheGuide(satellite, seen), _ => satellite.Chain!.Nodes.Length < 3, maxSeconds: 30), "the first should go once matched and cut");

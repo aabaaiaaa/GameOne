@@ -50,6 +50,7 @@ internal sealed class NavigationControl
 
     // This frame's rings: where they are in the world, and on the screen.
     private bool _onScreen;
+    private bool _centreShown; // the rocket's middle is on the screen, so the burn's mark can be placed (the rings may not fit)
     private Vector3 _centre, _up, _travel;
     private Vector3? _towards;
     private float _slowest; // the slowest travel its markers show (Flight.MarkerFloor)
@@ -68,10 +69,11 @@ internal sealed class NavigationControl
 
     /// <summary>
     /// The next node's burn still needed, if there is a node (set before <see cref="Update"/>), and
-    /// whether it has gone past: a diamond on each ring marks which way it points. Steering there
-    /// is the pilot's.
+    /// whether it has gone past, and whether the burn is matched: a diamond on each ring marks which
+    /// way it points, and, whether or not the rings show, a mark in the view out at the ring's radius
+    /// (green when matched). Steering there is the pilot's.
     /// </summary>
-    public (Vector3 Way, bool Overshot)? Burn { get; set; }
+    public (Vector3 Way, bool Overshot, bool Matched)? Burn { get; set; }
 
     /// <summary>Whether the pointer is on a ring, or dragging one: a click then is for steering.</summary>
     public bool InUse => _hover != Ring.None || _dragging != Ring.None;
@@ -119,7 +121,7 @@ internal sealed class NavigationControl
         {
             _dragging = _hover = Ring.None;
             _visibility = 0f;
-            _onScreen = false;
+            _onScreen = _centreShown = false;
             Hold = null;
             return;
         }
@@ -134,7 +136,7 @@ internal sealed class NavigationControl
         if (_dragging == Ring.None)
             FollowNose(flight.Aim);
 
-        _onScreen = camera.ToScreen(_centre, display, out _centreOnScreen, out var depth);
+        _onScreen = _centreShown = camera.ToScreen(_centre, display, out _centreOnScreen, out var depth);
         if (_onScreen)
         {
             _radius = Scene.NavigationRingPixels * ChaseCamera.MetresPerPixel(depth, display);
@@ -255,6 +257,9 @@ internal sealed class NavigationControl
     /// <summary>Draws the rings, their handles and the direction-of-travel markers, while they are showing.</summary>
     public void Draw(ImDrawListPtr draw)
     {
+        // The burn's mark, out at the rings' radius along the burn still needed: shown with the rings or without.
+        if (_centreShown && Burn is { } mark && mark.Way.Length() > 0.01f)
+            Diamond(draw, _centre + Vector3.Normalize(mark.Way) * _radius, mark.Matched ? Scene.NodeMatchedColor : Paths.PlanColor);
         if (!_onScreen || _visibility < 0.01f)
             return;
 

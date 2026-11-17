@@ -8,8 +8,6 @@ internal enum ControlAction
 {
     LaunchOrStage,
     ToggleLegs,
-    ToggleProgradeHold,
-    ToggleRetrogradeHold,
     FullThrottle,
     CutThrottle,
     GameMenu,
@@ -33,7 +31,6 @@ internal enum ControlAction
 ///   <item>Shift / Ctrl: throttle up / down. Z: full throttle. X: cut the engine.</item>
 ///   <item>W A S D or the arrow keys: lean the nose forward, left, back or right, in the vessel's own frame (so the same whatever the camera does). On the pad, facing the starting camera, D leans it east, for the gravity turn.</item>
 ///   <item>Space: light the engine (at the throttle set), then drop a stage (whenever, empty or not). G: deploy or stow the landing legs.</item>
-///   <item>P: prograde hold (point the way it's moving). R: retrograde hold (point against it, to slow down).</item>
 ///   <item>Tab: fly the next vessel that can be flown (a dropped stage with guidance).</item>
 ///   <item>Comma / full stop (they read as &lt; and &gt;): time slower / faster: 1/4, 1/2, normal, then warp at 2, 4, 8, 16, 32x.</item>
 ///   <item>M: zoom all the way out, to see the planet and the predicted path round it (or back to the vessel).</item>
@@ -62,8 +59,6 @@ internal sealed class Controls
         {
             GlfwKey.Space => ControlAction.LaunchOrStage,
             GlfwKey.G => ControlAction.ToggleLegs,
-            GlfwKey.P => ControlAction.ToggleProgradeHold,
-            GlfwKey.R => ControlAction.ToggleRetrogradeHold,
             GlfwKey.Z => ControlAction.FullThrottle,
             GlfwKey.X => ControlAction.CutThrottle,
             GlfwKey.Escape => ControlAction.GameMenu,
@@ -103,8 +98,6 @@ internal sealed class Controls
             Launch: space,
             Stage: space,
             ToggleLegs: Take(ControlAction.ToggleLegs),
-            ToggleProgradeHold: Take(ControlAction.ToggleProgradeHold),
-            ToggleRetrogradeHold: Take(ControlAction.ToggleRetrogradeHold),
             FullThrottle: Take(ControlAction.FullThrottle),
             CutThrottle: Take(ControlAction.CutThrottle),
             SwitchVessel: Take(ControlAction.SwitchVessel));

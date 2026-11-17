@@ -110,7 +110,7 @@ internal sealed class TransferPilot
         {
             case Phase.Target:
                 Now = Phase.Wait;
-                return new FlightInput(SetTarget: NavTarget.OfBody(Moon), ToggleProgradeHold: !flight.ProgradeHold);
+                return new FlightInput(SetTarget: NavTarget.OfBody(Moon), ChooseHold: flight.Holding == HoldMode.Prograde ? null : HoldMode.Prograde);
             case Phase.Wait:
             {
                 if (_burnAt == 0)
@@ -274,7 +274,7 @@ internal sealed class CapturePilot
         {
             case Phase.Hold:
                 Now = Phase.Wait;
-                return new FlightInput(ToggleRetrogradeHold: !flight.RetrogradeHold);
+                return new FlightInput(ChooseHold: flight.Holding == HoldMode.Retrograde ? null : HoldMode.Retrograde);
             case Phase.Wait:
             {
                 var orbit = new Orbit(Moon, vessel.CentreOfMass, stars);
@@ -454,7 +454,7 @@ internal sealed class MoonLandingPilot
         if (Now == Phase.Hold)
         {
             Now = Phase.LineUp;
-            return new FlightInput(ToggleRetrogradeHold: !flight.RetrogradeHold);
+            return new FlightInput(ChooseHold: flight.Holding == HoldMode.Retrograde ? null : HoldMode.Retrograde);
         }
         if (Now == Phase.Land)
             return Landing.Fly(flight, dt);
@@ -479,7 +479,7 @@ internal sealed class MoonLandingPilot
             if (MathF.Abs(aside) < LinedWithin)
             {
                 Now = Phase.Wait;
-                return new FlightInput(CutThrottle: true, ToggleRetrogradeHold: !flight.RetrogradeHold);
+                return new FlightInput(CutThrottle: true, ChooseHold: flight.Holding == HoldMode.Retrograde ? null : HoldMode.Retrograde);
             }
             var way = normal * MathF.Sign(aside);
             var lined = Vector3.Dot(flight.Controlled.Up, way) > 0.995f;

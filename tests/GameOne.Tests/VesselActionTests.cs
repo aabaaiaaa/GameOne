@@ -102,7 +102,7 @@ public sealed class VesselActionTests(ITestOutputHelper output)
         Assert.Equal(new FlightInput(ToggleLegs: true), VesselActions.Into(default, VesselAction.StowLegs));
         Assert.Equal(new FlightInput(ToggleBayDoors: true), VesselActions.Into(default, VesselAction.OpenBayDoors));
         Assert.Equal(new FlightInput(ToggleBayDoors: true), VesselActions.Into(default, VesselAction.CloseBayDoors));
-        var held = new FlightInput(Throttle: 1f, ToggleProgradeHold: true);
+        var held = new FlightInput(Throttle: 1f, ChooseHold: HoldMode.Prograde);
         Assert.Equal(held, VesselActions.Into(held, null));
         Assert.Equal(held with { ToggleLegs = true }, VesselActions.Into(held, VesselAction.DeployLegs)); // the rest of the frame's input kept
 

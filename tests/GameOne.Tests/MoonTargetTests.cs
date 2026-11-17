@@ -218,7 +218,7 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
 
             // The prograde hold turns the nose to that velocity, and keeps it there.
             var from = Degrees(flown.Up, flight.FrameVelocity);
-            sim.Step(new FlightInput(ToggleProgradeHold: true));
+            sim.Step(new FlightInput(ChooseHold: HoldMode.Prograde));
             Assert.True(sim.Run((_, _) => default, f => Degrees(f.Controlled.Up, f.FrameVelocity) < 1f, maxSeconds: 40),
                 $"the hold never brought the nose round (still {Degrees(flown.Up, flight.FrameVelocity):0.0}° off)");
             var away = Degrees(flown.Up, Planet.AmongStars(flight.CentreOfMass, flight.Velocity));
@@ -526,7 +526,7 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
         {
             var flight = sim.Flight;
             Assert.Same(Planet, flight.Body);
-            sim.Step(new FlightInput(SetTarget: NavTarget.OfBody(Moon), ChooseFrame: FrameChoice.Target, ToggleProgradeHold: true));
+            sim.Step(new FlightInput(SetTarget: NavTarget.OfBody(Moon), ChooseFrame: FrameChoice.Target, ChooseHold: HoldMode.Prograde));
             Assert.Equal(Frame.Target, flight.Frame);
             var paths = new Paths();
             paths.Build(flight, PlanFor(flight));
@@ -538,7 +538,7 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
             Assert.Null(flown.Target);
             Assert.Equal(FrameChoice.Auto, flight.FrameChoice);
             Assert.NotEqual(Frame.Target, flight.Frame);
-            Assert.True(flown.ProgradeHold);
+            Assert.True(flown.Hold == HoldMode.Prograde);
             Assert.Equal(Frames.VelocityIn(Moon, flown.AutoFrame, flight.CentreOfMass, flight.Velocity), flight.FrameVelocity);
             // No window, closest approach or target's path drawn for it any more.
             do

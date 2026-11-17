@@ -152,6 +152,7 @@ internal sealed class Hud : IDisposable
     private double _leftAirAt = double.MinValue, _enteredAirAt = double.MinValue;
     private Mission? _chosen;
     private FrameChoice? _frameChosen;
+    private HoldMode? _holdChosen;
     private Vessel? _lastControlled;
     private bool _hadFairing;
     private double _fairingAt = double.MinValue;
@@ -523,6 +524,14 @@ internal sealed class Hud : IDisposable
         return chosen;
     }
 
+    /// <summary>The hold picked on the buttons since the last call, if one was, for the flight's input.</summary>
+    public HoldMode? TakeHoldChoice()
+    {
+        var chosen = _holdChosen;
+        _holdChosen = null;
+        return chosen;
+    }
+
     /// <summary>The mission picked since the last call, if one was, for the flight to start.</summary>
     public Mission? TakeChoice()
     {
@@ -709,7 +718,7 @@ internal sealed class Hud : IDisposable
         // just as a menu came up would wait, and land after the pause, or in the next flight past
         // its start on Auto. While a menu is up the selector is off, and any such choice let go.
         if (MenuOpen)
-            _frameChosen = null;
+            (_frameChosen, _holdChosen) = (null, null);
         Instruments(flight);
         _openList = OpenListPlace(flight, display);
         MissionPanel(flight, display);
@@ -2216,8 +2225,8 @@ internal sealed class Hud : IDisposable
                 };
                 ImGui.TextColored(color, doors);
             }
-            ImGui.TextColored(flight.ProgradeHold ? Good : Quiet, flight.ProgradeHold ? "Prograde hold: on" : "Prograde hold: off (P)");
-            ImGui.TextColored(flight.RetrogradeHold ? Good : Quiet, flight.RetrogradeHold ? "Retrograde hold: on" : "Retrograde hold: off (R)");
+            _holdButtonsAt = ImGui.GetCursorScreenPos();
+            ImGui.Dummy(_holdButtonsSize);
             _instrumentsRect = ThisWindow();
         }
         else
@@ -2226,7 +2235,10 @@ internal sealed class Hud : IDisposable
         // Over the room the instruments kept for them this frame: with the instruments not drawn
         // (collapsed or clipped), there is none, and the buttons would float where it last was.
         if (shown)
+        {
             FrameButtonsWindow(flight);
+            HoldButtonsWindow(flight);
+        }
     }
 
     /// <summary>
@@ -2299,6 +2311,62 @@ internal sealed class Hud : IDisposable
         }
         ImGui.EndDisabled();
     }
+
+    /// <summary>
+    /// The holds' buttons (the one in use shown pressed; Manoeuvre only with a node), in a window of
+    /// their own over the room the instruments keep for them, as the frame buttons are.
+    /// </summary>
+    private void HoldButtonsWindow(Flight flight)
+    {
+        ImGui.SetNextWindowPos(_holdButtonsAt);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new float2(0, 0));
+        if (ImGui.Begin("##hold-buttons"u8, (PanelFlags & ~ImGuiWindowFlags.NoInputs) | ImGuiWindowFlags.NoBackground))
+        {
+            ImGui.PopStyleVar();
+            HoldButtonRow(flight);
+            _holdButtonsSize = ImGui.GetWindowSize();
+        }
+        else
+            ImGui.PopStyleVar();
+        ImGui.End();
+    }
+
+    /// <summary>The hold buttons, in a row: a click picks that hold, or, on the one in use, lets it go (for the flight's input, <see cref="TakeHoldChoice"/>).</summary>
+    private void HoldButtonRow(Flight flight)
+    {
+        // Off while a menu is up (see Build, which also lets go of a choice made then).
+        ImGui.BeginDisabled(MenuOpen);
+        for (var i = 0; i < HoldButtons.Length; i++)
+        {
+            var (label, name, mode) = HoldButtons[i];
+            if (i > 0)
+                ImGui.SameLine();
+            var chosen = flight.Holding == mode;
+            ImGui.BeginDisabled(mode == HoldMode.Manoeuvre && flight.Controlled.Chain is null);
+            if (chosen)
+            {
+                ImGui.PushStyleColor(ImGuiCol.Button, new float4(0.2f, 0.45f, 0.75f, 1f));
+                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new float4(0.25f, 0.52f, 0.85f, 1f));
+            }
+            if (ImGui.SmallButton(label))
+                _holdChosen = mode;
+            if (chosen)
+                ImGui.PopStyleColor(2);
+            _buttons.Add((name, ItemMiddle()));
+            ImGui.EndDisabled();
+        }
+        ImGui.EndDisabled();
+    }
+
+    private static readonly (string Label, string Name, HoldMode Mode)[] HoldButtons =
+    [
+        ("Prograde###holdPrograde", "Hold Prograde", HoldMode.Prograde),
+        ("Retrograde###holdRetrograde", "Hold Retrograde", HoldMode.Retrograde),
+        ("Manoeuvre###holdManoeuvre", "Hold Manoeuvre", HoldMode.Manoeuvre),
+    ];
+
+    private float2 _holdButtonsAt;
+    private float2 _holdButtonsSize = new(220f, 16f);
 
     private static readonly (string Label, FrameChoice Choice)[] FrameButtons =
     [
@@ -2868,7 +2936,7 @@ internal sealed class Hud : IDisposable
         10 => "Click the path  plan a burn there (zoomed out); pull its handles"u8,
         11 => "Space           launch, then drop a stage (any time)"u8,
         12 => "G               landing legs"u8,
-        13 => "P / R           prograde / retrograde hold (with / against travel)"u8,
+        13 => "Hold buttons    Prograde, Retrograde, Manoeuvre: keep the nose that way (again: off)"u8,
         14 => "Frame buttons   Auto, Surface, Orbit, Target: what speeds and holds go by"u8,
         15 => "Tab             fly another vessel (or click its view)"u8,
         16 => ", / .           time: slower / faster (1/4x to 32x warp)"u8,

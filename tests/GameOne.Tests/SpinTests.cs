@@ -400,7 +400,7 @@ public sealed class SpinTests(ITestOutputHelper output)
         sim.Step(new FlightInput(SwitchTo: satellite));
         float r1 = Planet.SeaRadius + 9000f, r2 = Planet.SeaRadius + 10000f;
         var raise = MathF.Sqrt(Planet.Mu / r1) * (MathF.Sqrt(2f * r2 / (r1 + r2)) - 1f);
-        sim.Step(new FlightInput(Plan: NodeTests.Chain(satellite, flight.WorldTime, flight.WorldTime + 30, new ManoeuvreNode(0, Prograde: raise)), ToggleProgradeHold: true));
+        sim.Step(new FlightInput(Plan: NodeTests.Chain(satellite, flight.WorldTime, flight.WorldTime + 30, new ManoeuvreNode(0, Prograde: raise)), ChooseHold: HoldMode.Prograde));
         var plan = new ManoeuvrePlan();
         plan.Update(satellite, satellite.Chain, flight.WorldTime);
         var planned = plan.Last.Orbit;

@@ -230,8 +230,7 @@ internal sealed class Readout
             Show("Legs", flight.LegDeploy switch { >= 1f => "deployed", <= 0f => "stowed", _ => flight.LegsWanted ? "deploying" : "stowing" });
         if (flight.HasBay)
             Show("Bay doors", flight.BayDoors switch { >= 1f => "open", <= 0f => "closed", _ => flight.BayDoorsWanted ? "opening" : "closing" });
-        Show("Prograde hold", flight.ProgradeHold ? "on" : "off");
-        Show("Retrograde hold", flight.RetrogradeHold ? "on" : "off");
+        Show("Hold", flight.Holding.ToString());
         if (flight.Guide is { } guide)
         {
             // The node's time in seconds, not minutes and seconds as the HUD has it, so a script can compare it.

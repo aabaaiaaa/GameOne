@@ -175,7 +175,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
                 Choose = choice, From = LaunchSites.Named(hud.Settings.LaunchSite), CarryOn = hud.TakeCarryOn(),
                 StartAgain = hud.TakeStartAgain(), Rewind = hud.TakeRewind(), CompleteRun = hud.TakeCompleteRun(), AbandonRun = hud.TakeAbandonRun(),
                 SwitchTo = swap, SetTarget = target, ClearTarget = clearTarget,
-                Plan = hud.TakePlan(), ChooseFrame = hud.TakeFrameChoice(),
+                Plan = hud.TakePlan(), ChooseFrame = hud.TakeFrameChoice(), ChooseHold = hud.TakeHoldChoice(),
                 Slower = controls.Take(ControlAction.Slower), Faster = controls.Take(ControlAction.Faster), Watched = watched,
                 // Last frame's: what the main view showed, at the body what the camera is on is at, and the vessel it is on.
                 Camera = view.CameraPlace.Position, CameraBody = view.CameraPlace.Body, CameraVelocity = view.CameraVelocity, Watching = view.WatchingNow(flight),

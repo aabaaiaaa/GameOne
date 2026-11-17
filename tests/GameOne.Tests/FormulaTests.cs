@@ -314,7 +314,7 @@ public sealed class FormulaTests(ITestOutputHelper output)
                 var comHeight = RocketGeometry.CentreOfMassHeight(satellite.Vehicle, satellite.First, satellite.Last);
                 var com = satellite.Position + Vector3.Transform(Vector3.UnitY, satellite.Rotation) * comHeight;
                 var prograde = Planet.AmongStars(com, satellite.Velocity);
-                return (Pointed(satellite, prograde) with { Throttle = 1f, ProgradeHold = true, Fuel = full }, 30, 20f);
+                return (Pointed(satellite, prograde) with { Throttle = 1f, Hold = HoldMode.Prograde, Fuel = full }, 30, 20f);
             }
             case "fall through the air":
                 // A booster, its engine off, falling 2.5 km over the sea, moving east at 40 m/s.
@@ -322,7 +322,7 @@ public sealed class FormulaTests(ITestOutputHelper output)
             case "burn through the air":
                 // Falling at 60 m/s 2 km over the sea, its engine at a third, holding retrograde.
                 return (Drops.Placed(Sea, Planet.East(Sea), 60f, sideways: Planet.East(Sea) * 20f, clearance: 2000f, legsOut: false)
-                    with { Throttle = 0.35f, RetrogradeHold = true }, 10, 50f);
+                    with { Throttle = 0.35f, Hold = HoldMode.Retrograde }, 10, 50f);
             default:
                 throw new ArgumentException(flight);
         }

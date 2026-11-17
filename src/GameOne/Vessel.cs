@@ -117,8 +117,7 @@ internal sealed class Vessel
             _autoFrame = Frame.Surface; // and it lifts off again from there
         Throttle = state.Throttle;
         _aim = state.Aim;
-        ProgradeHold = state.ProgradeHold;
-        RetrogradeHold = state.RetrogradeHold;
+        Hold = state.Hold;
         _legsWanted = state.LegsWanted;
         LegDeploy = state.LegDeploy;
         _bayDoorsWanted = state.BayDoorsWanted;
@@ -208,8 +207,7 @@ internal sealed class Vessel
         AngularVelocity = AngularVelocity,
         Throttle = Throttle,
         Aim = _aim,
-        ProgradeHold = ProgradeHold,
-        RetrogradeHold = RetrogradeHold,
+        Hold = Hold,
         LegsWanted = _legsWanted,
         LegDeploy = LegDeploy,
         BayDoorsWanted = _bayDoorsWanted,
@@ -872,11 +870,8 @@ internal sealed class Vessel
     /// <summary>Where the steering is pointing the nose. The rocket turns to follow it.</summary>
     public Vector3 Aim => _aim;
 
-    /// <summary>Whether the steering is keeping the nose pointed the way it is moving.</summary>
-    public bool ProgradeHold { get; private set; }
-
-    /// <summary>Whether the steering is keeping the nose pointed against the way it is moving (for slowing down).</summary>
-    public bool RetrogradeHold { get; private set; }
+    /// <summary>Which way the steering is keeping the nose pointed, if it is (see <see cref="HoldMode"/>); one at a time.</summary>
+    public HoldMode Hold { get; private set; }
 
     /// <summary>What its pilot has picked to fly to, if anything (see <see cref="GameOne.Flight.TargetOf"/>, which checks it is still there).</summary>
     public NavTarget? Target { get; internal set; }
@@ -1373,11 +1368,16 @@ internal sealed class Vessel
             _legsWanted = !_legsWanted;
         if (input.ToggleBayDoors && HasBay)
             _bayDoorsWanted = !_bayDoorsWanted;
-        // Prograde and retrograde hold are one or the other: turning one on turns the other off.
-        if (input.ToggleProgradeHold)
-            (ProgradeHold, RetrogradeHold) = (!ProgradeHold, false);
-        if (input.ToggleRetrogradeHold)
-            (RetrogradeHold, ProgradeHold) = (!RetrogradeHold, false);
+        // The holds are one at a time: choosing one turns the other off, and choosing the one that is on
+        // turns it off. The manoeuvre hold needs a node to steer by; the rings' hold is refused until
+        // there is something to steer it by.
+        if (input.ChooseHold is { } mode)
+        {
+            if (mode == Hold)
+                Hold = HoldMode.None;
+            else if (mode == HoldMode.Manoeuvre ? Chain is not null : mode != HoldMode.Rings)
+                Hold = mode;
+        }
     }
 
     /// <summary>
@@ -1396,7 +1396,10 @@ internal sealed class Vessel
             FollowNodes(dt, now);
         if (EngineLit)
             _fuel[Stage] = MathF.Max(0f, _fuel[Stage] - Throttle * CurrentStage.FuelFlow * dt);
-        Steer(dt, lean, hold, holdVelocity, holdFloor);
+        // The manoeuvre hold lets go once no node is left to steer by.
+        if (Hold == HoldMode.Manoeuvre && Chain is null)
+            Hold = HoldMode.None;
+        Steer(dt, lean, hold, holdVelocity, holdFloor, Hold == HoldMode.Manoeuvre ? BurnLeft(now) : null);
     }
 
     /// <summary>Whether any of it is in the water (as it was after the last physics step).</summary>
@@ -1514,25 +1517,27 @@ internal sealed class Vessel
     /// attitude among the stars, as its physics does (see <see cref="RocketPhysics"/>' Fall). In
     /// the air it is kept over the ground, which the air turns with.
     /// </summary>
-    private void Steer(float dt, Vector3 lean, Vector3? hold, Vector3 holdVelocity, float holdFloor)
+    private void Steer(float dt, Vector3 lean, Vector3? hold, Vector3 holdVelocity, float holdFloor, Vector3? burnLeft)
     {
         if (Body.AboveAir(_centreOfMass))
             _aim = Body.TurnedDirection(_aim, -dt);
         var amount = MathF.Min(lean.Length(), 1f);
         if (hold is { } direction && direction.LengthSquared() > 1e-8f)
         {
-            ProgradeHold = RetrogradeHold = false; // the pilot has taken over
+            Hold = HoldMode.None; // the pilot has taken over
             TurnAimTowards(direction, TurnRate * dt);
         }
         else if (amount > 1e-4f)
         {
-            ProgradeHold = RetrogradeHold = false;
+            Hold = HoldMode.None;
             TurnAimTowards(lean, TurnRate * amount * dt);
         }
-        else if (ProgradeHold && holdVelocity.Length() > holdFloor)
+        else if (Hold == HoldMode.Prograde && holdVelocity.Length() > holdFloor)
             TurnAimTowards(holdVelocity, TurnRate * dt);
-        else if (RetrogradeHold && holdVelocity.Length() > holdFloor) // slower than that, the nose stays where it is
+        else if (Hold == HoldMode.Retrograde && holdVelocity.Length() > holdFloor) // slower than that, the nose stays where it is
             TurnAimTowards(-holdVelocity, TurnRate * dt);
+        else if (Hold == HoldMode.Manoeuvre && burnLeft is { } left && left.LengthSquared() > 1e-8f)
+            TurnAimTowards(left, TurnRate * dt);
 
         Weathervane(dt);
     }

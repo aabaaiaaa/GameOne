@@ -215,7 +215,7 @@ public sealed class FrameTests(ITestOutputHelper output)
         using var sim = new Simulation(Mission.ReachOrbit, world: WorldPresets.Satellites());
         var flight = sim.Flight;
         var satellite = flight.WorldVessels.First(v => v.Id == 2);
-        sim.Step(new FlightInput(SwitchTo: satellite, ToggleProgradeHold: true));
+        sim.Step(new FlightInput(SwitchTo: satellite, ChooseHold: HoldMode.Prograde));
         Assert.Equal(Frame.Orbital, flight.Frame);
         sim.Run((_, _) => default, _ => false, maxSeconds: 30);
         var toStars = Degrees(satellite.Up, Planet.AmongStars(satellite.CentreOfMass, satellite.Velocity));
@@ -263,7 +263,7 @@ public sealed class FrameTests(ITestOutputHelper output)
         // In a small view (watched, but not flown), so it is the physics that turns its nose to
         // its hold (nobody watching it, it would leave the physics: see Unwatched).
         var watched = new[] { satellite };
-        sim.Step(new FlightInput(SwitchTo: satellite, ToggleRetrogradeHold: true));
+        sim.Step(new FlightInput(SwitchTo: satellite, ChooseHold: HoldMode.Retrograde));
         sim.Step(new FlightInput(SwitchTo: booster, ChooseFrame: FrameChoice.Surface, Watched: watched));
         Assert.Equal(Frame.Surface, flight.Frame);
         bool InThePhysics(Flight _)
@@ -306,7 +306,7 @@ public sealed class FrameTests(ITestOutputHelper output)
         // 3 m/s), from upright, square to the way it moves relative to the other.
         var start = flight.WorldTime;
         var from = Degrees(mine.Up, -flight.FrameVelocity);
-        sim.Step(new FlightInput(ToggleRetrogradeHold: true));
+        sim.Step(new FlightInput(ChooseHold: HoldMode.Retrograde));
         Assert.True(sim.Run((_, _) => default, f => Degrees(f.Controlled.Up, -f.FrameVelocity) < 1f, maxSeconds: 30),
             $"the hold never brought the nose round (still {Degrees(mine.Up, -flight.FrameVelocity):0.0}° off)");
         output.WriteLine($"the hold turned the nose from {from:0.0}° off retrograde to under 1° in {flight.WorldTime - start:0.0} s");
@@ -322,7 +322,7 @@ public sealed class FrameTests(ITestOutputHelper output)
             return new FlightInput(Throttle: Math.Clamp((wanted - f.Throttle) / (Scene.ThrottleRate * dt), -1f, 1f));
         }, f => f.RelativeSpeed < 0.5f, maxSeconds: 60 - (flight.WorldTime - start)), $"still {flight.RelativeSpeed:0.00} m/s apart");
         output.WriteLine($"matched to {flight.RelativeSpeed:0.000} m/s in {flight.WorldTime - start:0.0} s; the nose within {worst:0.00}° of retrograde over 1 m/s");
-        Assert.True(mine.RetrogradeHold);
+        Assert.True(mine.Hold == HoldMode.Retrograde);
         Assert.InRange(worst, 0f, 3f);
         Assert.Equal(FrameChoice.Target, flight.FrameChoice);
     }
@@ -335,7 +335,7 @@ public sealed class FrameTests(ITestOutputHelper output)
         using var sim = new Simulation(Mission.ReachOrbit, world: WorldPresets.Satellites());
         var flight = sim.Flight;
         var satellite = flight.WorldVessels.First(v => v.Id == 3);
-        sim.Step(new FlightInput(SwitchTo: satellite, SetTarget: NavTarget.OfVessel(flight.WorldVessels[1]), ToggleProgradeHold: true));
+        sim.Step(new FlightInput(SwitchTo: satellite, SetTarget: NavTarget.OfVessel(flight.WorldVessels[1]), ChooseHold: HoldMode.Prograde));
         var ways = new List<Vector3>();
         foreach (var choice in new[] { FrameChoice.Surface, FrameChoice.Orbit, FrameChoice.Target })
         {
@@ -450,7 +450,7 @@ public sealed class FrameTests(ITestOutputHelper output)
         var flight = sim.Flight;
         sim.Step(new FlightInput(SwitchTo: flight.WorldVessels.First(v => v.Id == 0)));
         Assert.Equal(Frame.Orbital, flight.Frame);
-        sim.Step(new FlightInput(ToggleProgradeHold: true, ChooseFrame: FrameChoice.Surface));
+        sim.Step(new FlightInput(ChooseHold: HoldMode.Prograde, ChooseFrame: FrameChoice.Surface));
         Assert.Equal(Frame.Surface, flight.Frame);
         var apart = Degrees(flight.Velocity, Planet.AmongStars(flight.CentreOfMass, flight.Velocity));
         sim.Run((_, _) => default, _ => false, maxSeconds: 10); // the nose comes round

@@ -174,9 +174,9 @@ public sealed class FrameFlightTests(ITestOutputHelper output)
         var zone = Scene.LandingZoneCentre;
         using var sim = Drops.At(zone, Planet.East(zone), speed: 3f, sideways: Planet.East(zone) * 0.8f, clearance: 40f);
         var flight = sim.Flight;
-        sim.Step(new FlightInput(SetTarget: new NavTarget(TargetKind.Site, 1), ChooseFrame: FrameChoice.Target, ToggleRetrogradeHold: true));
+        sim.Step(new FlightInput(SetTarget: new NavTarget(TargetKind.Site, 1), ChooseFrame: FrameChoice.Target, ChooseHold: HoldMode.Retrograde));
         Assert.Equal(Frame.Target, flight.Frame);
-        Assert.True(flight.RetrogradeHold);
+        Assert.True(flight.Holding == HoldMode.Retrograde);
 
         var tilt = 0f;
         Assert.True(sim.RunToEnd((f, dt) =>
@@ -188,7 +188,7 @@ public sealed class FrameFlightTests(ITestOutputHelper output)
             var throttle = Math.Clamp((Scene.SurfaceGravity + (wanted - vy) * 2f) / (f.MaxAcceleration * MathF.Max(Vector3.Dot(f.Aim, up), 0.5f)), 0f, 1f);
             return new FlightInput(Throttle: Pilots.ThrottleTowards(f, throttle, dt), CutThrottle: f.Ground < 0.2f);
         }, maxSeconds: 60), "it never came down");
-        output.WriteLine($"{flight.State} {flight.CrashReason} at {flight.TouchdownSpeed:0.0} m/s; at most {tilt:0.0}° over; the hold {(flight.RetrogradeHold ? "on" : "off")}");
+        output.WriteLine($"{flight.State} {flight.CrashReason} at {flight.TouchdownSpeed:0.0} m/s; at most {tilt:0.0}° over; the hold {(flight.Holding == HoldMode.Retrograde ? "on" : "off")}");
         Assert.Equal(FlightState.Landed, flight.State);
         Assert.InRange(tilt, 0f, 3f); // measured 0.1°
     }
