@@ -59,7 +59,7 @@ public sealed class PointOfInterestTests
         Assert.True(Vector3.Distance(spot.Position, frames.InView(Moon, PointOfInterest.MoonLandingSpot.Place)) < 1f);
         Assert.Equal(5, spot.Rank);
         Assert.True(spot.Arrow);
-        Assert.Null(spot.Target);
+        Assert.Equal(NavTarget.OfPoint(0), spot.Target);
         Assert.Equal(0f, spot.Radius);
         Assert.Equal(MarkerKind.Site, spot.Kind);
         Assert.Equal(Markers.Look.Square, spot.Look);
@@ -128,5 +128,59 @@ public sealed class PointOfInterestTests
             Name = "TWICE", Briefing = "", Vehicle = Vehicle.ThreeStage, Steps = [],
             PointsOfInterest = [PointOfInterest.MoonLandingSpot, PointOfInterest.MoonLandingSpot with { Latitude = 1f }],
         });
+    }
+    /// <summary>
+    /// A flight of <see cref="WithPoints"/> flying its new rocket at the planet, with a lander
+    /// landed on the moon in its world (not switched to: a switch carries the flight on in the
+    /// lander's own mission, free play).
+    /// </summary>
+    private static Simulation FlyingFromThePlanet()
+    {
+        var sim = new Simulation(WithPoints, world: World(OnTheMoon.Lander(0, OnTheMoon.LandingSpot)));
+        Assert.Same(WithPoints, sim.Flight.Mission);
+        Assert.NotEqual(0, sim.Flight.Controlled.Id);
+        return sim;
+    }
+
+    [Fact]
+    public void The_landing_spot_can_be_targeted_and_its_distance_is_read()
+    {
+        using var sim = FlyingFromThePlanet();
+        var flight = sim.Flight;
+        var spot = Gathered(flight, new Settings(), out _).Single(c => c.Name == "Landing spot");
+        Assert.Equal(NavTarget.OfPoint(0), spot.Target);
+
+        sim.Step(new FlightInput(SetTarget: spot.Target));
+        Assert.Equal(NavTarget.OfPoint(0), flight.Target);
+        var at = flight.TargetAt!.Value;
+        Assert.Same(Moon, at.Body);
+        Assert.False(at.Flying);
+        Assert.Equal(PointOfInterest.MoonLandingSpot.Place, at.Own);
+        // Across the bodies, from the vessel's centre of mass (the distance is to that, the point's from its origin).
+        var vessel = flight.Controlled;
+        var slack = Vector3.Distance(vessel.CentreOfMass, vessel.Position) + 1f;
+        var expected = PointOfInterest.MoonLandingSpot.DistanceFrom(vessel, flight.WorldTime);
+        Assert.InRange(flight.DistanceToTarget!.Value, expected - slack, expected + slack);
+
+        // The second point is a target too, by its place in the mission.
+        sim.Step(new FlightInput(SetTarget: NavTarget.OfPoint(1)));
+        Assert.Equal(NavTarget.OfPoint(1), flight.Target);
+        Assert.Equal(Second.Place, flight.TargetAt!.Value.Own);
+    }
+
+    [Fact]
+    public void A_point_target_of_another_mission_is_not_found()
+    {
+        using var sim = FlyingFromThePlanet();
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(SetTarget: NavTarget.OfPoint(2)));
+        Assert.Null(flight.Target); // WithPoints has two
+        sim.Step(new FlightInput(SetTarget: NavTarget.OfPoint(1)));
+        Assert.NotNull(flight.Target);
+
+        // The same target in a flight of a mission with no points of interest: it goes with them.
+        using var other = new Simulation(Mission.FreePlay, world: World(OnTheMoon.Lander(0, OnTheMoon.LandingSpot)));
+        other.Step(new FlightInput(SetTarget: NavTarget.OfPoint(0)));
+        Assert.Null(other.Flight.Target);
     }
 }

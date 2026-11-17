@@ -2329,6 +2329,11 @@ internal sealed class Flight : IDisposable
             var deck = Vector3.Transform(new Vector3(0f, ship.Freeboard, 0f), ship.Current.Model);
             return Across(Sites.Body, deck, ship.VelocityAt(deck), false);
         }
+        if (target.Kind == TargetKind.Point)
+        {
+            var point = Mission.PointsOfInterest[index];
+            return Across(point.Body, point.Place, Vector3.Zero, false);
+        }
         return Across(Sites.Body, Sites.Top(index), Vector3.Zero, false);
     }
 
@@ -2349,8 +2354,8 @@ internal sealed class Flight : IDisposable
 
     /// <summary>
     /// What <paramref name="target"/> is, if it is there and isn't <paramref name="from"/> itself
-    /// (nor, for a body, the body <paramref name="from"/> is at): the vessel, or the site's or
-    /// body's number. A tuple rather than an object, so a number isn't boxed: this is asked every step.
+    /// (nor, for a body, the body <paramref name="from"/> is at): the vessel, or the site's, body's or
+    /// point of interest's number. A tuple rather than an object, so a number isn't boxed: this is asked every step.
     /// </summary>
     private (Vessel? Vessel, int Index, bool Found) Find(NavTarget target, Vessel? from)
     {
@@ -2365,6 +2370,9 @@ internal sealed class Flight : IDisposable
                 return target.Id >= 0 && target.Id < Sites.All.Length ? (null, target.Id, true) : (null, -1, false);
             case TargetKind.Body:
                 return target.Id >= 0 && target.Id < Bodies.All.Count && Bodies.All[target.Id] != from?.Body ? (null, target.Id, true) : (null, -1, false);
+            case TargetKind.Point:
+                // The flight's mission's, as its markers are (Markers.Gather).
+                return target.Id >= 0 && target.Id < Mission.PointsOfInterest.Length ? (null, target.Id, true) : (null, -1, false);
             default:
                 return (null, -1, false);
         }

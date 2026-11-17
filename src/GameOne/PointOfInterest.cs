@@ -5,7 +5,7 @@ namespace GameOne;
 /// <summary>
 /// A place on a body's ground that exists only for a mission (<see cref="Mission.PointsOfInterest"/>):
 /// shown by a marker over the view and on the map (see <see cref="Markers.Gather"/>), never built
-/// on the ground, and information only: it is not a target and clicking it does nothing.
+/// on the ground, and a target as a site is (<see cref="TargetKind.Point"/>, by its index in the mission's list), never an instruction.
 /// </summary>
 internal sealed record PointOfInterest(string Name, GroundBody Body, float Latitude, float Longitude)
 {

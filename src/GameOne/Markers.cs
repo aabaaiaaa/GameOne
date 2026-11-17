@@ -386,12 +386,12 @@ internal sealed class Markers
         }
 
         // The flight's own mission's points of interest: found from anywhere like its landing site, on
-        // the ground of their body, with no size (so never faded as the vessel nears) and no target;
+        // the ground of their body, with no size (so never faded as the vessel nears), each a target;
         // the mission's order is kept among them by the sort (Candidate.Order); their names are unique
         // in a mission, as a label spread is found by its name (Mission.PointsOfInterest).
         var points = flight.Mission.PointsOfInterest;
         for (var i = 0; i < points.Length; i++)
-            Add(new Candidate(frames.InView(points[i].Body, points[i].Place), 0f, points[i].Name, MarkerKind.Site, Look.Square, null,
+            Add(new Candidate(frames.InView(points[i].Body, points[i].Place), 0f, points[i].Name, MarkerKind.Site, Look.Square, NavTarget.OfPoint(i),
                 Rank: 5, Size: 0f, Loud: true, Arrow: true, new Rgb(242, 196, 15), Order: i));
 
         // The target comes before everything, whatever its kind, and is found from anywhere.

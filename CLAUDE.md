@@ -454,9 +454,10 @@ dotnet run --project src/GameOne
   when: no "burn now" or "stop now" prompts. A transfer window is a shaded stretch of the orbit,
   not a moment; a manoeuvre node's guide shows the delta-v left and the burn time, and the player
   starts and stops the burn. New cues (the moon, docking, RCS, weather) follow the same rule. A
-  mission's points of interest (`Mission.PointsOfInterest`, `PointOfInterest`) are markers only: a
-  place on a body's ground shown by a marker (and an arrow off the screen) and built nowhere, never
-  a target and never an instruction; only the flight's own mission's are gathered.
+  mission's points of interest (`Mission.PointsOfInterest`, `PointOfInterest`) are markers and targets: a
+  place on a body's ground shown by a marker (and an arrow off the screen) and built nowhere, a
+  target as a site is (`TargetKind.Point`, by its index in the flight's mission's list) and never
+  an instruction; only the flight's own mission's are gathered.
 - **Branches and merging:** a feature is built on a branch of its own (a worktree under
   `.claude/worktrees/<name>`); one in several parts gets a commit per part, and is merged into
   main only once every part is done and the soak tests pass. Commit and merge only when the user

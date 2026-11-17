@@ -15,11 +15,16 @@ internal enum TargetKind
     /// influence, has it as a target no more).
     /// </summary>
     Body,
+    /// <summary>
+    /// One of the flight's mission's points of interest (<see cref="Mission.PointsOfInterest"/>), by
+    /// its index there: a place on a body's ground that is built nowhere, a target as a site is.
+    /// </summary>
+    Point,
 }
 
 /// <summary>
 /// What a vessel's pilot has picked to fly to (by clicking its marker): another vessel, a place
-/// on the ground, or a body. Each vessel keeps its own, saved with the world. It names the thing
+/// on the ground (a site, or a mission's point of interest), or a body. Each vessel keeps its own, saved with the world. It names the thing
 /// rather than holding it, so it is saved as it is, and one that has gone (destroyed, or removed to
 /// make room) is simply found to be missing: vessels' numbers are never used again in a world.
 /// </summary>
@@ -28,6 +33,8 @@ internal readonly record struct NavTarget(TargetKind Kind, int Id)
     public static NavTarget OfVessel(Vessel vessel) => new(TargetKind.Vessel, vessel.Id);
 
     public static NavTarget OfBody(GroundBody body) => new(TargetKind.Body, body.Index);
+
+    public static NavTarget OfPoint(int index) => new(TargetKind.Point, index);
 }
 
 /// <summary>

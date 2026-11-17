@@ -82,6 +82,15 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
         Assert.False(File.Exists(Path.Combine(_directory, "busy.json.saving")), "the save should leave no half-written file");
     }
 
+    [Fact]
+    public void A_point_target_round_trips()
+    {
+        var lander = OnTheMoon.Lander(0, OnTheMoon.LandingSpot) with { Target = NavTarget.OfPoint(1) };
+        Store.Save(new WorldState { Id = "points", Name = "Points", Vessels = [lander], NextVesselId = 1, Flights = 1 });
+        Assert.Equal(new NavTarget(TargetKind.Point, 1), Store.Load("points").Vessels.Single().Target);
+        Assert.Contains("\"Point\"", File.ReadAllText(Path.Combine(_directory, "points.json"))); // by name, as the other kinds are
+    }
+
     /// <summary>
     /// The lander launcher's lander, numbered <paramref name="id"/>, standing on the moon by the
     /// landing spot with its bay's doors half open and opening, one of them stopped short on the ground.

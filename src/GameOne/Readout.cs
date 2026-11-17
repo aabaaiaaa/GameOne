@@ -343,6 +343,8 @@ internal sealed class Readout
         {
             case { Kind: TargetKind.Site, Id: var site }:
                 return Sites.All[site].Name;
+            case { Kind: TargetKind.Point, Id: var point }:
+                return flight.Mission.PointsOfInterest[point].Name;
             case { Kind: TargetKind.Body, Id: var body }:
                 return Bodies.All[body].Name;
             case { Kind: TargetKind.Vessel, Id: var id }:
