@@ -246,6 +246,248 @@ public sealed class NodeTests(ITestOutputHelper output)
         Assert.InRange(top, plannedTop - 50, plannedTop + 50);
     }
 
+    /// <summary>
+    /// What a late burn still needs, worked out by brute force: <paramref name="chain"/>'s planned
+    /// path after its first burn, sampled every millisecond over a whole lap of it from the node,
+    /// its point nearest <paramref name="v"/>, how the path moves there less how the vessel does.
+    /// </summary>
+    /// <remarks>
+    /// Kilometres off the path, the distance is too flat near its least for a float's millimetres
+    /// to find it to better than a hundredth of a second (a few hundredths of a metre a second of
+    /// the path's speed), so the sampled least is narrowed down by bisecting where the way to the
+    /// vessel turns from ahead of the path's motion to behind it.
+    /// </remarks>
+    private static (Vector3 Left, float Off) NearestByBruteForce(ManoeuvreChain chain, Vessel v, double now)
+    {
+        var plan = PlanOf(chain, now);
+        var after = plan.Legs[plan.NodeLeg(0)!.Value + 1];
+        var place = v.CentreOfMass;
+        var (best, nearest) = (float.MaxValue, 0.0);
+        for (var t = chain.TimeOf(0); t < chain.TimeOf(0) + after.Orbit.Period; t += 0.001)
+        {
+            var d = Vector3.Distance(after.Orbit.StateAfter(t - after.Start).Position, place);
+            if (d < best)
+                (best, nearest) = (d, t);
+        }
+        double Ahead(double t) => after.Orbit.StateAfter(t - after.Start) is var (p, u) ? Vector3.Dot(place - p, u) : 0;
+        var (lo, hi) = (nearest - 0.5, nearest + 0.5);
+        if (Ahead(lo) > 0 && Ahead(hi) < 0)
+            for (var i = 0; i < 40; i++)
+                (lo, hi) = Ahead((lo + hi) / 2) > 0 ? ((lo + hi) / 2, hi) : (lo, (lo + hi) / 2);
+        var (_, moving) = after.Orbit.StateAfter((lo + hi) / 2 - after.Start);
+        return (moving - Planet.AmongStars(v.CentreOfMass, v.Velocity), best);
+    }
+
+    /// <summary>One node of <paramref name="nodes"/> first, anchored on <paramref name="v"/>'s own orbit <paramref name="seconds"/> before now (at its time: its gap from there).</summary>
+    private static ManoeuvreChain Before(Vessel v, double now, double seconds, params ManoeuvreNode[] nodes) =>
+        ManoeuvreChain.AnchoredOn(v, now - seconds, [.. nodes], now);
+
+    [Theory]
+    [InlineData(0.3)]
+    [InlineData(1.25)] // more than a lap late, a quarter of a lap past the node's place
+    [InlineData(1.5)]
+    [InlineData(1.8)]
+    public void A_node_more_than_a_lap_late_counts_against_the_nearest_point_whatever_its_phase(double laps)
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        var lap = new Orbit(GroundBody.Planet, satellite.CentreOfMass, Planet.AmongStars(satellite.CentreOfMass, satellite.Velocity)).Period;
+        sim.Step(new FlightInput(Plan: Before(satellite, flight.WorldTime, laps * lap, new ManoeuvreNode(0, Prograde: 10f))));
+        var chain = satellite.Chain!;
+        var now = flight.WorldTime;
+        var (expected, off) = NearestByBruteForce(chain, satellite, now);
+        var guide = flight.Guide!.Value;
+        output.WriteLine($"{(now - chain.TimeOf(0)) / lap:0.00} laps late, {off:0.0} m off the planned path: left {guide.Left.Length():0.000} m/s, expected {expected.Length():0.000}");
+        Assert.True(Vector3.Distance(guide.Left, expected) < 0.01f, $"the guide is {Vector3.Distance(guide.Left, expected):0.0000} m/s off");
+        Assert.False(guide.Matched);
+        Assert.Equal(chain, satellite.Chain);
+    }
+
+    /// <summary>
+    /// As a pilot would, steering by the guide: the nose held along the delta-v left, the engine lit
+    /// once it is lined up (half the burn's time before the node, or at once past it) and cut once
+    /// it is gone or goes past.
+    /// </summary>
+    private static Pilot AlongTheGuide(Vessel vessel, Seen seen) => (f, _) =>
+    {
+        if (vessel.Guide(f.WorldTime) is not { } guide)
+            return default;
+        seen.Lowest = MathF.Min(seen.Lowest, guide.Left.Length());
+        Vector3? aim = guide.Left.Length() > 0.01f ? Vector3.Normalize(guide.Left) : null;
+        if (f.EngineLit)
+        {
+            seen.MatchedLit |= guide.Matched;
+            if (guide.Overshot || guide.Left.Length() < 0.05f)
+            {
+                seen.Cut ??= f.WorldTime;
+                return new FlightInput(CutThrottle: true);
+            }
+            return new FlightInput(Hold: aim);
+        }
+        if (seen.Cut is not null || aim is not { } along)
+            return default;
+        var lined = Vector3.Dot(vessel.Up, along) > MathF.Cos(float.DegreesToRadians(2f));
+        return new FlightInput(Hold: along, FullThrottle: lined && guide.Seconds <= guide.BurnSeconds / 2);
+    };
+
+    [Fact]
+    public void A_large_burn_flown_well_late_is_guided_by_the_nearest_point_and_matches()
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        var node = new ManoeuvreNode(0, Prograde: 25f, Radial: -10f);
+        sim.Step(new FlightInput(Plan: Before(satellite, flight.WorldTime, 90, node)));
+        var chain = satellite.Chain!;
+        Assert.False(flight.Guide!.Value.Short);
+
+        // Late, and part way through a burn flown late by the guide: it is the nearest point's.
+        var seen = new Seen();
+        var pilot = AlongTheGuide(satellite, seen);
+        foreach (var share in new[] { 1f, 0.5f })
+        {
+            Assert.True(sim.Run(pilot, f => f.Guide!.Value.Left.Length() < share * node.Size, maxSeconds: 30));
+            var now = flight.WorldTime;
+            var (expected, off) = NearestByBruteForce(chain, satellite, now);
+            var guide = flight.Guide!.Value;
+            output.WriteLine($"{now - chain.TimeOf(0):0.0} s late, {off:0.0} m off the planned path: left {guide.Left.Length():0.000} m/s, expected {expected.Length():0.000}");
+            Assert.True(Vector3.Distance(guide.Left, expected) < 0.01f, $"the guide is {Vector3.Distance(guide.Left, expected):0.0000} m/s off");
+        }
+
+        Assert.True(sim.Run(pilot, _ => satellite.Chain is null, maxSeconds: 60), "flown by the guide, it should match the planned path and go");
+        output.WriteLine($"delta-v left down to {seen.Lowest:0.000} m/s, cut {seen.Cut - chain.TimeOf(0):0.0} s after its time");
+        Assert.True(seen.MatchedLit);
+        Assert.True(seen.Lowest < node.MatchTolerance);
+    }
+
+    [Fact]
+    public void An_early_burn_cut_within_tolerance_lets_the_node_go_before_its_time()
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 30, new ManoeuvreNode(0, Prograde: RaiseFrom(9000f, 10000f)));
+        sim.Step(new FlightInput(Plan: chain, ToggleProgradeHold: true));
+        // The whole burn well before its time.
+        double? cut = null, gone = null;
+        Assert.True(sim.Run((f, _) =>
+        {
+            var guide = f.Guide!.Value;
+            if (f.EngineLit)
+            {
+                if (guide.Left.Length() >= 0.05f && !guide.Overshot)
+                    return default;
+                Assert.True(guide.Matched);
+                cut ??= f.WorldTime;
+                return new FlightInput(CutThrottle: true);
+            }
+            return cut is null && guide.Seconds <= guide.BurnSeconds + 5 ? new FlightInput(FullThrottle: true) : default;
+        }, f =>
+        {
+            gone = f.WorldTime;
+            return satellite.Chain is null;
+        }, maxSeconds: 30), "matched and cut, it should go");
+        output.WriteLine($"cut {chain.TimeOf(0) - cut:0.00} s before its time, gone {chain.TimeOf(0) - gone:0.00} s before");
+        Assert.True(gone < chain.TimeOf(0) - 2, "it should go as it is cut, before its time");
+    }
+
+    [Fact]
+    public void A_fresh_node_before_its_time_is_never_matched()
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        // Less than the least tolerance: unburned, only its time can match it.
+        var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 10, new ManoeuvreNode(0, Prograde: 0.5f));
+        sim.Step(new FlightInput(Plan: chain));
+        Assert.True(sim.Run((f, _) =>
+        {
+            Assert.False(f.Guide!.Value.Matched);
+            Assert.Equal(chain, satellite.Chain);
+            return default;
+        }, f => f.Guide!.Value.Seconds < 0.1, maxSeconds: 10));
+        // From its time on its path already matches the one it plans (half a metre a second off),
+        // so it goes then, the engine off.
+        Assert.True(sim.Run((_, _) => default, _ => satellite.Chain is null, maxSeconds: 0.5));
+    }
+
+    [Fact]
+    public void Matched_holds_while_lit_until_half_as_much_again_is_left()
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        var node = new ManoeuvreNode(0, Prograde: 10f);
+        var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 15, node);
+        sim.Step(new FlightInput(Plan: chain, ToggleProgradeHold: true));
+        sim.Run((_, _) => default, f => f.Guide!.Value.Seconds < f.Guide!.Value.BurnSeconds / 2, maxSeconds: 15);
+
+        // Burned on past it until well over: each frame lit, what is left and whether it is matched.
+        var frames = new List<(float Left, bool Matched)>();
+        Assert.True(sim.Run((f, _) =>
+        {
+            if (f.EngineLit)
+                frames.Add((f.Guide!.Value.Left.Length(), f.Guide!.Value.Matched));
+            return new FlightInput(FullThrottle: true);
+        }, _ => frames.Count > 0 && frames[^1].Matched is false && frames.Any(x => x.Matched), maxSeconds: 10));
+        var tolerance = node.MatchTolerance;
+        var first = frames.FindIndex(x => x.Matched);
+        output.WriteLine($"matched from {frames[first].Left:0.000} m/s, held to {frames.Where(x => x.Matched).Max(x => x.Left):0.000}, let go at {frames[^1].Left:0.000} (tolerance {tolerance})");
+        Assert.True(frames[first].Left < tolerance, "it is matched only once within the tolerance");
+        Assert.All(frames.Take(first), x => Assert.True(x.Left >= tolerance));
+        var after = frames.Skip(first).ToList();
+        Assert.Contains(after, x => x.Matched && x.Left > tolerance); // held past it, overshooting
+        Assert.All(after, x => Assert.Equal(x.Left < Scene.NodeMatchHold * tolerance, x.Matched));
+
+        // Cut once let go: not matched, so it stays.
+        sim.Run((_, _) => new FlightInput(CutThrottle: true), _ => false, maxSeconds: 1);
+        Assert.Equal(chain, satellite.Chain);
+        Assert.False(flight.Guide!.Value.Matched);
+    }
+
+    [Fact]
+    public void A_node_matched_after_the_next_ones_time_leaves_the_next_late_on_the_present_path()
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        var next = new ManoeuvreNode(20, Radial: 5f);
+        sim.Step(new FlightInput(Plan: Before(satellite, flight.WorldTime, 40, new ManoeuvreNode(0, Prograde: 10f), next)));
+        var chain = satellite.Chain!;
+        Assert.True(chain.TimeOf(1) < flight.WorldTime - 15);
+
+        var seen = new Seen();
+        Assert.True(sim.Run(AlongTheGuide(satellite, seen), _ => satellite.Chain!.Nodes.Length < 2, maxSeconds: 30), "flown late by the guide, the first should go");
+        Assert.True(seen.MatchedLit);
+        sim.Run((_, _) => default, _ => false, maxSeconds: 3);
+
+        // The next is at its time, long past, on the path the vessel is on now; not matched, it
+        // stays, and its guide is its burn measured late.
+        var now = flight.WorldTime;
+        var rest = satellite.Chain!;
+        Assert.Equal(next with { Gap = 0 }, Assert.Single(rest.Nodes));
+        Assert.Equal(chain.TimeOf(1), rest.TimeOf(0), 9);
+        var off = Vector3.Distance(rest.StartAt(now).Position, OnItsOrbit(satellite, rest.TimeOf(0) - now));
+        var guide = flight.Guide!.Value;
+        var (expected, _) = NearestByBruteForce(rest, satellite, now);
+        output.WriteLine($"the next {now - rest.TimeOf(0):0.0} s late, anchored {off:0.00} m from its orbit now; left {guide.Left.Length():0.000} m/s, expected {expected.Length():0.000}");
+        Assert.True(off < 5f); // (anchored as a step began, with its rules at the step's end time)
+        Assert.False(guide.Matched);
+        Assert.InRange(guide.Left.Length(), 4f, 15f);
+        Assert.True(Vector3.Distance(guide.Left, expected) < 0.01f);
+    }
+
+    [Fact]
+    public void The_late_guide_allocates_nothing_once_warm()
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(Plan: Before(satellite, flight.WorldTime, 30, new ManoeuvreNode(0, Prograde: 10f))));
+        var now = flight.WorldTime;
+        for (var i = 0; i < 3; i++)
+            _ = satellite.Guide(now + i);
+        Assert.Equal(0, PatchedPathTests.Allocated(() =>
+        {
+            for (var i = 0; i < 10; i++)
+                _ = satellite.Guide(now + i);
+        }));
+    }
+
     [Fact]
     public void The_guide_counts_the_burn_down_and_says_when_it_goes_past()
     {

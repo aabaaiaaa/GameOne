@@ -614,8 +614,12 @@ say) stalls frames and spoils the timing.
   side, one flown by its guide turning matched and going as the engine is cut (in warp too),
   giving the orbit it planned, the guide counting down and saying when it goes past; a node past
   its time staying until matched, and cut before it is matched staying; the match tolerance (3% of
-  the burn, held between 1 and 5 m/s); a late burn counted against the planned path at its point
-  nearest the vessel, and flown to match it; a node staying where it was set (to a millimetre) when the vessel burns
+  the burn, held between 1 and 5 m/s), held while lit until half as much again is left; an early
+  burn cut matched letting it go before its time, and a fresh unburned one never matched before
+  it; a late burn counted against the planned path at its point nearest the vessel (a lap and
+  more late at any phase, a large burn flown well late, checked against a brute-force nearest
+  point), flown to match it, and allocating nothing once warm; one matched only after the next
+  one's time leaving the next late on the present path; a node staying where it was set (to a millimetre) when the vessel burns
   before it; changing a node redoing the chain after it, each later one keeping its gap and
   amounts; moving one moving the later ones with it, never before the one before it (nor the first
   before now); deleting a middle one joining its neighbours, and the first anchoring the second on

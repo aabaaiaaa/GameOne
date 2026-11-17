@@ -410,7 +410,7 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
     /// thread starts lands in the window, which happens with the suite's tests running together,
     /// though nothing was allocated; an allocation made on every run shows in every try.
     /// </summary>
-    private static long Allocated(Action work)
+    internal static long Allocated(Action work)
     {
         var least = long.MaxValue;
         for (var tries = 0; tries < 5 && least != 0; tries++)

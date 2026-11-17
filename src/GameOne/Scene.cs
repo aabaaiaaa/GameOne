@@ -111,6 +111,20 @@ internal static class Scene
     /// <summary>The most a node's match tolerance is (see <see cref="NodeMatchShare"/>), m/s.</summary>
     public const float NodeMatchMax = 5f;
 
+    /// <summary>
+    /// Once a node is matched with the engine lit, it stays matched until what is still needed is
+    /// this many times its tolerance (<see cref="ManoeuvreNode.MatchTolerance"/>), so it doesn't
+    /// flicker as the burn ends; with the engine off it is matched only within the tolerance.
+    /// </summary>
+    public const float NodeMatchHold = 1.5f;
+
+    /// <summary>
+    /// How many points along a stretch of a node's planned path are looked at for the one nearest
+    /// the vessel (a late burn's guide: see <see cref="Vessel.BurnLeft"/>), before Newton's steps
+    /// home in on it: enough that the nearest of them is on the right side of the path.
+    /// </summary>
+    public const int NodeNearestSamples = 48;
+
     // How the sky draws them: the moon's plains' grey (the share of the sun's light they give back,
     // a linear reflectance, not a display colour: MoonAlbedos has each kind of its ground's), and
     // how much of the sun's disc's angular radius its edge is softened over (half inside the disc's
