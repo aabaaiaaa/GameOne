@@ -32,7 +32,7 @@ namespace GameOne;
 /// </remarks>
 internal sealed class ChaseCamera
 {
-    private const float MinPitch = -0.15f, MaxPitch = 1.4f; // radians: from just below level to nearly overhead
+    private const float MaxPitch = MathF.PI / 2f - 0.25f * MathF.PI / 180f, MinPitch = -MaxPitch; // radians: from straight down to straight up, to within a quarter of a degree (never over the top)
     private const float FreeLookMaxPitch = 1.5675f;         // free look: to within a quarter of a degree of straight up or down
     private const float ZoomedOutMaxPitch = 1.55f;          // zoomed out, over the pole and below it too
 
@@ -43,6 +43,7 @@ internal sealed class ChaseCamera
     private Vector3 _zoomCentre = GroundBody.Planet.Centre;
 
     private float _yaw;   // radians round the rocket: 0 = to its south, looking north
+    private float _facingYaw; // the yaw it last had while looking less steeply than Scene.CameraFacingPitchDegrees: what GroundForward goes by
     private float _pitch = float.DegreesToRadians(Scene.CameraPitchDegrees);
     private float _distance = Scene.CameraDistance;
     private Vector3 _focus;     // what follows the vessel, lagging behind it
@@ -105,10 +106,10 @@ internal sealed class ChaseCamera
     public Vector3 Up => Vector3.Normalize(Vector3.Cross(Vector3.Cross(Forward, _worldUp), Forward));
 
     /// <summary>The way the camera faces, flattened onto the ground: what "away from the camera" means to the steering.</summary>
-    public Vector3 GroundForward => -(_east * MathF.Sin(_yaw) + _south * MathF.Cos(_yaw));
+    public Vector3 GroundForward => -(_east * MathF.Sin(_facingYaw) + _south * MathF.Cos(_facingYaw));
 
     /// <summary>The camera's right, flattened onto the ground.</summary>
-    public Vector3 GroundRight => _east * MathF.Cos(_yaw) - _south * MathF.Sin(_yaw);
+    public Vector3 GroundRight => _east * MathF.Cos(_facingYaw) - _south * MathF.Sin(_facingYaw);
 
     /// <param name="window">The window whose mouse turns and zooms it, or null for a camera nothing turns (a small view's).</param>
     public ChaseCamera(GlfwWindow? window)
@@ -388,6 +389,14 @@ internal sealed class ChaseCamera
     {
         (_yaw, _pitch, _distance) = (other._yaw, other._pitch, other._distance);
         (_free, _snap) = (false, true);
+        NoteFacing();
+    }
+
+    /// <summary>Keeps the yaw as the facing while it looks less steeply than <see cref="Scene.CameraFacingPitchDegrees"/>, so straight up or down it keeps the last usable one.</summary>
+    private void NoteFacing()
+    {
+        if (MathF.Abs(_pitch) < float.DegreesToRadians(Scene.CameraFacingPitchDegrees))
+            _facingYaw = _yaw;
     }
 
     /// <summary>How it is set up now: the chase and map angles and distances, and whether it is the map.</summary>
@@ -500,6 +509,7 @@ internal sealed class ChaseCamera
             _pitch = Math.Clamp(_pitch + _pendingDrag.Y * Scene.CameraRadiansPerDragPixel, MinPitch, MaxPitch);
             _distance = Math.Clamp(_distance * MathF.Pow(0.9f, _pendingZoom), Scene.CameraMinDistance, Scene.CameraMaxDistance);
         }
+        NoteFacing();
         _pendingDrag = Vector2.Zero;
         _pendingZoom = 0f;
         _out = Math.Clamp(_out + (_zoomedOut ? 1f : -1f) * (realDt ?? dt) / Scene.ZoomOutSeconds, 0f, 1f);
@@ -539,7 +549,7 @@ internal sealed class ChaseCamera
         var (sinPitch, cosPitch) = MathF.SinCos(_pitch);
         var offset = (_east * sinYaw + _south * cosYaw) * cosPitch + _up * sinPitch;
         var position = _seen + offset * _distance;
-        position = same ? KeepClear(around, position) : across.Point(KeepClear(around, back.Point(position).ToSingle())).ToSingle();
+        position = same ? KeepClear(around, position, _seen) : across.Point(KeepClear(around, back.Point(position).ToSingle(), seenThere)).ToSingle();
 
         Position = position;
         Target = _seen;
@@ -549,7 +559,11 @@ internal sealed class ChaseCamera
             var (sinLift, cosLift) = MathF.SinCos(_lookPitch);
             Target = position + ((_east * sinLook + _south * cosLook) * cosLift + _up * sinLift) * _distance;
         }
-        _worldUp = _up;
+        // Near straight down or up its up is the yaw's own (straight down the way it faces, straight
+        // up the way behind it), whatever the ground makes it slide to: it is the ground's up
+        // turned by the pitch, which is what the view's up works out to anyway at any pitch, so no jump.
+        _worldUp = MathF.Abs(_pitch) < float.DegreesToRadians(Scene.CameraFacingPitchDegrees)
+            ? _up : Vector3.Normalize(_up * cosPitch - (_east * sinYaw + _south * cosYaw) * sinPitch);
         if (_out > 0f)
         {
             ZoomedOutView(position);
@@ -587,7 +601,7 @@ internal sealed class ChaseCamera
         var direction = Vector3.Normalize(Vector3.Lerp((position - _seen) / near, outOffset, t));
         Target = _seen;
         Position = _seen + direction * distance;
-        _worldUp = Vector3.Normalize(Vector3.Lerp(_up, _poleUp, t));
+        _worldUp = Vector3.Normalize(Vector3.Lerp(_worldUp, _poleUp, t));
     }
 
     /// <summary>
@@ -703,15 +717,45 @@ internal sealed class ChaseCamera
     }
 
     /// <summary>
-    /// <paramref name="position"/>, lifted if need be to keep <see cref="Scene.CameraGroundClearance"/>
-    /// from <paramref name="body"/>'s ground (or a pad) and its waves: it looks up at the rocket from just above them
-    /// instead. Not only from the ground straight under it: on a steep mountainside the slope rising
-    /// beside it is much nearer than that, near enough for the near plane to cut into the hill, so
-    /// the ground is sampled in rings round it too, and it rises until each sample is that far off.
-    /// Over the sea it keeps clear of the highest its waves reach there (half their size, crest to
-    /// trough), whatever the moment, as the camera keeps no clock.
+    /// <paramref name="position"/>, kept <see cref="Scene.CameraGroundClearance"/> from
+    /// <paramref name="body"/>'s ground (or a pad) and its waves: it looks up at the rocket from just above
+    /// them instead. Seen from below the vessel's own height (<paramref name="focus"/>), the ground it would
+    /// be under is slid along instead of lifted through (straight up from below, lifting would put it
+    /// over the vessel looking the wrong way): it comes in along its line to the vessel to where the
+    /// ground leaves it clear, so looking up at a landed vessel it is under it, close to the ground.
     /// </summary>
-    private static Vector3 KeepClear(GroundBody body, Vector3 position)
+    private static Vector3 KeepClear(GroundBody body, Vector3 position, Vector3 focus)
+    {
+        if (Lift(body, position) <= 0f)
+            return position;
+        var up = body.Up(position);
+        if (Vector3.Dot(position - focus, up) < 0f)
+        {
+            // Nearest its full distance along the line that is clear (the vessel's own end is taken as clear).
+            float lo = 0f, hi = 1f;
+            for (var i = 0; i < 24; i++)
+            {
+                var mid = (lo + hi) / 2f;
+                if (Lift(body, focus + (position - focus) * mid) > 0f)
+                    hi = mid;
+                else
+                    lo = mid;
+            }
+            position = focus + (position - focus) * lo;
+        }
+        var lift = Lift(body, position);
+        return lift > 0f ? position + body.Up(position) * lift : position;
+    }
+
+    /// <summary>
+    /// How far <paramref name="position"/> must rise to keep <see cref="Scene.CameraGroundClearance"/>
+    /// from the ground: not only from the ground straight under it, since on a steep mountainside the
+    /// slope rising beside it is much nearer than that, near enough for the near plane to cut into the
+    /// hill, so the ground is sampled in rings round it too, and it rises until each sample is that far off.
+    /// Over the sea it keeps clear of the highest its waves reach there (half their size, crest to
+    /// trough), whatever the moment, as the camera keeps no clock. None (zero) if it is clear.
+    /// </summary>
+    private static float Lift(GroundBody body, Vector3 position)
     {
         var up = body.Up(position);
         var (east, north) = (body.East(position), body.North(position));
@@ -731,6 +775,6 @@ internal sealed class ChaseCamera
                 lift = MathF.Max(lift, over + crest - h);
             }
         }
-        return lift > 0f ? position + up * lift : position;
+        return MathF.Max(lift, 0f);
     }
 }

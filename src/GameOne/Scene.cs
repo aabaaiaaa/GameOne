@@ -1088,6 +1088,7 @@ internal static class Scene
     public const float CameraFollowRate = 10f;        // per second: how tightly it keeps up
     public const float CameraMaxLag = 2f;              // metres: never further behind than this (fast, or a stage dropped, it would trail far off)
     public const float CameraGroundClearance = 1.5f;   // metres: kept from the ground (and the waves) all round it, well past the near plane's corners
+    public const float CameraFacingPitchDegrees = 80f; // beyond this pitch the camera is looking too nearly up or down to say which way it faces: the compass keeps the last facing it had under it
     public const float CameraNearPlane = 0.5f;         // metres: the near plane, at every zoom (the far one is at infinity: ChaseCamera.Planes)
 
     // Real seconds the camera's up takes to turn from the body it was by to the one its vessel is

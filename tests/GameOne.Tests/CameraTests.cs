@@ -248,6 +248,87 @@ public sealed class CameraTests
     }
 
     [Fact]
+    public void The_chase_camera_reaches_straight_up_and_down_without_going_over()
+    {
+        var limit = 90f - 0.25f;
+        foreach (var sign in (ReadOnlySpan<float>)[1f, -1f])
+        {
+            var camera = new ChaseCamera(null);
+            var focus = Scene.RocketStart + new Vector3(0, 3000f, 0);
+            camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+            camera.DragOrbit(new Vector2(0f, sign * 1e6f));
+            camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+            var pitch = float.RadiansToDegrees(camera.View.Pitch);
+            Assert.Equal(sign * limit, pitch, 0.01f);
+            // Dragging on past the end changes nothing.
+            camera.DragOrbit(new Vector2(0f, sign * 1e6f));
+            camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+            Assert.Equal(pitch, float.RadiansToDegrees(camera.View.Pitch), 0.001f);
+        }
+    }
+
+    [Fact]
+    public void Looking_up_from_below_a_landed_vessel_the_camera_slides_along_the_ground_under_it()
+    {
+        var camera = new ChaseCamera(null);
+        var focus = Scene.RocketStart + new Vector3(0f, 10f, 0f); // a booster's middle, its bell on the pad
+        camera.Place(0.6f, float.DegreesToRadians(-89f), Scene.CameraDistance);
+        camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+        camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+        var up = Planet.Up(focus);
+        Assert.True(Planet.SurfaceAltitude(camera.Position) >= Scene.CameraGroundClearance - 0.01f,
+            $"the camera is {Planet.SurfaceAltitude(camera.Position):0.00} m above the ground");
+        Assert.True(NearestGround(camera.Position, 3f) >= Scene.CameraGroundClearance * 0.8f);
+        var across = camera.Position - focus;
+        across -= up * Vector3.Dot(across, up);
+        Assert.True(across.Length() <= Scene.PadHalfSize, $"the camera is {across.Length():0.0} m to the side of what it looks at");
+        Assert.True(Vector3.Dot(camera.Position - focus, up) < 0f, "it was lifted over the vessel instead of slid under it");
+        Assert.True(DegreesBetween(camera.Forward, up) < 10f);
+    }
+
+    [Fact]
+    public void At_the_extremes_the_view_does_not_spin()
+    {
+        foreach (var sign in (ReadOnlySpan<float>)[1f, -1f])
+        {
+            var camera = new ChaseCamera(null);
+            var focus = Scene.RocketStart + new Vector3(0, 3000f, 0);
+            camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+            camera.DragOrbit(new Vector2(0f, sign * 1e6f));
+            camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+            var before = camera.Up;
+            for (var i = 0; i < 120; i++)
+            {
+                focus += new Vector3(0.7f, 0f, 0.4f); // flying about under the camera, yaw held
+                camera.DragOrbit(new Vector2(0f, sign * (i % 2 == 0 ? -0.5f : 0.5f)));
+                camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+                Assert.True(DegreesBetween(before, camera.Up) < 1f, $"the up turned {DegreesBetween(before, camera.Up):0.0}° in a frame");
+                before = camera.Up;
+            }
+        }
+    }
+
+    [Fact]
+    public void Steering_away_from_the_camera_keeps_its_last_usable_facing_at_the_extremes()
+    {
+        foreach (var sign in (ReadOnlySpan<float>)[1f, -1f])
+        {
+            var camera = OnThePad(out var focus);
+            camera.DragOrbit(new Vector2(200f, 0f));
+            camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+            var usable = camera.GroundForward;
+            camera.DragOrbit(new Vector2(0f, sign * 1e6f));
+            camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+            Assert.True(DegreesBetween(usable, camera.GroundForward) < 0.01f, "the facing was lost at the extreme");
+            camera.DragOrbit(new Vector2(150f, 0f)); // turned about while straight up or down
+            camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+            Assert.True(DegreesBetween(usable, camera.GroundForward) < 0.01f, "turned about at the extreme, the facing changed");
+            Assert.True(MathF.Abs(Vector3.Dot(camera.GroundForward, Planet.Up(focus))) < 0.01f);
+            Assert.True(MathF.Abs(Vector3.Dot(camera.GroundRight, camera.GroundForward)) < 0.01f);
+        }
+    }
+
+    [Fact]
     public void A_right_drag_or_the_wheel_looks_at_the_vessel_again()
     {
         foreach (var undo in new Action<ChaseCamera>[] { c => c.DragOrbit(new Vector2(10f, 0f)), c => c.Zoom(1f) })
