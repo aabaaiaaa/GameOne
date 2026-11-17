@@ -197,6 +197,41 @@ public sealed class FlightTests(ITestOutputHelper output)
         Assert.Single(sim.Flight.Vessels);
     }
 
+    private static (Simulation Sim, Vessel First, Vessel Second) TwoVessels()
+    {
+        var sim = new Simulation(Mission.ReachOrbit);
+        sim.Step(new FlightInput(Launch: true));
+        sim.Run((_, _) => new FlightInput(FullThrottle: true), f => f.Ground > 200f, maxSeconds: 60);
+        sim.Step(new FlightInput(Stage: true));
+        var first = sim.Flight.Controlled;
+        var second = sim.Flight.WorldVessels.First(v => v != first && v.State != FlightState.Crashed);
+        return (sim, first, second);
+    }
+
+    [Fact]
+    public void A_view_given_with_a_switch_is_kept_by_the_vessel_flown_before_it()
+    {
+        var (sim, first, second) = TwoVessels();
+        using var _ = sim;
+        var view = new CameraView(true, 1f, 0.3f, 60f, 2f, 0.9f, 90_000f, CameraCentre.Own);
+        sim.Flight.RunFrame(Simulation.FrameSeconds, new FlightInput(View: view, SwitchTo: second));
+        Assert.Same(second, sim.Flight.Controlled);
+        Assert.Equal(view, first.View);
+        Assert.Null(second.View);
+    }
+
+    [Fact]
+    public void A_view_is_taken_in_a_warp_frames_first_step_only()
+    {
+        var (sim, first, second) = TwoVessels();
+        using var _ = sim;
+        var view = new CameraView(false, 1f, 0.3f, 60f, 2f, 0.9f, 90_000f, CameraCentre.Own);
+        sim.Flight.Advance(0.1f, new FlightInput(View: view, SwitchTo: second)); // several steps
+        Assert.Same(second, sim.Flight.Controlled);
+        Assert.Equal(view, first.View);
+        Assert.Null(second.View);
+    }
+
     [Fact]
     public void At_zero_throttle_space_leaves_it_on_the_pad_until_throttled_up()
     {
