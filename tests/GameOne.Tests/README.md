@@ -611,14 +611,18 @@ say) stalls frames and spoils the timing.
   debris, then vessels of no run, then runs', never the one flown; and the readout's runs, rewind,
   vessel id and position.
 - **`NodeTests`:** manoeuvre nodes as a chain (`ManoeuvreChain`): a prograde node raising the far
-  side, one flown by its guide giving the orbit it planned and going, the guide counting down and
-  saying when it goes past; a node staying where it was set (to a millimetre) when the vessel burns
+  side, one flown by its guide turning matched and going as the engine is cut (in warp too),
+  giving the orbit it planned, the guide counting down and saying when it goes past; a node past
+  its time staying until matched, and cut before it is matched staying; the match tolerance (3% of
+  the burn, held between 1 and 5 m/s); a late burn counted against the planned path at its point
+  nearest the vessel, and flown to match it; a node staying where it was set (to a millimetre) when the vessel burns
   before it; changing a node redoing the chain after it, each later one keeping its gap and
   amounts; moving one moving the later ones with it, never before the one before it (nor the first
   before now); deleting a middle one joining its neighbours, and the first anchoring the second on
   the vessel's path; moving the first snapping it onto the orbit the vessel is on now; inserting
-  one before the first or between two; a chain round the moon planned round it; the next node kept,
-  at its time, when the first is flown past; an empty chain clearing the plan; one anchored past
+  one before the first or between two; a chain round the moon planned round it; the next node, as
+  the first goes, snapping onto the orbit the vessel is on then, at its time with its amounts, the
+  chain after it redone; an empty chain clearing the plan; one anchored past
   where the path ends (falling, a hop, escaping) anchored where it ends, and saving; a node moved
   only once the pointer leaves where it was grabbed; and each vessel keeping its own.
 - **`WorldLogTests`:** the world's log: a crash on the ground, two vessels colliding (one entry; and two wrecked by one collision steps apart joined into the first's entry; two pairs colliding side by side an entry each, by who hit whom), an unwatched loss under formula (not witnessed, near its site), those removed to make room as a world loads (oldest first, unseen, no speed, printed without one), one cleared from the launch pad (unseen as a world loads; seen, flown, as a flight from its site starts), and the newest 300 kept; the missions' entries (a run begun, a step done with its points, completed with its score, and nothing for free play); and each crash reason worded without its advice (or the break-up's cause after its colon), its speed taken out to be the entry's (a line never says two speeds).

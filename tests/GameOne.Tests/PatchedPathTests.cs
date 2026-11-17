@@ -238,7 +238,7 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
         Patched.Legs(Planet, position, velocity, Now, legs);
         var chain = ManoeuvreChain.AnchoredOn(Planet, position, velocity, Now, [new ManoeuvreNode(legs[0].End + 30 - Now, Prograde: 10f)], Now);
         var plan = new ManoeuvrePlan();
-        plan.Update(chain, Now, null);
+        plan.Update(chain, Now);
         foreach (var leg in plan.Legs)
             output.WriteLine($"{leg.Body.Name}: {leg.Start - Now:0.000} to {leg.End - Now:0.000} s");
 
@@ -269,7 +269,7 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
         var chain = ManoeuvreChain.AnchoredOn(Planet, position, velocity, Now, [new ManoeuvreNode(legs[0].End + 30 - Now, Prograde: 2f, Radial: 6f, Normal: -8f)], Now);
         var node = chain.Nodes[0];
         var plan = new ManoeuvrePlan();
-        plan.Update(chain, Now, null);
+        plan.Update(chain, Now);
         Assert.Equal(1, plan.NodeLeg(0));
         Assert.Same(Moon, plan.Legs[1].Body);
         var (at, before) = plan.NodeAt(0)!.Value;
@@ -316,7 +316,7 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
         v.Replan(chain, Now);
 
         var plan = new ManoeuvrePlan();
-        plan.Update(chain, Now, null);
+        plan.Update(chain, Now);
         Assert.Same(Moon, plan.Legs[plan.NodeLeg(0)!.Value].Body);
         var (_, before) = plan.NodeAt(0)!.Value;
         var (_, after) = plan.Legs[plan.NodeLeg(0)!.Value + 1].Orbit.StateAfter(0);
@@ -361,8 +361,8 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
         Assert.Equal(at, round.TimeOf(0), 9);
 
         var (fromMoon, fromPlanet) = (new ManoeuvrePlan(), new ManoeuvrePlan());
-        fromMoon.Update(round, Now, null);
-        fromPlanet.Update(planet, Now, null);
+        fromMoon.Update(round, Now);
+        fromPlanet.Update(planet, Now);
         Assert.Same(Moon, fromMoon.Legs[fromMoon.NodeLeg(0)!.Value].Body);
         Assert.Same(Moon, fromPlanet.Legs[fromPlanet.NodeLeg(0)!.Value].Body);
         var (a, b) = (fromMoon.NodeAt(0)!.Value, fromPlanet.NodeAt(0)!.Value);
@@ -389,20 +389,15 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
         Patched.Legs(Planet, position, velocity, Now, legs);
         var chain = ManoeuvreChain.AnchoredOn(Planet, position, velocity, Now, [new(legs[0].End + 30 - Now, Prograde: 2f, Radial: 6f, Normal: -8f), new(370, Prograde: -5f)], Now);
         var plan = new ManoeuvrePlan();
-        var left = new Vector3(1f, 2f, 3f);
         for (var i = 0; i < 3; i++)
-        {
-            plan.Update(chain, Now, null);
-            plan.Update(chain, Now, left);
-        }
+            plan.Update(chain, Now);
         Assert.Equal(Moon, plan.Legs[plan.NodeLeg(0)!.Value].Body);
 
         Assert.Equal(0, Allocated(() =>
         {
             for (var i = 0; i < 10; i++)
             {
-                plan.Update(chain, Now, null);
-                plan.Update(chain, Now, left);
+                plan.Update(chain, Now);
                 _ = plan.NodeAt(0);
                 _ = plan.NodeLeg(1);
             }

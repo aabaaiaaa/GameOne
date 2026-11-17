@@ -430,7 +430,7 @@ public sealed class SpinTests(ITestOutputHelper output)
             if (f.EngineLit)
                 return guide.Overshot || guide.Left.Length() < 0.05f ? new FlightInput(CutThrottle: true) : default;
             return guide.Seconds <= guide.BurnSeconds / 2 && lowest > 0.05f ? new FlightInput(FullThrottle: true) : default;
-        }, _ => satellite.Chain is null, maxSeconds: 60), "the node should go once flown past");
+        }, _ => satellite.Chain is null, maxSeconds: 60), "the node should go once matched and cut");
         var top = satellite.Apoapsis;
         output.WriteLine($"over {flight.WorldTime - start:0.0} s (the planet turning {float.RadiansToDegrees(Planet.SpinRate * (float)(flight.WorldTime - start)):0.0}°) " +
             $"the guide among the stars was at most {wandered:0.000}° off what was left; delta-v left down to {lowest:0.000} m/s; top planned {plannedTop:0.0} m, flown {top:0.0} m");

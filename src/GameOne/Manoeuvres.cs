@@ -19,6 +19,13 @@ internal readonly record struct ManoeuvreNode(double Gap, float Prograde = 0f, f
     /// <summary>How much speed it adds altogether, m/s.</summary>
     public float Size => MathF.Sqrt(Prograde * Prograde + Radial * Radial + Normal * Normal);
 
+    /// <summary>
+    /// How much of its burn may still be needed for the path flown to match the one it plans, m/s:
+    /// a share of its size (<see cref="Scene.NodeMatchShare"/>), held between
+    /// <see cref="Scene.NodeMatchMin"/> and <see cref="Scene.NodeMatchMax"/>.
+    /// </summary>
+    public float MatchTolerance => Math.Clamp(Scene.NodeMatchShare * Size, Scene.NodeMatchMin, Scene.NodeMatchMax);
+
     /// <summary>Its burn as a change of velocity, for something at <paramref name="position"/> in <paramref name="body"/>'s frame moving at <paramref name="velocity"/> among its stars: measured round that body.</summary>
     public Vector3 DeltaV(GroundBody body, Vector3 position, Vector3 velocity)
     {
@@ -30,10 +37,12 @@ internal readonly record struct ManoeuvreNode(double Gap, float Prograde = 0f, f
 /// <summary>
 /// How the next node's burn stands, for the pilot flying it (see <see cref="Vessel.Guide"/>): how
 /// long until its time (negative once past), the change of velocity still needed (in the world),
-/// whether the burn has gone past what was planned, and how long the rest would take at full
-/// throttle (or that the stage hasn't the fuel for it).
+/// whether the burn has gone past what was planned, how long the rest would take at full
+/// throttle (or that the stage hasn't the fuel for it), and whether the path flown matches the
+/// one it plans (what is still needed within <see cref="ManoeuvreNode.MatchTolerance"/>), so
+/// cutting the engine lets it go.
 /// </summary>
-internal readonly record struct NodeGuide(double Seconds, Vector3 Left, bool Overshot, float BurnSeconds, bool Short);
+internal readonly record struct NodeGuide(double Seconds, Vector3 Left, bool Overshot, float BurnSeconds, bool Short, bool Matched);
 
 /// <summary>The directions a node's burn is measured in, and the path a vessel's nodes plan.</summary>
 internal static class Manoeuvres
@@ -98,22 +107,20 @@ internal sealed class ManoeuvrePlan
         Add(_stretch);
     }
 
-    /// <summary>The legs <paramref name="vessel"/> would have drawn at world time <paramref name="now"/>: <paramref name="chain"/>'s (with no first burn begun), or with none, its path as it is.</summary>
+    /// <summary>The legs <paramref name="vessel"/> would have drawn at world time <paramref name="now"/>: <paramref name="chain"/>'s, or with none, its path as it is.</summary>
     public void Update(Vessel vessel, ManoeuvreChain? chain, double now)
     {
         if (chain is { Nodes.IsEmpty: false })
-            Update(chain, now, null);
+            Update(chain, now);
         else
             Update(vessel.Body, vessel.CentreOfMass, vessel.Body.AmongStars(vessel.CentreOfMass, vessel.Velocity), now);
     }
 
     /// <summary>
     /// The legs <paramref name="chain"/> plans, as at world time <paramref name="now"/>: from its
-    /// anchor to its first node, then from each burn to the next node, and on after the last.
-    /// <paramref name="firstLeft"/>, if given, is the first node's burn in place of its amounts, as
-    /// a change of velocity in the anchor's body's frame (as it matches its ground now). A node
-    /// beyond where the path comes down (or escapes, or past the legs a stretch is followed for)
-    /// isn't reached.
+    /// anchor to its first node, then from each burn to the next node, and on after the last. A
+    /// node beyond where the path comes down (or escapes, or past the legs a stretch is followed
+    /// for) isn't reached.
     /// </summary>
     /// <remarks>
     /// The whole plan is among the stars, each leg in its body's frame as it matches that body's
@@ -124,14 +131,13 @@ internal sealed class ManoeuvrePlan
     /// It depends on the chain and the time alone, never on where the vessel is now, so a node
     /// stays where it was set.
     /// </remarks>
-    public void Update(ManoeuvreChain chain, double now, Vector3? firstLeft)
+    public void Update(ManoeuvreChain chain, double now)
     {
         Chained = true;
         _legs.Clear();
         _nodeLegs.Clear();
         var nodes = chain.Nodes;
         var body = chain.Body;
-        var first = body;
         var (position, velocity) = chain.StartAt(now);
         var start = chain.Anchor.Time;
         var time = start;
@@ -146,9 +152,7 @@ internal sealed class ManoeuvrePlan
             Add(_stretch);
             _nodeLegs.Add(_legs.Count - 1);
             (body, (position, velocity)) = (last.Body, last.Orbit.StateAfter(at - last.Start));
-            velocity += i == 0 && firstLeft is { } left
-                ? Bodies.Change(first, body, now).Direction(left).ToSingle()
-                : nodes[i].DeltaV(body, position, velocity);
+            velocity += nodes[i].DeltaV(body, position, velocity);
             start = at;
         }
         Patched.Legs(body, position, velocity, now, _stretch, from: start - now);

@@ -238,6 +238,7 @@ internal sealed class Readout
             Show("Node", $"{guide.Seconds:0.0} s");
             Show("Delta-v left", $"{guide.Left.Length():0.0} m/s{(guide.Overshot ? "  past it" : "")}");
             Show("Burn", guide.Short ? "more than the fuel left" : $"{guide.BurnSeconds:0.0} s at full");
+            Show("Node matched", guide.Matched ? "yes" : "no");
         }
         Show("Nodes", $"{flight.Controlled.Chain?.Nodes.Length ?? 0}");
 

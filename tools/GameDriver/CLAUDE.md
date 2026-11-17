@@ -72,7 +72,8 @@ again as it crosses into another), `Score`, `Message` (the big title) and
 zoomed out with some in view; they are looked for a lap of the flown vessel's orbit ahead, so
 none with the rocket on the pad: fly something in orbit first, as `Add view` below lets a script);
 and with a manoeuvre node, `Node` (seconds to it, where the HUD shows minutes and
-seconds), `Delta-v left`, `Burn`, and `Nodes` (how many); while "Show timings" is on, every number
+seconds), `Delta-v left`, `Burn`, `Node matched` (`yes` while the path flown matches the planned
+one, so cutting the engine lets the node go), and `Nodes` (how many); while "Show timings" is on, every number
 of the timings panel, whole, as `Timings <part>` (`Timings frame`, `Timings Jolt`, `Timings GPU
 scene`, `Timings awake`..., `Timings under formula` (the vessels out of the physics), and the
 tiles', the contact's and the rules' pieces: `Readout.ReadTimings`), so a

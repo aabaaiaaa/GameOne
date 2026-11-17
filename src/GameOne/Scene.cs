@@ -97,6 +97,20 @@ internal static class Scene
     /// <summary>How many legs a patched path is followed for (<see cref="Patched.Legs"/>): to the moon, round it, and out again.</summary>
     public const int PatchedLegs = 3;
 
+    /// <summary>
+    /// How closely a node's burn must be flown for the path to match the one it plans: what is
+    /// still needed under this share of the node's size (<see cref="ManoeuvreNode.MatchTolerance"/>),
+    /// held between <see cref="NodeMatchMin"/> and <see cref="NodeMatchMax"/>. Matched, cutting the
+    /// engine lets the node go.
+    /// </summary>
+    public const float NodeMatchShare = 0.03f;
+
+    /// <summary>The least a node's match tolerance is (see <see cref="NodeMatchShare"/>), m/s.</summary>
+    public const float NodeMatchMin = 1f;
+
+    /// <summary>The most a node's match tolerance is (see <see cref="NodeMatchShare"/>), m/s.</summary>
+    public const float NodeMatchMax = 5f;
+
     // How the sky draws them: the moon's plains' grey (the share of the sun's light they give back,
     // a linear reflectance, not a display colour: MoonAlbedos has each kind of its ground's), and
     // how much of the sun's disc's angular radius its edge is softened over (half inside the disc's

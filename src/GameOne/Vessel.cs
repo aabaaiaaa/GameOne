@@ -63,6 +63,8 @@ internal sealed class Vessel
     private bool _wasLit;
     private List<PathLeg>? _toNode;                    // the patched path from the anchor to the next node, kept for Planned (made with its first node)
     private (double Now, ManoeuvreChain Chain, GroundBody Body, Vector3 Burn)? _planned; // Planned's last answer, and what it was asked
+    private List<PathLeg>? _afterNode;                 // the planned path on from the next node's burn, kept for Late (made once past its time)
+    private (double Now, ManoeuvreChain Chain, double At, double Until)? _afterNodeFor; // what _afterNode was worked out for, and the stretch of it looked along
     private double _at;                                // the world time its state was last brought to (AfterPhysics, a crossing)
 
     /// <summary>A new vessel, <paramref name="craft"/> in <paramref name="physics"/> (its body's, one of <paramref name="worlds"/>).</summary>
@@ -877,14 +879,22 @@ internal sealed class Vessel
     /// <summary>How the camera last looked at it (set from the flown vessel's view each step, see <see cref="FlightInput.View"/>), or none if it has not been looked at.</summary>
     public CameraView? View { get; internal set; }
 
-    /// <summary>Its pilot's planned burns, the next one first, fixed once set (see <see cref="ManoeuvreChain"/>); null with none. Each goes once its time is past and the engine is off.</summary>
+    /// <summary>
+    /// Its pilot's planned burns, the next one first, fixed once set (see <see cref="ManoeuvreChain"/>);
+    /// null with none. The next stays until the path flown matches the one it plans and the engine
+    /// is off (see <see cref="Matched"/>), however long past its time; a node never matched stays
+    /// until it is deleted.
+    /// </summary>
     public ManoeuvreChain? Chain { get; private set; }
 
     /// <summary>
     /// The next node's burn still needed, as a change of velocity in the world (the ground's frame,
-    /// now): until the burn begins (the engine lighting), the node's amounts measured where its chain
-    /// has it, from how its planned path moves there; from then on, fixed among the stars as it was
-    /// when it began, less what the engine has given since. Null without a node.
+    /// now). Before its time: until the burn begins (the engine lighting), the node's amounts
+    /// measured where its chain has it, from how its planned path moves there; from then on, fixed
+    /// among the stars as it was when it began, less what the engine has given since. From its time
+    /// on, how its planned path moves at its point nearest the vessel, less how the vessel moves
+    /// (see <see cref="Late"/>), so a burn begun late, or still going, is measured against where the
+    /// plan goes. Null without a node.
     /// </summary>
     /// <remarks>
     /// A burn changes the orbit, which is among the stars, so that is where it is fixed: over the
@@ -893,17 +903,31 @@ internal sealed class Vessel
     /// time it is asked for, never turned frame by frame, so nothing turns it twice.
     /// </remarks>
     public Vector3? BurnLeft(double now) =>
-        Chain is not { } chain ? null : _burnAim is { } aim ? Body.TurnedDirection(aim - _burned, -(now - _burnStart)) : Planned(chain, now);
+        Chain is not { } chain ? null
+        : now >= chain.TimeOf(0) ? Late(chain, now)
+        : _burnAim is { } aim ? Body.TurnedDirection(aim - _burned, -(now - _burnStart))
+        : Planned(chain, now);
 
     /// <summary>Whether the next node's burn has begun (so it is fixed among the stars: see <see cref="BurnLeft"/>).</summary>
     public bool BurnBegun => _burnAim is not null;
+
+    /// <summary>
+    /// Whether the path flown matches the one <paramref name="chain"/>'s next node plans, with
+    /// <paramref name="left"/> still needed (<see cref="BurnLeft"/>) at world time
+    /// <paramref name="now"/>: under its <see cref="ManoeuvreNode.MatchTolerance"/>, once its burn
+    /// has begun or its time has come. Before either, what is left is only the node's amounts, which
+    /// a node with hardly any burn would match without being flown at all.
+    /// </summary>
+    private bool Matched(ManoeuvreChain chain, Vector3 left, double now) =>
+        (_burnAim is not null || now >= chain.TimeOf(0)) && left.Length() < chain.Nodes[0].MatchTolerance;
 
     /// <summary>How the next node's burn stands, for the pilot (see <see cref="NodeGuide"/>); null without a node.</summary>
     public NodeGuide? Guide(double now)
     {
         if (BurnLeft(now) is not { } left)
             return null;
-        var overshot = _burnAim is { } aim && Vector3.Dot(aim - _burned, aim) < 0f; // both as at ignition
+        // Past it: what is left points against the burn as it began (both turned to now).
+        var overshot = _burnAim is { } aim && Vector3.Dot(left, Body.TurnedDirection(aim, -(now - _burnStart))) < 0f;
         // At full throttle, from the rocket equation: the fuel it takes, at the rate it burns.
         var stage = CurrentStage;
         var needed = 0f;
@@ -913,7 +937,7 @@ internal sealed class Vessel
             needed = Mass * (1f - MathF.Exp(-left.Length() / stage.ExhaustVelocity));
             seconds = needed / stage.FuelFlow;
         }
-        return new NodeGuide(Chain!.TimeOf(0) - now, left, overshot, seconds, needed > _fuel[Stage] || stage.FuelFlow <= 0f);
+        return new NodeGuide(Chain!.TimeOf(0) - now, left, overshot, seconds, needed > _fuel[Stage] || stage.FuelFlow <= 0f, Matched(Chain!, left, now));
     }
 
     /// <summary>
@@ -950,21 +974,102 @@ internal sealed class Vessel
 
     private Vector3 PlannedAfresh(ManoeuvreChain chain, double now)
     {
+        var (body, position, velocity, _) = AtNode(chain, now);
+        var burn = chain.Nodes[0].DeltaV(body, position, velocity);
+        return body == Body ? burn : Bodies.Change(body, Body, now).Direction((Vector3Double)burn).ToSingle();
+    }
+
+    /// <summary>
+    /// Where <paramref name="chain"/>'s first node is on its anchored path (patched at the spheres
+    /// of influence) and how that path moves there among the stars, before its burn: round the body
+    /// it is at by then, in that body's frame as it matches its ground at world time
+    /// <paramref name="now"/>; and its time (no earlier than its anchor's).
+    /// </summary>
+    private (GroundBody Body, Vector3 Position, Vector3 Velocity, double At) AtNode(ManoeuvreChain chain, double now)
+    {
         var legs = _toNode ??= new List<PathLeg>(Scene.PatchedLegs);
         var (start, at) = (chain.Anchor.Time, Math.Max(chain.TimeOf(0), chain.Anchor.Time));
         var (anchored, moving) = chain.StartAt(now);
         Patched.Legs(chain.Body, anchored, moving, now, legs, horizon: at, from: start - now);
         var last = legs[^1];
         var (position, velocity) = last.Orbit.StateAfter(at - last.Start);
-        var burn = chain.Nodes[0].DeltaV(last.Body, position, velocity);
-        return last.Body == Body ? burn : Bodies.Change(last.Body, Body, now).Direction((Vector3Double)burn).ToSingle();
+        return (last.Body, position, velocity, at);
+    }
+
+    /// <summary>
+    /// The next node's burn still needed from its time on: how the path it plans (from its burn,
+    /// patched at the spheres of influence) moves at its point nearest where the vessel is, less how
+    /// the vessel moves, both among the stars of the body that stretch of path is round, changed
+    /// into the vessel's own body's frame. A vessel that hasn't burned yet is still short of the
+    /// whole burn; one that has flown it, by the guide or late, is left with only how far off it is.
+    /// </summary>
+    /// <remarks>
+    /// The nearest point is looked for from the node's time on, no further than twice as far past
+    /// it as now (and a second): one late by some time is near where the plan was that long after
+    /// its burn. On a closed orbit, no further than a lap, which has every point of it. It is found by Newton's steps along each stretch, starting from where the plan is
+    /// now; the path is smooth and the vessel near it, so a few are enough. The path is worked out
+    /// once a step (it depends on the chain and the time alone); the nearest point every time it is
+    /// asked, as the vessel moves between.
+    /// </remarks>
+    private Vector3 Late(ManoeuvreChain chain, double now)
+    {
+        var legs = _afterNode ??= new List<PathLeg>(Scene.PatchedLegs);
+        if (_afterNodeFor is not { } kept || kept.Now != now || !ReferenceEquals(kept.Chain, chain))
+        {
+            var (body, position, velocity, at) = AtNode(chain, now);
+            velocity += chain.Nodes[0].DeltaV(body, position, velocity);
+            var until = now + (now - at) + 1.0;
+            // A closed orbit comes round to every point of it within a lap.
+            if (new Orbit(body, position, velocity, from: at - now) is { Closed: true } orbit)
+                until = Math.Min(until, at + orbit.Period);
+            Patched.Legs(body, position, velocity, now, legs, horizon: until, from: at - now);
+            kept = (now, chain, at, until);
+            _afterNodeFor = kept;
+        }
+
+        var (nearest, left) = (double.PositiveInfinity, Vector3.Zero);
+        for (var i = 0; i < legs.Count; i++)
+        {
+            var leg = legs[i];
+            var (from, to) = (Math.Max(leg.Start, kept.At), Math.Min(leg.End, kept.Until));
+            if (to < from)
+                continue;
+            // The vessel in the frame of the body this stretch is round.
+            var (place, moving) = (CentreOfMass, Velocity);
+            if (leg.Body != Body)
+            {
+                var change = Bodies.Change(Body, leg.Body, now);
+                (place, moving) = (change.Point((Vector3Double)CentreOfMass).ToSingle(), change.Velocity((Vector3Double)CentreOfMass, (Vector3Double)Velocity).ToSingle());
+            }
+            var stars = leg.Body.AmongStars(place, moving);
+            var t = Math.Clamp(now, from, to);
+            for (var step = 0; step < 6; step++)
+            {
+                var (p, v) = leg.Orbit.StateAfter(t - leg.Start);
+                var speed = v.LengthSquared();
+                if (speed < 1e-6f)
+                    break;
+                var next = Math.Clamp(t + Vector3.Dot(place - p, v) / speed, from, to);
+                if (Math.Abs(next - t) < 1e-6)
+                    break;
+                t = next;
+            }
+            var (on, planned) = leg.Orbit.StateAfter(t - leg.Start);
+            var distance = Vector3.Distance(on, place);
+            if (distance >= nearest)
+                continue;
+            nearest = distance;
+            left = leg.Body == Body ? planned - stars : Bodies.Change(leg.Body, Body, now).Direction((Vector3Double)(planned - stars)).ToSingle();
+        }
+        return left;
     }
 
     /// <summary>
     /// The next node, as the engine runs: lighting it begins the burn (fixing it among the stars),
     /// and what it gives is counted against it (turned to how the ground was when it began); once
-    /// the node's time is past with the engine off, it goes, and the next is anchored afresh on the
-    /// path it is on now, at its own time (<see cref="ManoeuvreChain.Delete"/>).
+    /// the path flown matches the one it plans with the engine off (<see cref="Matched"/>), it goes,
+    /// and the next is anchored afresh on the path it is on now, at its own time
+    /// (<see cref="ManoeuvreChain.Delete"/>), keeping its amounts.
     /// </summary>
     private void FollowNodes(float dt, double now)
     {
@@ -975,7 +1080,7 @@ internal sealed class Vessel
                 (_burnAim, _burnStart) = (Planned(chain, now), now);
             if (lit && _burnAim is not null)
                 _burned += Body.TurnedDirection(Up, now - _burnStart) * (Throttle * MaxAcceleration * dt);
-            if (!lit && now >= chain.TimeOf(0))
+            if (!lit && (_burnAim is not null || now >= chain.TimeOf(0)) && BurnLeft(now) is { } left && Matched(chain, left, now))
             {
                 var rest = chain.Delete(0, this, now);
                 Chain = rest.Nodes.IsEmpty ? null : rest;
