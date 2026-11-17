@@ -24,7 +24,7 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
         new() { Time = time, Vessels = vessels, NextVesselId = vessels.Max(v => v.Id) + 1, Flights = 1 };
 
     /// <summary>A free-play flight in a world (at <paramref name="time"/>) of <paramref name="vessels"/>, the first flown (the frame after the switch's link-up).</summary>
-    private static (Simulation Sim, Vessel Flown) Flying(double time, params VesselState[] vessels)
+    internal static (Simulation Sim, Vessel Flown) Flying(double time, params VesselState[] vessels)
     {
         var sim = new Simulation(Mission.FreePlay, world: World(time, vessels));
         var flown = sim.Flight.WorldVessels.Single(v => v.Id == vessels[0].Id);
@@ -44,7 +44,7 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
     }
 
     /// <summary>The path built for the flown vessel, frame after frame until its window is worked out.</summary>
-    private static (Paths Paths, ManoeuvrePlan Plan) Built(Flight flight)
+    internal static (Paths Paths, ManoeuvrePlan Plan) Built(Flight flight)
     {
         var plan = PlanFor(flight);
         var paths = new Paths();
@@ -80,7 +80,7 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
     /// moving at <paramref name="share"/> of the circle's speed (over 1, the bottom of an orbit
     /// reaching out towards the moon's height): its centre of mass and velocity among the stars.
     /// </summary>
-    private static (Vector3 Position, Vector3 Velocity) InTheMoonsPlane(double now, double angle, double share)
+    internal static (Vector3 Position, Vector3 Velocity) InTheMoonsPlane(double now, double angle, double share)
     {
         var low = Planet.SeaRadius + 4000.0;
         var normal = MoonNormal(now);
@@ -109,7 +109,7 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
     }
 
     /// <summary>A vessel (the satellite launcher's upper stage) with its centre of mass at <paramref name="centre"/>, moving <paramref name="stars"/> among the planet's stars.</summary>
-    private static VesselState OnPlanet(int id, (Vector3 Position, Vector3 Velocity) state) =>
+    internal static VesselState OnPlanet(int id, (Vector3 Position, Vector3 Velocity) state) =>
         InOrbit.At(InOrbit.Round(Planet, id, 1000f), state.Position, state.Velocity);
 
     /// <summary>

@@ -88,6 +88,8 @@ internal sealed class Paths
     // is patched into no more than Scene.PatchedLegs), so legs with marks of their own don't build
     // each other's again every frame.
     private readonly string[] _apLabels = [.. Enumerable.Repeat("", Scene.PatchedLegs)], _peLabels = [.. Enumerable.Repeat("", Scene.PatchedLegs)];
+    private readonly string[] _anLabels = [.. Enumerable.Repeat("", Scene.PatchedLegs)], _dnLabels = [.. Enumerable.Repeat("", Scene.PatchedLegs)];
+    private readonly double[] _anLabelsFor = [.. Enumerable.Repeat(double.NaN, Scene.PatchedLegs)], _dnLabelsFor = [.. Enumerable.Repeat(double.NaN, Scene.PatchedLegs)];
     private readonly double[] _apLabelsFor = [.. Enumerable.Repeat(double.NaN, Scene.PatchedLegs)], _peLabelsFor = [.. Enumerable.Repeat(double.NaN, Scene.PatchedLegs)];
     private string _closestLabel = "";
     private double _closestLabelFor = double.NaN;
@@ -329,6 +331,8 @@ internal sealed class Paths
         var within = Scene.TransferWithin;
         GroundBody? targetBody = null; // a body targeted, or the body a vessel or place targeted is at
         var targetOwn = Vector3.Zero; // a target staying put, in its own body's frame
+        Vector3? planeNormal = null; // the plane of a flying target's orbit (its normal, among the stars), round planeBody
+        GroundBody? planeBody = null;
         _theirLine.Clear();
         _theirLegs.Clear();
         _targetIsBody = flight.Target is { Kind: TargetKind.Body };
@@ -342,6 +346,7 @@ internal sealed class Paths
                 if (found.Body.Parent is { } parent)
                 {
                     var round = Bodies.OrbitOf(found.Body, now);
+                    (planeNormal, planeBody) = (round.Normal, parent);
                     if (parent == view)
                         (theirs, within) = (round, found.Body.SphereRadius);
                     Fill(_theirLine, new PathLeg(parent, round, now, double.PositiveInfinity), view, now, frame, last: true);
@@ -352,6 +357,7 @@ internal sealed class Paths
                 Patched.Legs(found.Body, own, found.Body.AmongStars(own, ownVelocity), now, _theirLegs);
                 for (var i = 0; i < _theirLegs.Count; i++)
                     Fill(_theirLine, _theirLegs[i], view, now, frame, last: i == _theirLegs.Count - 1);
+                (planeNormal, planeBody) = (_theirLegs[0].Orbit.Normal, found.Body);
                 if (found.Body == view)
                     theirs = _theirLegs[0].Orbit;
             }
@@ -488,6 +494,18 @@ internal sealed class Paths
             if (orbit.NextPeriapsis is { } periapsis && orbit.TimeTo(periapsis) <= span)
                 _marks.Add(new Mark(place.Point(frame, orbit.At(periapsis), startsIn + orbit.TimeTo(periapsis)), markColor,
                     DistanceLabel(ref _peLabels[slot], ref _peLabelsFor[slot], "Pe ", MarkHeight(orbit, periapsis))));
+            // Where it crosses a flying target's plane, only while the target is round the same body
+            // as this leg (information: the angle between the planes, never when to burn).
+            if (planeNormal is { } targetNormal && planeBody == leg.Body && PlaneCrossings.Of(orbit, targetNormal) is var (ascending, descending, inclination))
+            {
+                var degrees = inclination * 180f / MathF.PI;
+                if (orbit.TimeTo(ascending) <= span)
+                    _marks.Add(new Mark(place.Point(frame, orbit.At(ascending), startsIn + orbit.TimeTo(ascending)), TargetColor,
+                        AngleLabel(ref _anLabels[slot], ref _anLabelsFor[slot], "AN ", degrees)));
+                if (orbit.TimeTo(descending) <= span)
+                    _marks.Add(new Mark(place.Point(frame, orbit.At(descending), startsIn + orbit.TimeTo(descending)), TargetColor,
+                        AngleLabel(ref _dnLabels[slot], ref _dnLabelsFor[slot], "DN ", degrees)));
+            }
             var body = leg.Body;
             if (body.HasAir && body.Altitude(orbit.PositionAfter(0)) > Scene.AtmosphereHeight
                 && orbit.Descending(body.SeaRadius + Scene.AtmosphereHeight) is { } air && orbit.TimeTo(air) <= span)
@@ -728,6 +746,14 @@ internal sealed class Paths
     /// Ap's or Pe's height, the closest approach): built again only when what it shows changes
     /// (<paramref name="shownFor"/>, see <see cref="ShownAs"/>), not as a new string every frame.
     /// </summary>
+    private static string AngleLabel(ref string label, ref double shownFor, string prefix, float degrees)
+    {
+        var key = Math.Round(degrees, 1);
+        if (key != shownFor)
+            (label, shownFor) = ($"{prefix}{key:0.0}°", key);
+        return label;
+    }
+
     private static string DistanceLabel(ref string label, ref double shownFor, string prefix, float metres)
     {
         var key = ShownAs(metres);
