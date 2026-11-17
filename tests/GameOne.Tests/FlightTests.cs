@@ -215,6 +215,7 @@ public sealed class FlightTests(ITestOutputHelper output)
         using var _ = sim;
         var view = new CameraView(true, 1f, 0.3f, 60f, 2f, 0.9f, 90_000f, CameraCentre.Own);
         sim.Flight.RunFrame(Simulation.FrameSeconds, new FlightInput(View: view, SwitchTo: second));
+        sim.Flight.RunFrame(Simulation.FrameSeconds, default); // flown behind its link-up
         Assert.Same(second, sim.Flight.Controlled);
         Assert.Equal(view, first.View);
         Assert.Null(second.View);
@@ -227,6 +228,7 @@ public sealed class FlightTests(ITestOutputHelper output)
         using var _ = sim;
         var view = new CameraView(false, 1f, 0.3f, 60f, 2f, 0.9f, 90_000f, CameraCentre.Own);
         sim.Flight.Advance(0.1f, new FlightInput(View: view, SwitchTo: second)); // several steps
+        sim.Flight.RunFrame(Simulation.FrameSeconds, default); // flown behind its link-up
         Assert.Same(second, sim.Flight.Controlled);
         Assert.Equal(view, first.View);
         Assert.Null(second.View);

@@ -123,7 +123,12 @@ internal sealed class Views
             // own, so the vessel leaving it starts with its own too.
             var at = _small.FindIndex(view => view.Vessel == flown);
             var left = new SmallView(previous) { ShadowPlace = MainShadowPlace };
-            left.Camera.LookLike(mainCamera);
+            // The main camera has been given the vessel now flown's view by then, so the one
+            // leaving it looks as it was left (its own view, kept each frame), not like that.
+            if (previous.View is { } kept)
+                left.Camera.Place(kept.Yaw, kept.Pitch, kept.Distance);
+            else
+                left.Camera.LookLike(mainCamera);
             MainShadowPlace = at >= 0 ? _small[at].ShadowPlace : -1;
             if (at >= 0)
                 _small[at] = left;

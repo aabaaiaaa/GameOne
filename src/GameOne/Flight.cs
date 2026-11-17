@@ -369,7 +369,11 @@ internal sealed class Flight : IDisposable
             _rewind = new RewindPoint(Capture(), Resumed: true, vessel.Id, RunOf(vessel)?.Mission ?? vessel.Mission, vessel.Site);
         _shownEnded = null; // a choice, as a switch is: a run ended shows no more
         if (vessel == Controlled)
+        {
+            // Already flown: in its physics now, and its link-up shown all the same, as for any switch.
             BringIn(vessel);
+            LinkUp.Begin(vessel, _realTime, _frames);
+        }
         else
             SwitchTo(vessel);
         RunOf(vessel)?.LastFlownId = vessel.Id; // only a run in progress: one ended is no one's
@@ -620,6 +624,12 @@ internal sealed class Flight : IDisposable
 
     /// <summary>Raised when the pilot switches to flying another vessel.</summary>
     public event Action? Switched;
+
+    /// <summary>
+    /// Raised with the vessel now flown once it has been flown (after the link-up of every switch,
+    /// carry-on and rewind): its view (<see cref="Vessel.View"/>) is to be brought back to the camera.
+    /// </summary>
+    public event Action<Vessel>? ViewTaken;
 
     /// <summary>Raised when a vessel is carried on (<see cref="CarryOn"/>, a rewind to one too), with that vessel: it may be flown only after its link-up.</summary>
     public event Action<Vessel>? CarriedOn;
@@ -1522,9 +1532,10 @@ internal sealed class Flight : IDisposable
         if (LinkUp.Due(_frames))
         {
             var vessel = LinkUp.Vessel!;
-            if (vessel != Controlled && CanFly(vessel) && _world.Contains(vessel))
+            if (CanFly(vessel) && _world.Contains(vessel))
             {
-                _worlds.Need(vessel.Body);
+                if (_worlds.At(vessel.Body) is null)
+                    _worlds.Need(vessel.Body);
                 Fly(vessel);
                 LinkUp.Ready(_realTime);
             }
@@ -1844,22 +1855,17 @@ internal sealed class Flight : IDisposable
     /// <summary>
     /// Hands the controls to <paramref name="vessel"/>, if it is another one in the world that can
     /// be flown, back in the physics first if it was out of it (so it is flown there from the first
-    /// frame). At a body whose physics isn't made, the link-up is shown first, and the physics made
-    /// and the vessel flown in the next frame, behind it (<see cref="LinkUp"/>): so making a body's
-    /// physics never stalls the frame the switch was asked in. True if it did, or will.
+    /// frame). The link-up is shown first, and the vessel flown in the next frame, behind it
+    /// (<see cref="LinkUp"/>), its body's physics made then if it isn't: so making it never stalls
+    /// the frame the switch was asked in. True if it will be.
     /// </summary>
     private bool SwitchTo(Vessel vessel)
     {
         if (vessel == Controlled || !CanFly(vessel) || !_world.Contains(vessel))
             return false;
-        if (_worlds.At(vessel.Body) is null)
-        {
-            LinkUp.Begin(vessel, _realTime, _frames);
-            return true;
-        }
-        if (LinkUp.On)
-            LinkUp.Cancel(); // another switched to meanwhile, at a body with its physics made: none over it
-        Fly(vessel);
+        if (_worlds.At(vessel.Body) is not null)
+            BringIn(vessel); // out of the formula now, so the frame behind the link-up has it as it was
+        LinkUp.Begin(vessel, _realTime, _frames);
         return true;
     }
 
@@ -1873,6 +1879,7 @@ internal sealed class Flight : IDisposable
         if (RunOf(vessel) is { } run)
             run.LastFlownId = vessel.Id;
         Switched?.Invoke();
+        ViewTaken?.Invoke(vessel);
         if (vessel.Body != from)
             Rebase(Bodies.Change(from, vessel.Body, WorldTime));
     }
@@ -2173,12 +2180,17 @@ internal sealed class Flight : IDisposable
         var waiting = false;
         foreach (var link in _viewLinks)
             waiting |= link.Waiting;
-        if (watched is null || !waiting)
+        // The vessel a switch waits on, its physics made, was brought in by the switch and is kept
+        // in it (watched) until it is flown, so it isn't handed back to the formula meanwhile.
+        var pending = LinkUp is { Waiting: true, Vessel: { } to } && _worlds.At(to.Body) is not null ? to : null;
+        if (!waiting && pending is null)
             return watched;
         _witnessed.Clear();
-        for (var i = 0; i < watched.Count; i++)
+        for (var i = 0; watched is not null && i < watched.Count; i++)
             if (ViewLink(watched[i]) is not { Waiting: true })
                 _witnessed.Add(watched[i]);
+        if (pending is not null && !_witnessed.Contains(pending))
+            _witnessed.Add(pending);
         return _witnessed;
     }
 

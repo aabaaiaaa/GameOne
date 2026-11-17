@@ -344,8 +344,9 @@ dotnet run --project src/GameOne
   pair or touch**: each vessel crosses by itself, the moment its own place says so, so two side by
   side at the edge can't touch until both have crossed. The flown vessel's frame changing
   (its crossing, or a switch to one at another body) raises `Flight.ViewRebased` with the change.
-  Switching to a vessel at a body whose physics isn't made shows the communications link-up
-  first (`LinkUp`, drawn by `Hud`: the picture breaking into static, clearing as it connects,
+  Every switch, carry-on and rewind shows the communications link-up first, and the view comes
+  back as that vessel left it (`Flight.ViewTaken`, raised as it is flown: `GameView` gives the
+  camera `Vessel.View`, or `GameView.DefaultView` for one never flown; `LinkUp`, drawn by `Hud`: the picture breaking into static, clearing as it connects,
   `Scene.LinkUpSeconds` (1 s) of real time in all, the same however soon the physics is made,
   which is the frame after it is first drawn, never the switch's own, and longer only if the
   physics takes longer), flavour only, telling the player nothing to

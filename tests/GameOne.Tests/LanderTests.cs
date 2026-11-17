@@ -139,7 +139,7 @@ public sealed class LanderTests(ITestOutputHelper output)
     {
         foreach (var (speed, safe) in (ReadOnlySpan<(float, bool)>)[(2f, true), (4f, false)])
         {
-            using var sim = Dropped(speed, 0.05f, legsOut: false);
+            using var sim = Dropped(speed, 0.05f + speed * 0.05f, legsOut: false); // clear of the ground for the frame its switch is made in
             var lander = sim.Flight.Controlled;
             sim.Run(Nobody, _ => lander.State != FlightState.Flying, maxSeconds: 20);
             output.WriteLine($"at {speed} m/s: {lander.State} {lander.CrashReason}, touchdown {lander.TouchdownSpeed:0.00} m/s");

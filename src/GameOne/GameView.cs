@@ -97,6 +97,10 @@ internal sealed class GameView : IDisposable
         Hud.SetLogo(_renderer.LogoTexture, _renderer.LogoTextureSize);
     }
 
+    /// <summary>How a vessel never flown is looked at: the chase view at its starting distance and pitch, centred on itself.</summary>
+    internal static CameraView DefaultView { get; } = new(false, 0f, float.DegreesToRadians(Scene.CameraPitchDegrees), Scene.CameraDistance,
+        0f, float.DegreesToRadians(Scene.ZoomOutPitchDegrees), Scene.ZoomOutMinDistance, CameraCentre.Own);
+
     /// <summary>Starts showing <paramref name="flight"/>, resetting the camera and effects whenever it starts again.</summary>
     public void Follow(Flight flight)
     {
@@ -109,7 +113,7 @@ internal sealed class GameView : IDisposable
             _trail.Clear();
         };
         Views.Follow(flight); // the small views reset with the flight, and as something is carried on
-        flight.Switched += Camera.Snap; // straight to the vessel now being flown, which may be far off
+        flight.ViewTaken += vessel => Camera.Apply(vessel.View ?? DefaultView); // straight to the vessel now being flown (which may be far off), looked at as it was left
         flight.ViewRebased += Hud.Rebase; // what the HUD keeps from frame to frame in the flown vessel's frame (the paths' window), dropped
     }
 

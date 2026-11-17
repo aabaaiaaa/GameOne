@@ -566,6 +566,7 @@ public sealed class CrossingTests(ITestOutputHelper output)
     public void Switching_to_a_body_with_no_physics_shows_the_link_being_made()
     {
         using var sim = new Simulation(Mission.FreePlay, world: World(OnTheMoon.Lander(0, OnTheMoon.LandingSpot)));
+        sim.ShowLinkUp = true;
         var lander = Get(sim, 0);
         var pad = sim.Flight.Controlled;
         var link = sim.Flight.LinkUp;
@@ -605,10 +606,12 @@ public sealed class CrossingTests(ITestOutputHelper output)
         Assert.Same(lander, sim.Flight.Controlled);
         Assert.Same(sim.Flight.PhysicsAt(Moon), lander.Physics);
 
-        // To a body whose physics is made: none.
+        // To a body whose physics is made: a link-up all the same, over as soon as its length has gone.
         sim.Step(new FlightInput(SwitchTo: pad));
+        Assert.True(link.On);
+        Assert.Equal("connecting", Reading());
+        sim.Run(Nobody, _ => !link.On, maxSeconds: 3);
         Assert.Same(pad, sim.Flight.Controlled);
-        Assert.False(link.On);
         Assert.Null(Reading());
     }
 
@@ -724,6 +727,7 @@ public sealed class CrossingTests(ITestOutputHelper output)
         // rocket into the strip first, and the newest, the lander's, is dropped.
         var satellites = Enumerable.Range(1, 5).Select(id => UnwatchedTests.Satellite(id, 10000f, 0f, 40f * id)).ToArray();
         using var sim = new Simulation(Mission.FreePlay, world: World([OnTheMoon.Lander(0, OnTheMoon.LandingSpot), .. satellites]));
+        sim.ShowLinkUp = true;
         var lander = Get(sim, 0);
         var views = new Views();
         var camera = new ChaseCamera(null);
@@ -731,11 +735,12 @@ public sealed class CrossingTests(ITestOutputHelper output)
         views.Update(Simulation.FrameSeconds, sim.Flight, camera);
         for (var id = 1; id <= 4; id++)
             views.Open(Get(sim, id), sim.Flight);
+        sim.Step(new FlightInput(SwitchTo: Get(sim, 5))); // its link-up begun: it is flown (and the strip changes with it) the frame after
         views.Open(lander, sim.Flight);
         Assert.True(views.Full);
         Assert.True(sim.Flight.ViewLink(lander) is { Waiting: true });
 
-        sim.Step(new FlightInput(SwitchTo: Get(sim, 5)));
+        sim.Step(default);
         views.Update(Simulation.FrameSeconds, sim.Flight, camera);
         Assert.DoesNotContain(views.Small, view => view.Vessel == lander);
         Assert.Null(sim.Flight.ViewLink(lander));
@@ -873,6 +878,7 @@ public sealed class CrossingTests(ITestOutputHelper output)
         // step), so the frames of the link-up allocate no more than those without it. The frame
         // it is due in makes the moon's physics (behind the link-up), and is left out.
         using var linked = new Simulation(Mission.FreePlay, world: World(OnTheMoon.Lander(0, OnTheMoon.LandingSpot)));
+        linked.ShowLinkUp = true;
         var lander = Get(linked, 0);
         var pad = linked.Flight.Controlled;
         long Frame1(FlightInput input)
@@ -904,16 +910,22 @@ public sealed class CrossingTests(ITestOutputHelper output)
     public void Any_switch_or_new_flight_ends_the_link_up()
     {
         using var sim = new Simulation(Mission.FreePlay, world: World(OnTheMoon.Lander(0, OnTheMoon.LandingSpot)));
+        sim.ShowLinkUp = true;
         var lander = Get(sim, 0);
         var pad = sim.Flight.Controlled;
         var link = sim.Flight.LinkUp;
 
-        // Switched back to the pad (its physics made) while the link to the lander clears: none at once.
+        // Switched back to the pad (its physics made) while the link to the lander clears: its own
+        // link-up replaces that one (every switch has one), and the pad is flown the frame after.
         sim.Step(new FlightInput(SwitchTo: lander));
         sim.Run(Nobody, _ => link.On && !link.Connecting, maxSeconds: 2);
         Assert.Equal("connected", link.Reading);
         sim.Step(new FlightInput(SwitchTo: pad));
+        Assert.True(link.Waiting);
+        Assert.Same(pad, link.Vessel);
+        sim.Step(default);
         Assert.Same(pad, sim.Flight.Controlled);
+        sim.Run(Nobody, _ => !link.On, maxSeconds: 3);
         Assert.False(link.On);
 
         // A new flight started while it is still waiting (the lander flown in that frame, then the
@@ -953,5 +965,26 @@ public sealed class CrossingTests(ITestOutputHelper output)
         Assert.Same(Moon, second.Body);
         Assert.StartsWith("Hit another vessel", first.CrashReason);
         Assert.StartsWith("Hit another vessel", second.CrashReason);
+    }
+
+    [Fact]
+    public void Every_switch_shows_the_link_up_even_where_the_physics_is_made()
+    {
+        using var sim = new Simulation(Mission.FreePlay);
+        sim.ShowLinkUp = true;
+        sim.Step(new FlightInput(Launch: true, FullThrottle: true));
+        sim.Run((_, _) => new FlightInput(FullThrottle: true), f => f.Ground > 200f, maxSeconds: 60);
+        sim.Step(new FlightInput(Stage: true));
+        var first = sim.Flight.Controlled;
+        var second = sim.Flight.WorldVessels.First(v => v != first && v.State != FlightState.Crashed);
+        Assert.NotNull(sim.Flight.PhysicsAt(first.Body));
+
+        sim.Step(new FlightInput(SwitchVessel: true));
+        Assert.True(sim.Flight.LinkUp.On);
+        var frames = 0;
+        while (sim.Flight.LinkUp.On && frames++ < 600)
+            sim.Step(default);
+        Assert.NotSame(first, sim.Flight.Controlled);
+        Assert.False(sim.Flight.LinkUp.On);
     }
 }

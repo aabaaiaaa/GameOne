@@ -333,4 +333,117 @@ public sealed class ViewsTests
         // No views: the buttons at the bottom, or below the panel.
         Assert.Equal(display.Y - margin, Hud.StripPlace(display, 0, available, 300f).ButtonsBottom, 3);
     }
+
+    private static readonly CameraView Seen = new(true, 0.5f, 0.3f, 300f, 1f, 0.9f, 90_000f, CameraCentre.Own);
+
+    /// <summary>A headless camera that takes each vessel's view as the game's does when it is flown.</summary>
+    private static ChaseCamera Taking(Flight flight)
+    {
+        var camera = new ChaseCamera(null);
+        flight.ViewTaken += vessel => camera.Apply(vessel.View ?? GameView.DefaultView);
+        return camera;
+    }
+
+    private static void ThroughLinkUp(Simulation sim, Views views, ChaseCamera camera)
+    {
+        Assert.True(sim.Flight.LinkUp.On, "every switch shows the link-up");
+        for (var frames = 0; sim.Flight.LinkUp.On && frames++ < 600;)
+        {
+            sim.Step(default);
+            views.Update(Dt, sim.Flight, camera);
+        }
+        Assert.False(sim.Flight.LinkUp.On);
+    }
+
+    [Fact]
+    public void Tab_brings_back_the_new_vessels_own_view()
+    {
+        var (sim, views, _) = ThreeVessels();
+        using (sim)
+        {
+            var flight = sim.Flight;
+            sim.ShowLinkUp = true;
+            var camera = Taking(flight);
+            var first = flight.Controlled;
+            foreach (var other in flight.Vessels.Where(v => v != first))
+                other.View = Seen;
+            var before = camera.View;
+
+            sim.Step(new FlightInput(View: before, SwitchVessel: true));
+            ThroughLinkUp(sim, views, camera);
+
+            Assert.NotSame(first, flight.Controlled);
+            Assert.Equal(Seen, camera.View);
+            Assert.Equal(before, first.View); // kept as the camera had it
+        }
+    }
+
+    [Fact]
+    public void A_swap_by_a_small_view_brings_back_its_vessels_view()
+    {
+        var (sim, views, mainCamera) = ThreeVessels();
+        using (sim)
+        {
+            var flight = sim.Flight;
+            sim.ShowLinkUp = true;
+            var camera = Taking(flight);
+            var first = flight.Controlled;
+            var booster = views.Small[0].Vessel;
+            booster.View = Seen;
+            var before = camera.View;
+
+            views.Swap(views.Small[0]);
+            sim.Step(new FlightInput(View: before, SwitchTo: views.TakeSwap()));
+            ThroughLinkUp(sim, views, camera);
+
+            Assert.Same(booster, flight.Controlled);
+            Assert.Equal(Seen, camera.View);
+            Assert.Equal(before, first.View);
+            Assert.Same(first, views.Small[0].Vessel);
+        }
+    }
+
+    [Fact]
+    public void A_carry_on_and_a_rewind_bring_back_the_saved_view_after_a_link_up()
+    {
+        var (sim, views, _) = ThreeVessels();
+        sim.Step(new FlightInput(View: Seen));
+        var saved = sim.Reloaded(); // carried on after a restore: the link-up, then the view
+        using (saved)
+        {
+            var flight = saved.Flight;
+            sim.ShowLinkUp = true;
+            var camera = Taking(flight);
+            var views2 = new Views();
+            views2.Follow(flight);
+            Assert.Equal(Seen, flight.Controlled.View);
+            ThroughLinkUp(saved, views2, camera);
+            Assert.Equal(Seen, camera.View);
+
+            // A different view given, then the rewind to the carry-on: the saved one again, after a link-up.
+            saved.Step(new FlightInput(View: Seen with { Distance = 120f }));
+            Assert.NotEqual(Seen, flight.Controlled.View);
+            saved.Step(new FlightInput(Rewind: true));
+            ThroughLinkUp(saved, views2, camera);
+            Assert.Equal(Seen, camera.View);
+        }
+    }
+
+    [Fact]
+    public void A_vessel_never_flown_gets_the_default_view()
+    {
+        var (sim, views, _) = ThreeVessels();
+        using (sim)
+        {
+            sim.ShowLinkUp = true;
+            var camera = Taking(sim.Flight);
+            camera.Apply(Seen);
+            Assert.All(sim.Flight.Vessels.Where(v => v != sim.Flight.Controlled), v => Assert.Null(v.View));
+
+            sim.Step(new FlightInput(SwitchVessel: true));
+            ThroughLinkUp(sim, views, camera);
+
+            Assert.Equal(GameView.DefaultView, camera.View);
+        }
+    }
 }

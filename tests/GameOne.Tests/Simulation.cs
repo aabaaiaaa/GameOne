@@ -75,9 +75,7 @@ internal sealed class Simulation : IDisposable
             // The pilot is told the frame's game time, as its rules (a throttle's rate, a hold's
             // gain) run on the game's clock: at a rate other than 1 that isn't the real frame.
             var input = pilot(Flight, FrameSeconds * Flight.TimeScale);
-            var dt = Flight.RunFrame(FrameSeconds, input);
-            Time += dt;
-            _watcher?.Show(Flight, dt, FrameSeconds);
+            Frame(input);
             done = until(Flight);
         }
         WallTime += clock.Elapsed;
@@ -93,6 +91,34 @@ internal sealed class Simulation : IDisposable
 
     /// <summary>One real frame with this input (<see cref="Flight.RunFrame"/>).</summary>
     public void Step(FlightInput input)
+    {
+        Frame(input);
+    }
+
+    /// <summary>
+    /// Whether a switch's link-up is left to be seen: by default a switch asked in a frame has been
+    /// made by the end of <see cref="Step"/> (the frame after, behind the link-up, is run at once), as
+    /// the tests about something other than the link-up expect; the tests of it set this.
+    /// </summary>
+    public bool ShowLinkUp { get; set; }
+
+    private void Frame(FlightInput input)
+    {
+        var switching = input.SwitchTo is not null || input.SwitchVessel || input.CarryOn is not null || input.Rewind;
+        if (ShowLinkUp || !switching)
+        {
+            RunOne(input);
+            return;
+        }
+        // The switch alone first, in a frame of its own (the rest of the input is for the vessel
+        // flown once it has been switched to), then the rest, in the frame its link-up ends in and
+        // of no time, so that the pair take the one frame's time.
+        RunOne(new FlightInput(SwitchTo: input.SwitchTo, SwitchVessel: input.SwitchVessel, CarryOn: input.CarryOn, Rewind: input.Rewind,
+            Watched: input.Watched, Camera: input.Camera, NearMisses: input.NearMisses, View: input.View));
+        Flight.RunFrame(0f, input with { SwitchTo = null, SwitchVessel = false, CarryOn = null, Rewind = false, View = null });
+    }
+
+    private void RunOne(FlightInput input)
     {
         var dt = Flight.RunFrame(FrameSeconds, input);
         Time += dt;

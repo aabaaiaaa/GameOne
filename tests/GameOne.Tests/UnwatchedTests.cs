@@ -276,6 +276,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
                     back[i] = steps;
         }
         output.WriteLine($"the step each came back in, the nearest first: {string.Join(" ", back)}");
+        flight.RunFrame(Simulation.FrameSeconds, default); // flown behind its link-up
         Assert.Same(flown, flight.Controlled);
         Assert.Equal([1, 1, 1, 1, 2, 2, 2, 2], back);
     }
