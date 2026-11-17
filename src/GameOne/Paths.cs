@@ -298,14 +298,6 @@ internal sealed class Paths
     /// <summary>What the map draws of the system, zoomed out (<see cref="GameOne.SystemMap"/>), as last drawn.</summary>
     internal SystemMap Map { get; } = new();
 
-    /// <summary>
-    /// Works out everything <see cref="Draw"/> draws, where it is drawn in the flight's line frame
-    /// (<see cref="Flight.LineFrame"/>): over the ground, the vessel's real track over the turning
-    /// ground, at its height, ending where it comes down; among the stars, the orbit's ellipse.
-    /// Every point goes through its leg's <see cref="LegPlace"/> with its time from now, so the
-    /// marks and the nodes stay on the line in either, and a leg round another body (the moon's,
-    /// on a path from the planet) is drawn as that body sees it, where the path comes to it.
-    /// </summary>
     /// <summary>A node's colour: green if it is the next node (index 0) and matched, else the plan's.</summary>
     internal static (byte R, byte G, byte B) NodeColorOf(bool matched, int index) =>
         matched && index == 0 ? Scene.NodeMatchedColor : PlanColor;
@@ -318,6 +310,14 @@ internal sealed class Paths
     internal static (byte R, byte G, byte B) LegColorOf(bool matched, int leg, int firstNodeLeg, int secondNodeLeg) =>
         matched && leg > firstNodeLeg && leg <= secondNodeLeg ? Scene.NodeMatchedColor : PlanColor;
 
+    /// <summary>
+    /// Works out everything <see cref="Draw"/> draws, where it is drawn in the flight's line frame
+    /// (<see cref="Flight.LineFrame"/>): over the ground, the vessel's real track over the turning
+    /// ground, at its height, ending where it comes down; among the stars, the orbit's ellipse.
+    /// Every point goes through its leg's <see cref="LegPlace"/> with its time from now, so the
+    /// marks and the nodes stay on the line in either, and a leg round another body (the moon's,
+    /// on a path from the planet) is drawn as that body sees it, where the path comes to it.
+    /// </summary>
     internal void Build(Flight flight, ManoeuvrePlan plan)
     {
         var frame = flight.LineFrame;
