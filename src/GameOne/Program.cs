@@ -179,6 +179,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
                 Slower = controls.Take(ControlAction.Slower), Faster = controls.Take(ControlAction.Faster), Watched = watched,
                 Camera = view.Camera.Position, // last frame's: what the main view showed
                 NearMisses = hud.Settings.SlowNearMisses,
+                View = view.Camera.View,
             };
             // In warp, as many normal steps as fit in the budget, and however fast that turned out to be.
             dt = flight.RunFrame(real, given, Flight.WarpBudgetSeconds);

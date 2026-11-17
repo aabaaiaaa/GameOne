@@ -388,6 +388,22 @@ internal sealed class ChaseCamera
         (_free, _snap) = (false, true);
     }
 
+    /// <summary>How it is set up now: the chase and map angles and distances, and whether it is the map.</summary>
+    internal CameraView View => new(_zoomedOut, _yaw, _pitch, _distance, _outYaw, _outPitch, _outDistance, CameraCentre.Own);
+
+    /// <summary>
+    /// Sets up as <paramref name="view"/> says and snaps there, the map (if it shows it) fully out at
+    /// once, so a view brought back lands as it was rather than zooming.
+    /// </summary>
+    internal void Apply(CameraView view)
+    {
+        Place(view.Yaw, view.Pitch, view.Distance);
+        (_outYaw, _outPitch, _outDistance) = (view.MapYaw, Math.Clamp(view.MapPitch, -ZoomedOutMaxPitch, ZoomedOutMaxPitch),
+            Math.Clamp(view.MapDistance, Scene.ZoomOutMinDistance, Scene.ZoomOutMaxDistance));
+        _zoomedOut = view.Map;
+        _out = _zoomedOut ? 1f : 0f;
+    }
+
     /// <summary>Looks from these angles and this far, as a drag and the wheel would leave it: for a view set up without the mouse.</summary>
     internal void Place(float yaw, float pitch, float distance)
     {

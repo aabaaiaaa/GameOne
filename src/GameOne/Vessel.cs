@@ -135,6 +135,7 @@ internal sealed class Vessel
         _wetParts = state.WetParts;
         _ground = state.Ground;
         Target = state.Target;
+        View = state.View;
         _nodes.AddRange(state.Nodes);
         _burnAim = state.BurnAim;
         _burned = state.Burned;
@@ -225,6 +226,7 @@ internal sealed class Vessel
         FloatingFor = _floatingFor,
         WetParts = _wetParts,
         Target = Target,
+        View = View,
         Nodes = [.. _nodes],
         BurnAim = _burnAim,
         Burned = _burned,
@@ -872,6 +874,9 @@ internal sealed class Vessel
 
     /// <summary>What its pilot has picked to fly to, if anything (see <see cref="GameOne.Flight.TargetOf"/>, which checks it is still there).</summary>
     public NavTarget? Target { get; internal set; }
+
+    /// <summary>How the camera last looked at it (set from the flown vessel's view each step, see <see cref="FlightInput.View"/>), or none if it has not been looked at.</summary>
+    public CameraView? View { get; internal set; }
 
     /// <summary>Its pilot's planned burns, in time order: the next one first. Each goes once its time is past and the engine is off.</summary>
     public IReadOnlyList<ManoeuvreNode> Nodes => _nodes;

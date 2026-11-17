@@ -107,6 +107,18 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
     }
 
     [Fact]
+    public void A_view_centred_elsewhere_round_trips()
+    {
+        var world = Busy();
+        var view = new CameraView(true, 1f, 0.3f, 60f, 2f, 0.9f, 90_000f, new CameraCentre(CentreKind.Vessel, 7));
+        world = world with { Vessels = [world.Vessels[0] with { View = view }, .. world.Vessels.Skip(1)] };
+        Store.Save(world);
+        var back = Store.Load("busy");
+        Assert.Equal(view, back.Vessels[0].View);
+        AssertSameVessels(world, back);
+    }
+
+    [Fact]
     public void Runs_and_the_flown_vessel_round_trip()
     {
         var run = new RunState

@@ -64,6 +64,7 @@ internal sealed record VesselState
     public Vector2? BayDoorStops { get; init; } // where each stopped on the ground (Craft.DoorStops); none, their full swing
     public bool FairingOn { get; init; }
     public NavTarget? Target { get; init; }
+    public CameraView? View { get; init; } // how it was last looked at (see Vessel.View)
     public ManoeuvreNode[] Nodes { get; init; } = [];
     public Vector3? BurnAim { get; init; }
     public Vector3 Burned { get; init; }

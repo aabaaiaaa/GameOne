@@ -45,7 +45,7 @@ internal sealed class WorldStore(string directory)
     /// what this game doesn't know, and an older one has no missions in progress, no vessel flown
     /// and no vessel's launch site (and older still, no vessel's body), none of which is migrated.
     /// </summary>
-    public const int FormatVersion = 3;
+    public const int FormatVersion = 4;
 
     private const string Extension = ".json";
 

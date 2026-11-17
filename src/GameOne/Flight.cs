@@ -138,6 +138,7 @@ internal readonly record struct Coming(Vessel Watched, SolidKind With, Vessel? O
 /// <param name="CarryOn">Carry on flying the vessel of this id where it is, in its run or in free play (any vessel in the world that can be flown: the carry-on screen offers <see cref="Flight.CarryOnChoices"/>): a menu choice, as <paramref name="Choose"/> is.</param>
 /// <param name="CompleteRun">Complete the flown vessel's run with a bonus still open ("Complete mission"): the bonuses not done are lost.</param>
 /// <param name="AbandonRun">Give up the flown vessel's run ("Abandon mission"): its vessels stay where they are, in no run.</param>
+/// <param name="View">How the main view's camera is set up now: kept with the flown vessel, before anything in the step switches vessels or carries on (see <see cref="Vessel.View"/>).</param>
 internal readonly record struct FlightInput(
     float Throttle = 0f,
     Vector3 Lean = default,
@@ -167,7 +168,8 @@ internal readonly record struct FlightInput(
     bool ToggleBayDoors = false,
     int? CarryOn = null,
     bool CompleteRun = false,
-    bool AbandonRun = false);
+    bool AbandonRun = false,
+    CameraView? View = null);
 
 /// <summary>
 /// Something the player can carry on flying where it is (<see cref="Flight.CarryOnChoices"/>):
@@ -1621,6 +1623,9 @@ internal sealed class Flight : IDisposable
         Timings.BeginStep();
         _bodiesAt = WorldTime; // until the physics steps them on to the step's end
         WorldTime += dt;
+
+        if (input.View is { } view)
+            Controlled.View = view; // the vessel it was seen as, before a switch or a carry-on below changes which is flown
 
         if (input.Choose is { } chosen)
             LaunchFrom(input.From ?? Site, chosen);

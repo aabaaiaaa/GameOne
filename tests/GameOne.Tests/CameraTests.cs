@@ -15,6 +15,27 @@ public sealed class CameraTests
     private const float Dt = 1f / 60f;
 
     [Fact]
+    public void A_view_read_from_the_camera_applies_back_the_same()
+    {
+        var camera = new ChaseCamera(null);
+        var focus = Scene.RocketStart + new Vector3(0, 100f, 0);
+        camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+        camera.Place(0.7f, 0.4f, 120f);
+        camera.ToggleZoomOut(5_000f);
+        camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+        var v = camera.View;
+        Assert.True(v.Map);
+        Assert.Equal(CameraCentre.Own, v.Centre);
+
+        var other = new ChaseCamera(null);
+        other.Apply(v);
+        other.Update(Dt, focus, null, GroundBody.Planet, 0);
+        camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+        Assert.Equal(v, other.View);
+        Assert.Equal(camera.View, other.View);
+    }
+
+    [Fact]
     public void Flying_fast_the_camera_stays_close_behind()
     {
         var camera = new ChaseCamera(null);
