@@ -717,7 +717,7 @@ internal sealed class Hud : IDisposable
             _timingsRect = RectangleF.Empty;
         var strip = Strip(flight, views, display, frames);
         LinkUp(flight.LinkUp.On ? flight.LinkUp : flight.WatchLink, display, strip); // (a switch's covers the camera's)
-        Actions(flight, camera, new Vector2(display.X, display.Y));
+        Actions(flight, camera, new Vector2(display.X, display.Y), frames);
         LastMessage = default;
         // (Kept for the timings panel's next frame, as each is drawn after it: empty unless drawn.)
         _messageRect = _controlsRect = _captionRect = RectangleF.Empty;
@@ -799,8 +799,48 @@ internal sealed class Hud : IDisposable
         return marker.Kind == CentreKind.Vessel && marker.Id == flown.Id ? CameraCentre.Own : marker;
     }
 
-    /// <summary>The vessel in the main view under <paramref name="click"/> (the nearest to the camera of those at the flown vessel's body, in one piece), if any.</summary>
-    private static Vessel? VesselClicked(Flight flight, ChaseCamera camera, Matrix4x4 viewProjection, Vector2 display, Vector2 click)
+    /// <summary>
+    /// Whether the strip (the small views' row and its buttons) is shown: once there is more than one
+    /// vessel in the world (<paramref name="vessels"/>), or while the main camera is on something other than
+    /// the flown vessel (<paramref name="cameraOff"/>), for its "Reset camera".
+    /// </summary>
+    internal static bool HasStrip(int vessels, bool cameraOff) => vessels >= 2 || cameraOff;
+
+    /// <summary>
+    /// The body whose disc <paramref name="click"/> is on, in the main view from
+    /// <paramref name="camera"/> (the nearest in front along the ray through it), as the camera's
+    /// centre: a body can always be centred on, whether its marker is shown or not.
+    /// </summary>
+    internal static CameraCentre? BodyDisc(BodyFrames frames, Vector3 camera, Matrix4x4 viewProjection, Vector2 display, Vector2 click)
+    {
+        if (!Matrix4x4.Invert(viewProjection, out var inverse) || display.X <= 0 || display.Y <= 0)
+            return null;
+        // A point on the ray, between the near plane and the (infinite) far one in the reversed depth.
+        var ndc = new Vector4(2f * click.X / display.X - 1f, 1f - 2f * click.Y / display.Y, 0.5f, 1f);
+        var through = Vector4.Transform(ndc, inverse);
+        if (MathF.Abs(through.W) < 1e-12f)
+            return null;
+        var direction = Vector3.Normalize(new Vector3(through.X, through.Y, through.Z) / through.W - camera);
+        CameraCentre? found = null;
+        var nearest = float.MaxValue;
+        var bodies = Bodies.All;
+        for (var i = 0; i < bodies.Count; i++)
+        {
+            var offset = frames.InView(bodies[i], bodies[i].Centre) - camera;
+            var along = Vector3.Dot(offset, direction);
+            var radius = bodies[i].SeaRadius;
+            var miss = offset.LengthSquared() - along * along;
+            if (miss > radius * radius)
+                continue;
+            var t = along - MathF.Sqrt(radius * radius - miss);
+            if (t > 0f && t < nearest)
+                (found, nearest) = (new CameraCentre(CentreKind.Body, bodies[i].Index), t);
+        }
+        return found;
+    }
+
+    /// <summary>The vessel in the main view under <paramref name="click"/> (the nearest to the camera of those at the flown vessel's body, in one piece, and not hidden behind a body), if any.</summary>
+    private static Vessel? VesselClicked(Flight flight, ChaseCamera camera, Matrix4x4 viewProjection, Vector2 display, Vector2 click, BodyFrames frames)
     {
         Vessel? found = null;
         var nearest = float.MaxValue;
@@ -812,6 +852,8 @@ internal sealed class Hud : IDisposable
                 continue;
             var (bottom, top) = vessel.AxisOffsets(vessel.Rotation);
             if (!VesselActions.OnVessel(vessel.CentreOfMass + bottom, vessel.CentreOfMass + top, vessel.Width, viewProjection, display, click))
+                continue;
+            if (frames.Behind(camera.Position, vessel.CentreOfMass))
                 continue;
             var distance = Vector3.DistanceSquared(camera.Position, vessel.CentreOfMass);
             if (distance < nearest)
@@ -827,7 +869,7 @@ internal sealed class Hud : IDisposable
     /// its items recorded among the buttons for the readout. ImGui closes the popup on a click
     /// elsewhere, and the menu closes with it.
     /// </summary>
-    private void Actions(Flight flight, ChaseCamera camera, Vector2 display)
+    private void Actions(Flight flight, ChaseCamera camera, Vector2 display, BodyFrames frames)
     {
         var vessel = flight.Controlled;
         if (!camera.ZoomedOut && camera.ToScreen(vessel.CentreOfMass, display, out var screen, out _)
@@ -841,8 +883,8 @@ internal sealed class Hud : IDisposable
         if (camera.TakeRightClick() is { } click && !MenuOpen)
         {
             var viewProjection = camera.ViewProjection(display);
-            var onVessel = VesselClicked(flight, camera, viewProjection, display, click);
-            var onMarker = camera.ZoomedOut ? _markers.At(click) : null;
+            var onVessel = VesselClicked(flight, camera, viewProjection, display, click, frames);
+            var onMarker = camera.ZoomedOut ? _markers.At(click) ?? BodyDisc(frames, camera.Position, viewProjection, display, click) : null;
             if (RightClickCentre(camera.ZoomedOut, camera.Centre, onMarker, onVessel, vessel) is { } centre)
             {
                 camera.CentreOn(centre);
@@ -2654,7 +2696,7 @@ internal sealed class Hud : IDisposable
     private float? Strip(Flight flight, Views views, float2 display, BodyFrames frames)
     {
         _stripRect = RectangleF.Empty; // the views and the buttons over them, as they are drawn
-        if (flight.WorldVessels.Count < 2 && !_cameraOff) // (one camera put elsewhere has "Reset camera" here)
+        if (!HasStrip(flight.WorldVessels.Count, _cameraOff))
             return null;
 
         const float gap = StripGap, header = 40f;
@@ -2860,7 +2902,7 @@ internal sealed class Hud : IDisposable
     /// </summary>
     private (Vector2 At, float Scale) OpenListPlace(Flight flight, float2 display)
     {
-        var buttons = (flight.WorldVessels.Count >= 2 || _cameraOff) ? StripGap + StripButtonsHeight : 0f; // the strip's buttons, when there is a strip
+        var buttons = HasStrip(flight.WorldVessels.Count, _cameraOff) ? StripGap + StripButtonsHeight : 0f; // the strip's buttons, when there is a strip
         var bottom = display.Y - Margin;
         // Beside the instruments, or at the left edge while they aren't drawn.
         var beside = _instrumentsRect.IsEmpty ? Margin : _instrumentsRect.Right + StripGap;
@@ -2934,6 +2976,7 @@ internal sealed class Hud : IDisposable
                     ImGui.TextColored(Quiet, "Every vessel has a view."u8);
                 ImGui.EndPopup();
             }
+            // As the centre was at the start of this frame: a right click or this button in this frame changes the button in the next.
             if (_cameraOff)
             {
                 ImGui.SameLine();

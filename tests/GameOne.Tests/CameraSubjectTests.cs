@@ -320,6 +320,40 @@ public sealed class CameraSubjectTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void A_centre_is_described_as_the_readout_says_it()
+    {
+        using var sim = new Simulation(Mission.LandOnTheMoon);
+        var flight = sim.Flight;
+        sim.Step(default);
+        var spot = flight.Mission.PointsOfInterest[0];
+
+        Assert.Equal("Own", CameraSubject.Describe(flight, CameraCentre.Own));
+        Assert.Equal("Vessel 7", CameraSubject.Describe(flight, new CameraCentre(CentreKind.Vessel, 7)));
+        Assert.Equal($"Body {Moon.Name}", CameraSubject.Describe(flight, new CameraCentre(CentreKind.Body, Moon.Index)));
+        Assert.Equal($"Site {Sites.All[1].Name}", CameraSubject.Describe(flight, new CameraCentre(CentreKind.Site, 1)));
+        Assert.Equal($"Point {spot.Name}", CameraSubject.Describe(flight, new CameraCentre(CentreKind.Point, 0)));
+
+        // A number naming nothing is said by its kind alone.
+        Assert.Equal("Body", CameraSubject.Describe(flight, new CameraCentre(CentreKind.Body, Bodies.All.Count)));
+        Assert.Equal("Site", CameraSubject.Describe(flight, new CameraCentre(CentreKind.Site, -1)));
+        Assert.Equal("Point", CameraSubject.Describe(flight, new CameraCentre(CentreKind.Point, flight.Mission.PointsOfInterest.Length)));
+    }
+
+    [Fact]
+    public void A_marker_gives_the_centre_of_what_it_marks()
+    {
+        Markers.Candidate Marker(MarkerKind kind, NavTarget? target, GroundBody? of = null, int order = 0) =>
+            new(Vector3.Zero, 1f, "x", kind, Markers.Look.Square, target, 0, 0f, false, false, new Markers.Rgb(0, 0, 0), of, order);
+
+        Assert.Equal(new CameraCentre(CentreKind.Body, Moon.Index), Markers.CentreOf(Marker(MarkerKind.Body, NavTarget.OfBody(Moon), Moon)));
+        // The body the flown vessel is at has no target, but is still a body.
+        Assert.Equal(new CameraCentre(CentreKind.Body, Home.Index), Markers.CentreOf(Marker(MarkerKind.Body, null, Home)));
+        Assert.Equal(new CameraCentre(CentreKind.Vessel, 12), Markers.CentreOf(Marker(MarkerKind.ThisFlight, new NavTarget(TargetKind.Vessel, 12))));
+        Assert.Equal(new CameraCentre(CentreKind.Site, 3), Markers.CentreOf(Marker(MarkerKind.Site, new NavTarget(TargetKind.Site, 3))));
+        Assert.Equal(new CameraCentre(CentreKind.Point, 2), Markers.CentreOf(Marker(MarkerKind.Site, null, order: 2)));
+    }
+
+    [Fact]
     public void Right_clicks_centre_by_the_rules()
     {
         using var sim = new Simulation(Mission.FreePlay, world: World(UnwatchedTests.Satellite(1, 10000f, 0f, 0f), UnwatchedTests.Satellite(2, 10000f, 0f, 90f)));

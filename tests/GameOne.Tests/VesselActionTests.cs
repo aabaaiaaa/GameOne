@@ -35,6 +35,15 @@ public sealed class VesselActionTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void The_strip_shows_with_one_vessel_only_while_the_camera_is_off_its_own()
+    {
+        Assert.False(Hud.HasStrip(vessels: 1, cameraOff: false));
+        Assert.True(Hud.HasStrip(vessels: 1, cameraOff: true), "its Reset camera button");
+        Assert.True(Hud.HasStrip(vessels: 2, cameraOff: false));
+        Assert.True(Hud.HasStrip(vessels: 2, cameraOff: true));
+    }
+
+    [Fact]
     public void A_lander_offers_its_bay_doors_and_its_legs()
     {
         var (sim, lander) = Flown(LanderTests.Alone);
