@@ -915,10 +915,9 @@ say) stalls frames and spoils the timing.
   where the two ups are 80 degrees apart: its place and view kept within 1 cm and 0.1 degrees, at
   once and after the next frame against a camera left in the planet's frame, then its up easing
   round to the moon's over `Scene.CameraBodyEaseSeconds`, under 5 degrees a frame, still well
-  short half way. In `PathTests`, zoomed out (M): the orbit fitted and back to just where it was,
-  in the same real time in a warp; and the map opening on its own view until turned or zoomed by
-  hand, then on the view left at that body (the planet's and the moon's kept apart), each
-  forgotten for a new flight (`ChaseCamera.ForgetMapViews`).
+  short half way. In `PathTests`, zoomed out (M): the vessel looked at from far enough to fit the orbit, and back to just where it
+  was, in the same real time in a warp; the map looking down from the pole's side; and the map
+  opening on the view its vessel left (turned or zoomed by hand, or given with a view brought back).
 - **`BodiesInPlayTests`:** a physics at each body in use (`Worlds`), every vessel at its own body,
   all played out at once: flying a lander in a moon orbit (the moon's physics), a small view's
   booster flies its landing burn down onto Home's zone by its retrograde hold (the planet's

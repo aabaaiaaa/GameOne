@@ -293,7 +293,7 @@ public sealed class PathTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Zooming_out_looks_at_the_planet_from_far_enough_to_see_the_orbit_and_comes_back()
+    public void Zooming_out_looks_at_the_vessel_from_far_enough_to_see_the_orbit_and_comes_back()
     {
         var camera = new ChaseCamera(null);
         var focus = Above(4000f);
@@ -307,9 +307,9 @@ public sealed class PathTests(ITestOutputHelper output)
         for (var i = 0; i < 120; i++)
             camera.Update(frame, focus, null, GroundBody.Planet, 0);
         Assert.True(camera.ZoomedOut);
-        Assert.True(Vector3.Distance(camera.Target, Planet.Centre) < 1f, "it should look at the planet's centre");
+        Assert.True(Vector3.Distance(camera.Target, camera.Focus) < 1f, "it should look at the vessel");
         var half = float.DegreesToRadians(Scene.CameraVerticalFovDegrees) / 2;
-        Assert.True(Vector3.Distance(camera.Position, Planet.Centre) * MathF.Tan(half) > reach, "the orbit doesn't fit on the screen");
+        Assert.True(Vector3.Distance(camera.Position, camera.Target) * MathF.Tan(half) > reach, "the orbit doesn't fit on the screen");
         Assert.True(Vector3.Distance(camera.Focus, focus) < 0.1f, "it should still follow the vessel underneath");
 
         camera.ToggleZoomOut(reach);
@@ -321,54 +321,65 @@ public sealed class PathTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void The_map_opens_on_its_own_view_until_turned_by_hand_then_on_that_one_at_that_body()
+    public void The_map_looks_from_above_the_orbits_plane()
+    {
+        const float frame = 1f / 60f;
+        var camera = new ChaseCamera(null);
+        var focus = Above(4000f);
+        camera.Update(frame, focus, null, GroundBody.Planet, 0);
+        camera.ToggleZoomOut(Planet.Radius + 4000f);
+        for (var i = 0; i < 120; i++)
+            camera.Update(frame, focus, null, GroundBody.Planet, 0);
+        var pole = Vector3.Normalize(GroundBody.Planet.NorthPole);
+        Assert.True(Vector3.Dot(camera.Position - camera.Focus, pole) > 0f, "the map should look down from the north pole's side");
+    }
+
+    [Fact]
+    public void The_map_opens_on_the_view_its_vessel_left()
     {
         const float frame = 1f / 60f;
         var reach = Planet.Radius + 4000f;
-        var (planet, moon) = (GroundBody.Planet, GroundBody.Moon);
         var focus = Above(4000f);
-        var onTheMoon = OnTheMoon.Standing(OnTheMoon.LandingSpot).Position;
-        // Opens the map at body, lets it settle, and gives where it looks from; then closes it again.
-        Vector3 Open(ChaseCamera camera, GroundBody body, Vector3 at, Action? byHand = null)
+        var camera = new ChaseCamera(null);
+        camera.Update(frame, focus, null, GroundBody.Planet, 0);
+        // Opens the map, lets it settle, optionally turns it by hand, and gives where it looks from; then closes it again.
+        Vector3 Open(Action? byHand = null)
         {
             camera.ToggleZoomOut(reach);
             for (var i = 0; i < 120; i++)
-                camera.Update(frame, at, null, body, 0);
+                camera.Update(frame, focus, null, GroundBody.Planet, 0);
             if (byHand is not null)
             {
                 byHand();
                 for (var i = 0; i < 5; i++)
-                    camera.Update(frame, at, null, body, 0);
+                    camera.Update(frame, focus, null, GroundBody.Planet, 0);
             }
             var from = camera.Position;
             camera.ToggleZoomOut(reach);
             for (var i = 0; i < 120; i++)
-                camera.Update(frame, at, null, body, 0);
+                camera.Update(frame, focus, null, GroundBody.Planet, 0);
             return from;
         }
 
-        var camera = new ChaseCamera(null);
-        camera.Update(frame, focus, null, planet, 0);
-        var own = Open(camera, planet, focus);
-        Assert.True(Vector3.Distance(own, Open(camera, planet, focus)) < 1f, "opened again, untouched: its own view");
+        var own = Open();
+        Assert.True(Vector3.Distance(own, Open()) < 1f, "opened again, untouched: the same view");
 
-        // Turned and zoomed by hand: kept, and opened on again.
-        var set = Open(camera, planet, focus, () => { camera.DragOrbit(new Vector2(300f, -120f)); camera.Zoom(-6f); });
+        // Turned and zoomed by hand: opened on again.
+        var set = Open(() => { camera.DragOrbit(new Vector2(300f, -120f)); camera.Zoom(-6f); });
         Assert.True(Vector3.Distance(set, own) > 1000f, "the drag and the wheel moved it");
-        Assert.True(Vector3.Distance(set, Open(camera, planet, focus)) < 1f, "opened again on the view set by hand");
+        Assert.True(Vector3.Distance(set, Open()) < 1f, "opened again on the view set by hand");
 
-        // At another body, that body's own view until it is set there; the planet's kept meanwhile.
-        camera.Update(frame, onTheMoon, null, moon, 0);
-        var moonOwn = Open(camera, moon, onTheMoon);
-        var moonSet = Open(camera, moon, onTheMoon, () => camera.DragOrbit(new Vector2(-200f, 80f)));
-        Assert.True(Vector3.Distance(moonSet, moonOwn) > 100f);
-        Assert.True(Vector3.Distance(moonSet, Open(camera, moon, onTheMoon)) < 1f);
-        camera.Update(frame, focus, null, planet, 0);
-        Assert.True(Vector3.Distance(set, Open(camera, planet, focus)) < 1f, "the planet's view kept while the moon's was set");
-
-        // A new flight forgets them: the map's own view again.
-        camera.ForgetMapViews();
-        Assert.True(Vector3.Distance(own, Open(camera, planet, focus)) < 1f, "a new flight opens on the map's own view");
+        // Another camera given that vessel's view (as a switch back to it does) opens on it, not on its own.
+        var view = camera.View;
+        var other = new ChaseCamera(null);
+        other.Update(frame, focus, null, GroundBody.Planet, 0);
+        other.Apply(view with { Map = false });
+        for (var i = 0; i < 5; i++)
+            other.Update(frame, focus, null, GroundBody.Planet, 0);
+        other.ToggleZoomOut(reach);
+        for (var i = 0; i < 120; i++)
+            other.Update(frame, focus, null, GroundBody.Planet, 0);
+        Assert.True(Vector3.Distance(set, other.Position) < 1f, "a view brought back opens the map as it was left");
     }
 
     [Fact]

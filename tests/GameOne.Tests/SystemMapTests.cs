@@ -62,7 +62,7 @@ public sealed class SystemMapTests(ITestOutputHelper output)
                 foreach (var t in ThroughTheYear())
                 {
                     var camera = ZoomedOut(body, focus, drag, t);
-                    Assert.Equal(Scene.ZoomOutMaxDistance, Vector3.Distance(camera.Position, body.Centre), Scene.ZoomOutMaxDistance * 1e-4f);
+                    Assert.Equal(Scene.ZoomOutMaxDistance, Vector3.Distance(camera.Position, camera.Focus), Scene.ZoomOutMaxDistance * 1e-4f);
                     var sun = Bodies.Change(planet, body, t).Point(SolarSystem.SunCentreAt(t)).ToSingle();
                     Assert.True(camera.ToScreen(sun, Screen, out var at, out var depth), $"{name} at {t:0} s the sun is behind the camera");
                     var radius = Scene.SunRadius / ChaseCamera.MetresPerPixel(depth, Screen);

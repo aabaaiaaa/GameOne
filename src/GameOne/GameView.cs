@@ -107,7 +107,6 @@ internal sealed class GameView : IDisposable
         flight.Restarted += () =>
         {
             Camera.Snap();
-            Camera.ForgetMapViews();
             _smokeStirs.Reset();
             _effects.Clear();
             _trail.Clear();

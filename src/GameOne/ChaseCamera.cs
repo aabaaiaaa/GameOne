@@ -20,12 +20,12 @@ namespace GameOne;
 /// Its angles are measured in the local frame where the rocket is (up away from the body it is at, east
 /// and north across the ground), so it stays upright relative to the ground below, wherever round
 /// that body the rocket has flown (and eased round to a new body's across a sphere of influence's edge: <see cref="Rebase"/>).
-/// <para>Zoomed out (<see cref="ToggleZoomOut"/>), it looks at the centre of the body its vessel is at instead, with
-/// angles of its own measured from that body's north pole (so from above the plane the orbits are flown
-/// in), while still following the vessel underneath, to go back to it just as it was. It opens on a
-/// view of its own (from a little to the vessel's side of the pole, far enough out for its orbit)
-/// until the player turns or zooms it there; from then the view they left is kept for each body it
-/// was centred on, and opens again there, until <see cref="ForgetMapViews"/> (a new flight).</para>
+/// <para>Zoomed out (<see cref="ToggleZoomOut"/>), it looks from farther out at what it looks at when
+/// near (the vessel), with angles of its own measured from the north pole of the body its vessel is at
+/// (so from above the plane the orbits are flown in), to go back to it just as it was. It opens on the
+/// angles and distance last set in it (turned or zoomed by hand, or brought by <see cref="Apply"/> as its
+/// vessel's view), or, if none have been, on a view of its own (from a little to the vessel's side of
+/// the pole, far enough out for its orbit).</para>
 /// </remarks>
 internal sealed class ChaseCamera
 {
@@ -35,7 +35,7 @@ internal sealed class ChaseCamera
 
     // Zoomed out, the frame its angles are in (PoleFrame): up is its body's north pole (the launch
     // goes east, so the orbits lie round it), and its frame's origin (the planet's pad) is to the
-    // south. And the centre it looks at: its body's.
+    // south. And the body's centre, which the side of the pole its vessel is on is told by.
     private Vector3 _poleUp = -Vector3.UnitZ, _poleEast = Vector3.UnitX, _poleSouth = Vector3.UnitY;
     private Vector3 _zoomCentre = GroundBody.Planet.Centre;
 
@@ -61,9 +61,6 @@ internal sealed class ChaseCamera
     private float _out;   // 0 by the vessel, 1 zoomed out, in between on the way
     private float _outYaw, _outPitch, _outDistance;
     private Vector3 _worldUp = Vector3.UnitY;
-    private GroundBody? _body; // the body its vessel was at in the last Update, the one the map is centred on
-    // Zoomed out, the view the player last turned or zoomed to at each body (by its index), if any.
-    private readonly (float Yaw, float Pitch, float Distance)?[] _mapViews = new (float, float, float)?[Bodies.All.Count];
 
     // Across a sphere of influence's edge (Rebase): the frames it eases from, carried into the new
     // body's frame (its own up, east and south, the zoomed-out ones and the centre), the turns from
@@ -416,7 +413,7 @@ internal sealed class ChaseCamera
     /// <summary>
     /// Zooms all the way out, to look at the whole of its vessel's body and the orbits round it, far enough to
     /// take in <paramref name="reach"/> metres from its centre (the flown vessel's orbit), or from the
-    /// angle and distance the player last turned or zoomed it to at this body; or, if it is zoomed
+    /// angle and distance it was last set to (its view's, see <see cref="Apply"/>); or, if it is zoomed
     /// out already, back to the vessel, at the distance and angle it was at before.
     /// </summary>
     public void ToggleZoomOut(float reach)
@@ -425,12 +422,9 @@ internal sealed class ChaseCamera
         _free = false;
         if (!_zoomedOut)
             return;
-        // The view the player left at this body, if they have turned or zoomed it here.
-        if (_body is { } body && _mapViews[body.Index] is { } kept)
-        {
-            (_outYaw, _outPitch, _outDistance) = kept;
+        // A distance past the least is one already set: opens on it.
+        if (_outDistance > Scene.ZoomOutMinDistance)
             return;
-        }
         // Else starting a little to the vessel's side of the pole, so it is towards the bottom of the screen.
         var outward = _seen - _zoomCentre;
         _outYaw = MathF.Atan2(Vector3.Dot(outward, _poleEast), Vector3.Dot(outward, _poleSouth));
@@ -438,9 +432,6 @@ internal sealed class ChaseCamera
         var fit = reach * Scene.ZoomOutMargin / MathF.Tan(float.DegreesToRadians(Scene.CameraVerticalFovDegrees) / 2);
         _outDistance = Math.Clamp(fit, Scene.ZoomOutMinDistance, Scene.ZoomOutMaxDistance);
     }
-
-    /// <summary>Forgets the map's views the player set at each body (see <see cref="ToggleZoomOut"/>): a new flight opens the map on its own view again.</summary>
-    public void ForgetMapViews() => Array.Clear(_mapViews);
 
     /// <summary>
     /// Follows <paramref name="focus"/> (the middle of the rocket). Call once per frame, with the
@@ -462,8 +453,6 @@ internal sealed class ChaseCamera
             _outYaw -= _pendingDrag.X * Scene.CameraRadiansPerDragPixel;
             _outPitch = Math.Clamp(_outPitch + _pendingDrag.Y * Scene.CameraRadiansPerDragPixel, -ZoomedOutMaxPitch, ZoomedOutMaxPitch);
             _outDistance = Math.Clamp(_outDistance * MathF.Pow(0.9f, _pendingZoom), Scene.ZoomOutMinDistance, Scene.ZoomOutMaxDistance);
-            if (_pendingDrag != Vector2.Zero || _pendingZoom != 0f)
-                _mapViews[body.Index] = (_outYaw, _outPitch, _outDistance); // set by hand: kept for the next time at this body
         }
         else
         {
@@ -484,7 +473,6 @@ internal sealed class ChaseCamera
             _focus = focus - Vector3.Normalize(behind) * Scene.CameraMaxLag;
 
         _lastFocus = focus;
-        _body = body;
         _seen = Seen(focus);
         (_up, _east, _south) = (body.Up(_seen), body.East(_seen), -body.North(_seen));
         (_poleUp, _poleEast, _poleSouth) = PoleFrame(body);
@@ -530,20 +518,18 @@ internal sealed class ChaseCamera
     /// <summary>Zoomed out, or on the way: where it looks from and at, from where it would be by the vessel (<paramref name="position"/>).</summary>
     private void ZoomedOutView(Vector3 position)
     {
-        // From the vessel to its body's centre. The distance changes by the same factor each
-        // moment (so the zoom feels even, from metres to tens of kilometres), and the camera only
-        // turns to the body's centre as it gets far enough out
-        // for that to matter, so the vessel stays in view for most of the way.
+        // It always looks at the vessel. The distance changes by the same factor each moment (so
+        // the zoom feels even, from metres to tens of kilometres), and the direction turns from
+        // the chase view's to the map's with it.
         var (sinOutYaw, cosOutYaw) = MathF.SinCos(_outYaw);
         var (sinOutPitch, cosOutPitch) = MathF.SinCos(_outPitch);
         var outOffset = (_poleEast * sinOutYaw + _poleSouth * cosOutYaw) * cosOutPitch + _poleUp * sinOutPitch;
         var t = _out * _out * (3f - 2f * _out);
         var near = Vector3.Distance(position, _seen);
         var distance = near * MathF.Pow(_outDistance / near, t);
-        var turned = Math.Clamp((distance - near) / (_outDistance - near), 0f, 1f);
         var direction = Vector3.Normalize(Vector3.Lerp((position - _seen) / near, outOffset, t));
-        Target = Vector3.Lerp(_seen, _zoomCentre, turned);
-        Position = Target + direction * distance;
+        Target = _seen;
+        Position = _seen + direction * distance;
         _worldUp = Vector3.Normalize(Vector3.Lerp(_up, _poleUp, t));
     }
 
