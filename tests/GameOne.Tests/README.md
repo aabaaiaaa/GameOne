@@ -618,8 +618,9 @@ say) stalls frames and spoils the timing.
   before now); deleting a middle one joining its neighbours, and the first anchoring the second on
   the vessel's path; moving the first snapping it onto the orbit the vessel is on now; inserting
   one before the first or between two; a chain round the moon planned round it; the next node kept,
-  at its time, when the first is flown past; an empty chain clearing the plan; and each vessel
-  keeping its own.
+  at its time, when the first is flown past; an empty chain clearing the plan; one anchored past
+  where the path ends (falling, a hop, escaping) anchored where it ends, and saving; a node moved
+  only once the pointer leaves where it was grabbed; and each vessel keeping its own.
 - **`WorldLogTests`:** the world's log: a crash on the ground, two vessels colliding (one entry; and two wrecked by one collision steps apart joined into the first's entry; two pairs colliding side by side an entry each, by who hit whom), an unwatched loss under formula (not witnessed, near its site), those removed to make room as a world loads (oldest first, unseen, no speed, printed without one), one cleared from the launch pad (unseen as a world loads; seen, flown, as a flight from its site starts), and the newest 300 kept; the missions' entries (a run begun, a step done with its points, completed with its score, and nothing for free play); and each crash reason worded without its advice (or the break-up's cause after its colon), its speed taken out to be the entry's (a line never says two speeds).
 - **`WorldStoreTests`:** saving and loading, in a folder of the test's own: a world loads back
   exactly (every field of every vessel, a body targeted from the planet and from the moon
@@ -702,7 +703,8 @@ say) stalls frames and spoils the timing.
   in its frame as it falls round the planet); a node 30 s after the crossing burned prograde
   round the moon (within 0.01 m/s), and one burned radial, normal and a little prograde the same
   (its radial out from the moon's centre and its normal square to the orbit round it; measured
-  round the planet it would be 3.7 m/s off); the burn guide of a vessel on that transfer, its node
+  round the planet it would be 3.7 m/s off); a node placed past the crossing, anchored round the moon, planned
+  and guided as the same node anchored at the planet; the burn guide of a vessel on that transfer, its node
   on the moon's leg, the plan's burn round the moon changed into the planet's frame (within
   0.01 m/s; on the planet's orbit alone, as though it never crossed, metres a second off), and
   allocating nothing asked every frame; the plan with nodes on the moon's leg, worked out again

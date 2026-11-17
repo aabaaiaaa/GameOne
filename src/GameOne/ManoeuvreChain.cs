@@ -50,7 +50,8 @@ internal sealed record ManoeuvreChain(ChainAnchor Anchor, ImmutableArray<Manoeuv
     /// The chain of <paramref name="nodes"/> anchored on <paramref name="v"/>'s path as it is at
     /// world time <paramref name="now"/> (its orbit with the engine off, patched at the spheres of
     /// influence), where that has it at world time <paramref name="time"/>: the first node's
-    /// <see cref="ManoeuvreNode.Gap"/> is from then (0 puts it there).
+    /// <see cref="ManoeuvreNode.Gap"/> is from then (0 puts it there). Past where that path ends (down
+    /// on the ground, or escaping out of range) it is anchored where it ends.
     /// </summary>
     public static ManoeuvreChain AnchoredOn(Vessel v, double time, ImmutableArray<ManoeuvreNode> nodes, double now) =>
         AnchoredOn(v.Body, v.CentreOfMass, v.Body.AmongStars(v.CentreOfMass, v.Velocity), time, nodes, now);
@@ -65,10 +66,20 @@ internal sealed record ManoeuvreChain(ChainAnchor Anchor, ImmutableArray<Manoeuv
         var legs = new List<PathLeg>(Scene.PatchedLegs);
         Patched.Legs(body, position, starsVelocity, now, legs, horizon: time);
         var last = legs[^1];
-        var (at, moving) = last.Orbit.StateAfter(time - last.Start);
+        // No later than its path goes (down to the ground, or out to the range escaping, or the
+        // last crossing patched): past that a state worked out from its orbit is no place at all.
+        var orbit = last.Orbit;
+        var ends = orbit.Closed ? double.PositiveInfinity
+            : last.Start + (orbit.Radial && !orbit.EndsOnGround ? orbit.RisingTo(Orbit.MaxRange) ?? 0 : orbit.SecondsToEnd);
+        time = Math.Min(time, Math.Min(ends, last.End));
+        var (at, moving) = orbit.StateAfter(time - last.Start);
+        if (!Finite(at) || !Finite(moving))
+            (last, time, at, moving) = (legs[0], now, position, starsVelocity); // where it is, if not even that
         // From the frame matching the ground now into the one matching it at the anchor's time.
         var back = now - time;
         return new ManoeuvreChain(new ChainAnchor(last.Body.Name, time, last.Body.Turned(at, back), last.Body.TurnedDirection(moving, back)), nodes);
+
+        static bool Finite(Vector3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
     }
 
     /// <summary>The body the anchor is round (worked out from its name, so not saved: the name is).</summary>

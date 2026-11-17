@@ -340,6 +340,47 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void A_node_inserted_past_the_crossing_is_anchored_round_the_moon_and_planned_as_the_planets_would()
+    {
+        // A vessel on the transfer at the planet; a node 30 s past the crossing, placed there (so
+        // it is the first, anchored on the moon's leg, in the moon's frame), and the same node
+        // anchored at the planet now: both put it in the same place, with the same burn.
+        var (position, velocity) = Transfer(PassLead);
+        var state = InOrbit.At(InOrbit.UpperStage(0, 4000f, 1f), position, velocity);
+        using var sim = new Simulation(Mission.FreePlay, world: new WorldState { Time = Now, Vessels = [state], NextVesselId = 1, Flights = 1 });
+        var v = sim.Flight.WorldVessels.Single(w => w.Id == 0);
+        Assert.Same(Planet, v.Body);
+        var legs = new List<PathLeg>();
+        Patched.Legs(Planet, v.CentreOfMass, Planet.AmongStars(v.CentreOfMass, v.Velocity), Now, legs);
+        var at = legs[0].End + 30;
+        var burn = new ManoeuvreNode(0, Prograde: 2f, Radial: 6f, Normal: -8f);
+        var round = ManoeuvreChain.Empty.Insert(at, v, Now).WithNode(0, burn);
+        var planet = ManoeuvreChain.AnchoredOn(v, Now, [burn with { Gap = at - Now }], Now);
+        Assert.Equal(Moon.Name, round.Anchor.Body);
+        Assert.Equal(Planet.Name, planet.Anchor.Body);
+        Assert.Equal(at, round.TimeOf(0), 9);
+
+        var (fromMoon, fromPlanet) = (new ManoeuvrePlan(), new ManoeuvrePlan());
+        fromMoon.Update(round, Now, null);
+        fromPlanet.Update(planet, Now, null);
+        Assert.Same(Moon, fromMoon.Legs[fromMoon.NodeLeg(0)!.Value].Body);
+        Assert.Same(Moon, fromPlanet.Legs[fromPlanet.NodeLeg(0)!.Value].Body);
+        var (a, b) = (fromMoon.NodeAt(0)!.Value, fromPlanet.NodeAt(0)!.Value);
+        output.WriteLine($"the node {Vector3.Distance(a.Position, b.Position) * 1000:0.0} mm and {Vector3.Distance(a.Velocity, b.Velocity) * 1000:0.00} mm/s apart");
+        Assert.True(Vector3.Distance(a.Position, b.Position) < 0.05f);
+        Assert.True(Vector3.Distance(a.Velocity, b.Velocity) < 1e-3f);
+
+        // The guide (in the planet's frame, where the vessel is) is the same burn either way.
+        v.Replan(planet, Now);
+        var expected = v.Guide(Now)!.Value.Left;
+        v.Replan(round, Now);
+        var guide = v.Guide(Now)!.Value.Left;
+        output.WriteLine($"the guide {guide}, anchored at the planet {expected}");
+        Assert.True(Vector3.Distance(guide, expected) < 1e-3f);
+        Assert.InRange(guide.Length(), burn.Size - 0.01f, burn.Size + 0.01f);
+    }
+
+    [Fact]
     public void A_plan_with_a_node_on_the_moons_leg_allocates_nothing_once_warm()
     {
         // The HUD's plan is worked out again every frame, patched at the crossing and burned on the moon's leg.

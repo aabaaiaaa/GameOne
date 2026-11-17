@@ -152,6 +152,14 @@ public sealed class NodeTests(ITestOutputHelper output)
         var path = before.Last.Orbit.StateAfter(300).Position;
         var ownBefore = OnItsOrbit(satellite, chain.TimeOf(0) - set);
 
+        // Coasting, planned later, the node is where the vessel's own orbit has it then, as the
+        // physics has flown it: the anchor's turn into the later frame is the ground's own.
+        sim.Run((_, _) => default, _ => false, maxSeconds: 5);
+        var coasted = flight.WorldTime;
+        var onOrbit = Vector3.Distance(PlanOf(satellite.Chain!, coasted).NodeAt(0)!.Value.Position, OnItsOrbit(satellite, chain.TimeOf(0) - coasted));
+        output.WriteLine($"{coasted - set:0.0} s on, the node is {onOrbit * 1000:0.0} mm from its orbit as flown");
+        Assert.True(onOrbit < 0.1f);
+
         // A little prograde, well before the node: its own path is somewhere else now.
         sim.Run((_, _) => new FlightInput(FullThrottle: true), _ => false, maxSeconds: 1);
         sim.Run((_, _) => new FlightInput(CutThrottle: true), _ => false, maxSeconds: 1);
@@ -352,6 +360,50 @@ public sealed class NodeTests(ITestOutputHelper output)
         var now = flight.WorldTime;
         output.WriteLine($"anchored {Vector3.Distance(satellite.Chain.StartAt(now).Position, OnItsOrbit(satellite, chain.TimeOf(1) - now)):0.000} m from its orbit now");
         Assert.True(Vector3.Distance(satellite.Chain.StartAt(now).Position, OnItsOrbit(satellite, chain.TimeOf(1) - now)) < 5f); // (the physics' step is not quite the orbit's, over the second since)
+    }
+
+    [Theory]
+    [InlineData(0f)]   // straight down: it falls back to the ground
+    [InlineData(0.5f)] // a hop, down again within a lap
+    [InlineData(1.6f)] // escaping
+    public void A_chain_anchored_past_where_the_path_ends_is_anchored_where_it_ends_and_saves(float share)
+    {
+        var state = InOrbit.UpperStage(0, 9000f, share);
+        var (centre, stars) = (state.CentreOfMass, InOrbit.Stars(state));
+        var chain = ManoeuvreChain.AnchoredOn(GroundBody.Planet, centre, stars, 1e7, [new ManoeuvreNode(0, Prograde: 5f)], 0);
+        var anchor = chain.Anchor;
+        output.WriteLine($"share {share}: anchored at {anchor.Time:0.0} s, {anchor.Position}, {anchor.StarsVelocity}");
+        Assert.True(double.IsFinite(anchor.Time) && anchor.Time < 1e7, "anchored no later than where the path ends");
+        Assert.True(Finite(anchor.Position) && Finite(anchor.StarsVelocity), "the anchor should be a state, not NaN or infinity");
+        Assert.True(PlanOf(chain, 0).Legs.All(leg => Finite(leg.Orbit.StateAfter(0).Position)));
+
+        // Saved with a vessel, it loads back as it was.
+        var directory = Path.Combine(Path.GetTempPath(), "GameOne.Tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new WorldStore(directory);
+            WorldState world;
+            using (var sim = new Simulation(Mission.FreePlay, world: new WorldState { Time = 0.0, Vessels = [InOrbit.UpperStage(0, 9000f, 1f)], NextVesselId = 1, Flights = 1 }))
+                world = sim.Flight.Capture() with { Id = "ends", Name = "Ends" };
+            store.Save(world with { Vessels = [world.Vessels[0] with { Chain = chain }] });
+            Assert.Equal(chain, store.Load("ends").Vessels[0].Chain);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+
+        static bool Finite(Vector3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
+    }
+
+    [Fact]
+    public void A_node_is_moved_only_once_the_pointer_has_left_where_it_was_grabbed()
+    {
+        var grabbed = new Vector2(400f, 300f);
+        Assert.False(NodeEditor.Dragged(grabbed, grabbed));
+        Assert.False(NodeEditor.Dragged(grabbed, grabbed + new Vector2(2f, 2f)));
+        Assert.True(NodeEditor.Dragged(grabbed, grabbed + new Vector2(NodeEditor.DragPixels + 0.5f, 0f)));
     }
 
     [Fact]

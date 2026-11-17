@@ -32,6 +32,8 @@ internal sealed class NodeEditor
     private const float NodePixels = 6f, GrabPixels = 9f;
     /// <summary>How near the pointer must be to a path, in pixels, to be on it.</summary>
     internal const float PathPixels = 8f;
+    /// <summary>How far the pointer must move from where a node was grabbed, in pixels, before it is dragged: a click to select it (to use its handles) leaves it where it is.</summary>
+    internal const float DragPixels = 4f;
     private const float HandleRest = 44f;     // how far out the handles sit, in pixels
     private const float HandlePull = 70f;     // and how much farther one can be pulled
     private const float FastestRate = 40f;    // m/s added each second, pulled all the way out
@@ -48,6 +50,8 @@ internal sealed class NodeEditor
     private bool _changed;
     private long _last = System.Diagnostics.Stopwatch.GetTimestamp();
     private Vector2 _cursor;
+    private Vector2 _grabbedAt; // where the pointer was as a node was grabbed
+    private bool _dragging;     // and whether it has since moved far enough to drag it
     private bool _pressed, _rightPressed, _held;
 
     /// <summary>
@@ -140,8 +144,11 @@ internal sealed class NodeEditor
 
         // Dragging: the node along the path it is on (the first, the vessel's own as it is now, so
         // it snaps there; a later one, the path the one before it plans), the nodes after it
-        // moving with it; or a handle out from it.
-        if (_grab == Grab.Node && _pending is { } chain && _selected >= 0 && _selected < chain.Nodes.Length)
+        // moving with it, once the pointer has moved off where it grabbed it (a click only selects
+        // it, leaving it where it was set); or a handle out from it.
+        if (_grab == Grab.Node)
+            _dragging |= Dragged(_grabbedAt, V2(pointer));
+        if (_grab == Grab.Node && _dragging && _pending is { } chain && _selected >= 0 && _selected < chain.Nodes.Length)
         {
             double? time = null;
             var best = float.MaxValue;
@@ -264,7 +271,7 @@ internal sealed class NodeEditor
                     (_grab, _handle) = (Grab.Handle, hoveredIndex);
                     break;
                 case Hover.Node:
-                    (_selected, _grab) = (hoveredIndex, Grab.Node);
+                    (_selected, _grab, _grabbedAt, _dragging) = (hoveredIndex, Grab.Node, V2(pointer), false);
                     break;
                 default:
                     if (ghost is { } place)
@@ -410,6 +417,9 @@ internal sealed class NodeEditor
 
     private static ImColor8 Color((byte R, byte G, byte B) color, float alpha) =>
         new(color.R, color.G, color.B, (byte)(255 * Math.Clamp(alpha, 0f, 1f)));
+
+    /// <summary>Whether a node grabbed with the pointer at <paramref name="grabbedAt"/> is being dragged with it at <paramref name="pointer"/>: once it has moved more than <see cref="DragPixels"/> away.</summary>
+    internal static bool Dragged(Vector2 grabbedAt, Vector2 pointer) => Vector2.Distance(grabbedAt, pointer) > DragPixels;
 
     private static float Distance(float2 a, float2 b) => Vector2.Distance(V2(a), V2(b));
     private static Vector2 V2(float2 v) => new(v.X, v.Y);
