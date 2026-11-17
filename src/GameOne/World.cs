@@ -69,6 +69,7 @@ internal sealed record VesselState
     public Vector3? BurnAim { get; init; }
     public Vector3 Burned { get; init; }
     public double BurnStart { get; init; }
+    public bool MatchHeld { get; init; } // its next node matched with the engine lit, held so (see Vessel.Matched): a cut just after loading judged by it as it would have been
 
     // What has happened to it so far.
     public float MaxAltitude { get; init; }

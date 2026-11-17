@@ -155,7 +155,7 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
     [Fact]
     public void A_chain_round_trips()
     {
-        // A vessel round the moon with a chain anchored there, and one with none.
+        // A vessel round the moon with a chain anchored there (its next node held matched), and one with none.
         var chain = new ManoeuvreChain(new ChainAnchor(GroundBody.Moon.Name, 123.25, new Vector3(1.5f, -2f, 3f), new Vector3(400f, 5f, -6f)),
             [new ManoeuvreNode(0, 5f, -1f, 2f), new ManoeuvreNode(500.5, Normal: -3f)]);
         WorldState world;
@@ -164,12 +164,13 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
             Time = 100.0, NextVesselId = 2, Flights = 1, Vessels = [InOrbit.Round(GroundBody.Moon, 0, 400f), InOrbit.Round(GroundBody.Moon, 1, 900f)],
         }))
             world = sim.Flight.Capture() with { Id = "chain", Name = "A chain" };
-        world = world with { Vessels = [world.Vessels[0] with { Chain = chain }, .. world.Vessels.Skip(1)] };
+        world = world with { Vessels = [world.Vessels[0] with { Chain = chain, MatchHeld = true }, .. world.Vessels.Skip(1)] };
         Store.Save(world);
         var back = Store.Load("chain");
         Assert.Equal(chain, back.Vessels[0].Chain);
         Assert.Equal(chain.TimeOf(1), back.Vessels[0].Chain!.TimeOf(1));
         Assert.Null(back.Vessels[1].Chain);
+        Assert.True(back.Vessels[0].MatchHeld); // a hold under way, too
     }
 
     /// <summary>Every field of every vessel in <paramref name="back"/> is as it was in <paramref name="world"/>.</summary>

@@ -442,6 +442,57 @@ public sealed class NodeTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void A_cut_while_the_hold_shows_it_matched_lets_the_node_go()
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        var node = new ManoeuvreNode(0, Prograde: 10f);
+        var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 15, node);
+        sim.Step(new FlightInput(Plan: chain, ToggleProgradeHold: true));
+        sim.Run((_, _) => default, f => f.Guide!.Value.Seconds < f.Guide!.Value.BurnSeconds / 2, maxSeconds: 15);
+
+        // Burned past it, and cut while it is shown matched only by the hold.
+        float? cutAt = null;
+        Assert.True(sim.Run((f, _) =>
+        {
+            if (!f.EngineLit)
+                return cutAt is null ? new FlightInput(FullThrottle: true) : default;
+            var guide = f.Guide!.Value;
+            if (!guide.Matched || guide.Left.Length() <= node.MatchTolerance * 1.2f)
+                return default;
+            cutAt ??= guide.Left.Length();
+            return new FlightInput(CutThrottle: true);
+        }, _ => satellite.Chain is null, maxSeconds: 10), "cut while shown matched, it should go");
+        output.WriteLine($"cut with {cutAt:0.000} m/s left (tolerance {node.MatchTolerance}), shown matched");
+        Assert.InRange(cutAt!.Value, node.MatchTolerance, Scene.NodeMatchHold * node.MatchTolerance);
+    }
+
+    [Fact]
+    public void In_the_air_drag_bringing_it_within_tolerance_lets_the_node_go()
+    {
+        // Coasting in the air with the engine off, a little short of a node planned a little slower
+        // than it is: the air slows it into the tolerance, with nothing else to judge it by.
+        using var sim = new Simulation(Mission.FreePlay, world: new WorldState { Time = 0.0, Vessels = [InOrbit.UpperStage(0, 2500f, 1f)], NextVesselId = 1, Flights = 1 });
+        var v = sim.Flight.WorldVessels.Single(w => w.Id == 0);
+        sim.Step(new FlightInput(SwitchTo: v));
+        var now = sim.Flight.WorldTime;
+        sim.Step(new FlightInput(Plan: ManoeuvreChain.AnchoredOn(v, now, [new ManoeuvreNode(0, Prograde: -1.6f)], now)));
+        Assert.False(v.Body.AboveAir(v.CentreOfMass));
+        var start = v.Guide(sim.Flight.WorldTime)!.Value;
+        Assert.False(start.Matched);
+        Assert.False(sim.Flight.EngineLit);
+
+        var last = start.Left.Length();
+        Assert.True(sim.Run((f, _) =>
+        {
+            last = v.Guide(f.WorldTime)?.Left.Length() ?? last;
+            return default;
+        }, _ => v.Chain is null, maxSeconds: 30), $"slowed by the air into the tolerance, it should go (left {last:0.000} m/s)");
+        output.WriteLine($"left {start.Left.Length():0.000} m/s at first, {last:0.000} as it went, {sim.Flight.WorldTime - now:0.0} s on");
+        Assert.True(last < Scene.NodeMatchMin + 0.05f); // (its tolerance: 1.6 m/s is under the least share)
+    }
+
+    [Fact]
     public void A_node_matched_after_the_next_ones_time_leaves_the_next_late_on_the_present_path()
     {
         using var sim = Satellite(out var satellite);

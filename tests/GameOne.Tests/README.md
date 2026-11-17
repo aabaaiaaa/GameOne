@@ -614,7 +614,8 @@ say) stalls frames and spoils the timing.
   side, one flown by its guide turning matched and going as the engine is cut (in warp too),
   giving the orbit it planned, the guide counting down and saying when it goes past; a node past
   its time staying until matched, and cut before it is matched staying; the match tolerance (3% of
-  the burn, held between 1 and 5 m/s), held while lit until half as much again is left; an early
+  the burn, held between 1 and 5 m/s), held while lit until half as much again is left, and a cut while
+  held letting it go; drag in the air slowing a coasting vessel into the tolerance letting it go; an early
   burn cut matched letting it go before its time, and a fresh unburned one never matched before
   it; a late burn counted against the planned path at its point nearest the vessel (a lap and
   more late at any phase, a large burn flown well late, checked against a brute-force nearest

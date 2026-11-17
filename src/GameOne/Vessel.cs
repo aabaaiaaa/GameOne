@@ -65,7 +65,8 @@ internal sealed class Vessel
     private (double Now, ManoeuvreChain Chain, GroundBody Body, Vector3 Burn)? _planned; // Planned's last answer, and what it was asked
     private List<PathLeg>? _afterNode;                 // the planned path on from the next node's burn, kept for Late (made once past its time)
     private (double Now, ManoeuvreChain Chain, double At, double Until)? _afterNodeFor; // what _afterNode was worked out for, and the stretch of it looked along
-    private bool _matchHeld;                           // the next node matched in the last step with the engine lit (see Matched)
+    private bool _matchHeld;                           // the next node matched in the last step with the engine lit (see Matched); saved, as a cut just after loading goes by it
+    private bool _nodeTouching;                        // touching anything as FollowNodes last looked: the step after a touch is judged too
     private (ManoeuvreChain? Chain, bool Past) _judged; // the chain last judged with the engine off, and whether its node's time had come (see FollowNodes)
     private double _at;                                // the world time its state was last brought to (AfterPhysics, a crossing)
 
@@ -143,6 +144,7 @@ internal sealed class Vessel
         _burnAim = state.BurnAim;
         _burned = state.Burned;
         _burnStart = state.BurnStart;
+        _matchHeld = state.MatchHeld;
         if (onFormulaFrom is { } from)
             StartOnFormula(state, from);
         Measure(); // its altitude and tilt, as they were
@@ -234,6 +236,7 @@ internal sealed class Vessel
         BurnAim = _burnAim,
         Burned = _burned,
         BurnStart = _burnStart,
+        MatchHeld = _matchHeld,
     };
 
     /// <summary>Which vessel this is in its world: each one gets the next number, and keeps it.</summary>
@@ -926,7 +929,7 @@ internal sealed class Vessel
     /// <paramref name="left"/> still needed (<see cref="BurnLeft"/>) at world time
     /// <paramref name="now"/>: under its <see cref="ManoeuvreNode.MatchTolerance"/> once it may be
     /// (<see cref="MayMatch"/>); with <paramref name="held"/> (matched in the step before with the
-    /// engine lit, and lit still), under <see cref="Scene.NodeMatchHold"/> times that.
+    /// engine lit, and lit still or just cut), under <see cref="Scene.NodeMatchHold"/> times that.
     /// </summary>
     private bool Matched(ManoeuvreChain chain, Vector3 left, double now, bool held)
     {
@@ -1100,16 +1103,24 @@ internal sealed class Vessel
     /// (<see cref="ManoeuvreChain.Delete"/>), keeping its amounts.
     /// </summary>
     /// <remarks>
-    /// With the engine off nothing it does changes whether it matches, so that is judged only as
-    /// something does: the engine just cut, the chain new or changed, or the node's time just come
-    /// (from when it may be matched with no burn). So a vessel coasting on past an unmatched node
-    /// works out no path for it, step after step.
+    /// What the pilot sees is what happens: cut while the guide shows it matched (held, too: see
+    /// <see cref="Matched"/>), it goes. With the engine already off it goes once matched within the
+    /// tolerance itself. Coasting above the air and touching nothing, only its own fall moves it,
+    /// which neither the path flown nor the one planned leaves, so it is judged then only as
+    /// something changes: the engine just cut, the chain new or changed, or the node's time just
+    /// come (from when it may be matched with no burn); a vessel coasting on past an unmatched
+    /// node works out no path for it, step after step. In the air drag keeps changing how it
+    /// moves, and a touch changes it at once, so there it is judged every step, and in the step
+    /// after a touch.
     /// </remarks>
     private void FollowNodes(float dt, double now)
     {
         var lit = EngineLit;
         if (Chain is { } chain)
         {
+            var touching = Physics is { } physics && physics.TouchingAnything(_craft);
+            var touched = touching || _nodeTouching;
+            _nodeTouching = touching;
             if (lit && !_wasLit && _burnAim is null)
                 (_burnAim, _burnStart) = (Planned(chain, now), now);
             if (lit && _burnAim is not null)
@@ -1119,12 +1130,13 @@ internal sealed class Vessel
                 _matchHeld = mayMatch && BurnLeft(now) is { } left && Matched(chain, left, now, _matchHeld);
             else
             {
+                var held = _wasLit && _matchHeld; // just cut: matched as the guide showed it, the hold as it stood lit
                 _matchHeld = false;
                 var past = now >= chain.TimeOf(0);
-                if (_wasLit || !ReferenceEquals(chain, _judged.Chain) || past != _judged.Past)
+                if (_wasLit || touched || !Body.AboveAir(CentreOfMass) || !ReferenceEquals(chain, _judged.Chain) || past != _judged.Past)
                 {
                     _judged = (chain, past);
-                    if (mayMatch && BurnLeft(now) is { } left && Matched(chain, left, now, held: false))
+                    if (mayMatch && BurnLeft(now) is { } left && Matched(chain, left, now, held))
                     {
                         var rest = chain.Delete(0, this, now);
                         Chain = rest.Nodes.IsEmpty ? null : rest;
