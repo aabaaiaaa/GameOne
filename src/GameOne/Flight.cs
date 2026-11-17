@@ -1605,6 +1605,7 @@ internal sealed class Flight : IDisposable
             ToggleProgradeHold = false, ToggleRetrogradeHold = false, StartAgain = false, Rewind = false, Choose = null, From = null,
             SwitchVessel = false, SwitchTo = null, SetTarget = null, ClearTarget = false, Plan = null, ChooseFrame = null,
             Slower = false, Faster = false, ToggleBayDoors = false, CarryOn = null, CompleteRun = false, AbandonRun = false,
+            View = null, // taken once, in the first step, before a switch there changes which vessel is flown
         };
         for (var i = 0; i < steps; i++)
         {
