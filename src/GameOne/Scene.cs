@@ -118,6 +118,12 @@ internal static class Scene
     /// </summary>
     public const float NodeMatchHold = 1.5f;
 
+    /// <summary>A node's handle pushed in takes away at this share of the rate the same distance out adds.</summary>
+    public const float NodeHandleInwardShare = 0.25f;
+
+    /// <summary>The next node's colour (and its planned legs') once its trajectory is matched (<see cref="NodeMatchShare"/>).</summary>
+    public static readonly (byte R, byte G, byte B) NodeMatchedColor = (120, 230, 120);
+
     /// <summary>
     /// How many points along a stretch of a node's planned path are looked at for the one nearest
     /// the vessel (a late burn's guide: see <see cref="Vessel.BurnLeft"/>), before Newton's steps

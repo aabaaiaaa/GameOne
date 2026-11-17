@@ -235,8 +235,11 @@ internal sealed class Paths
         // With a plan: the orbit as it is, faintly; over it, the path to the first node, then the plan.
         DrawLine(draw, _line, pathColor, _planned ? 0.3f : 0.9f, Scene.PathWidth);
         DrawLine(draw, _toFirst, pathColor, 0.9f, Scene.PathWidth);
+        // The next node matched: the legs it plans, up to the second node's burn, are green.
+        var matched = flight.Guide is { Matched: true };
+        var secondNodeLeg = plan.NodeLeg(1) ?? int.MaxValue;
         for (var i = 0; i < _legs.Count; i++)
-            DrawLine(draw, _legs[i], i <= _firstNodeLeg ? pathColor : PlanColor, 0.9f, Scene.PathWidth);
+            DrawLine(draw, _legs[i], i <= _firstNodeLeg ? pathColor : matched && i <= secondNodeLeg ? Scene.NodeMatchedColor : PlanColor, 0.9f, Scene.PathWidth);
         Window(draw);
         // The collisions: each one's lead-ins (faint for a vessel neither flown nor the target, whose
         // path is otherwise not drawn at all), then its cross over them, soonest first; one within

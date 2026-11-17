@@ -107,6 +107,10 @@ to place a node there, a burn planned for that moment. The selected node (the la
 clicked) has six handles: prograde and retrograde (green), radial out and in (blue), normal and
 antinormal (pink); filled ones add that way, hollow ones the other. Pull one out from the node and
 hold it: speed builds that way, faster the farther out you hold it, and stops when you let go.
+Push a handle in towards the node instead and it takes that speed away, a quarter as fast, so it
+undoes an overshoot in small steps (it goes past zero; for a larger change use the other handle).
+While a node is selected the steering rings give way to it. The next node turns green once the path
+you fly matches its plan, as do the legs it plans.
 The path after the burn (purple) follows as you pull, with its own Ap and Pe, and the closest
 approach to your target is worked out on it; the orbit you are on now shows faintly beneath. Drag
 a node along the path it is on to move it in time (the nodes after it move with it; it can't go

@@ -83,6 +83,23 @@ internal sealed class NodeEditor
 
     private int Count => _pending?.Nodes.Length ?? 0;
 
+    /// <summary>Whether a node is selected, its handles out: a click on the steering rings' place is then for the handles, not the rings.</summary>
+    public bool Selected => _selected >= 0;
+
+    /// <summary>
+    /// How fast a handle adds to its speed (m/s each second, negative to take away) with the
+    /// pointer <paramref name="along"/> pixels past where the handle rests, on its own axis. Out,
+    /// faster the farther: fine near the rest, quick at the end. In, a share of that
+    /// (<see cref="Scene.NodeHandleInwardShare"/>) the other way, so it undoes an overshoot in
+    /// small steps; it goes past zero (a larger change is the opposite handle's).
+    /// </summary>
+    internal static float Rate(float along)
+    {
+        var pull = Math.Clamp(Math.Abs(along), 0f, HandlePull);
+        var outward = 0.3f + FastestRate * (pull / HandlePull) * (pull / HandlePull);
+        return along >= 0f ? outward : -Scene.NodeHandleInwardShare * outward;
+    }
+
     /// <summary>Whether the pointer is on a node, a handle or the path, or dragging: a click then is for planning, not the steering rings or the markers.</summary>
     public bool PointerOver { get; private set; }
 
@@ -205,15 +222,13 @@ internal sealed class NodeEditor
                 if (!handleShown[k])
                     continue;
                 handleWay[k] = F2(Vector2.Normalize(V2(tip) - V2(onScreen[_selected])));
-                var pull = _grab == Grab.Handle && _handle == k
-                    ? Math.Clamp(Vector2.Dot(V2(pointer) - V2(onScreen[_selected]), V2(handleWay[k])) - HandleRest, 0f, HandlePull)
+                var along = _grab == Grab.Handle && _handle == k
+                    ? Math.Clamp(Vector2.Dot(V2(pointer) - V2(onScreen[_selected]), V2(handleWay[k])) - HandleRest, -HandleRest, HandlePull)
                     : 0f;
-                handleAt[k] = onScreen[_selected] + handleWay[k] * (HandleRest + pull);
-                if (pull > 3f)
+                handleAt[k] = onScreen[_selected] + handleWay[k] * (HandleRest + along);
+                if (Math.Abs(along) > 3f)
                 {
-                    // Faster the farther out it is held: fine near the rest, quick at the end.
-                    var rate = 0.3f + FastestRate * (pull / HandlePull) * (pull / HandlePull);
-                    var add = rate * dt * (k % 2 == 0 ? 1f : -1f);
+                    var add = Rate(along) * dt * (k % 2 == 0 ? 1f : -1f);
                     var node = _pending!.Nodes[_selected];
                     _pending = _pending.WithNode(_selected, (k / 2) switch
                     {
@@ -288,6 +303,7 @@ internal sealed class NodeEditor
         }
 
         // Drawing: the nodes, the selected one's handles and delete button, and the ghost.
+        var matched = flight.Guide is { Matched: true };
         var color = Paths.PlanColor;
         if (ghost is { } g && paths.InView(g.At, out var ghostAt))
             draw.AddCircle(ghostAt, 5f, Color(color, alpha * 0.9f), 0, 1.5f);
@@ -298,15 +314,16 @@ internal sealed class NodeEditor
                 continue;
             var at = onScreen[i];
             var hot = i == _selected || (hovered == Hover.Node && hoveredIndex == i);
-            draw.AddCircleFilled(at, hot ? NodePixels + 1.5f : NodePixels, Color(color, alpha));
+            var nodeColor = i == 0 && matched ? Scene.NodeMatchedColor : color;
+            draw.AddCircleFilled(at, hot ? NodePixels + 1.5f : NodePixels, Color(nodeColor, alpha));
             draw.AddCircle(at, (hot ? NodePixels + 1.5f : NodePixels) + 1f, Color((0, 0, 0), alpha * 0.6f), 0, 1.5f);
             var node = _pending!.Nodes[i];
-            Label(draw, at + new float2(10f, 8f), color, alpha, $"{node.Size:0.0} m/s  in {Clock(_pending.TimeOf(i) - now)}");
+            Label(draw, at + new float2(10f, 8f), nodeColor, alpha, $"{node.Size:0.0} m/s  in {Clock(_pending.TimeOf(i) - now)}");
         }
         if (_selected >= 0 && _selected == selectedAtStart && _selected < shown.Length && _selected < Count && shown[_selected])
         {
             var at = onScreen[_selected];
-            draw.AddCircle(at, NodePixels + 5f, Color(color, alpha), 0, 1.5f);
+            draw.AddCircle(at, NodePixels + 5f, Color(_selected == 0 && matched ? Scene.NodeMatchedColor : color, alpha), 0, 1.5f);
             for (var k = 0; k < 6; k++)
             {
                 if (!handleShown[k])

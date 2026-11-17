@@ -610,6 +610,8 @@ say) stalls frames and spoils the timing.
   the vessel flown letting its ended run's result go; a world loaded over its capacity losing
   debris, then vessels of no run, then runs', never the one flown; and the readout's runs, rewind,
   vessel id and position.
+- **`NodeEditorTests`:** the node editor's handle rate: out as it adds, in a quarter of that
+  taking away, past zero.
 - **`NodeTests`:** manoeuvre nodes as a chain (`ManoeuvreChain`): a prograde node raising the far
   side, one flown by its guide turning matched and going as the engine is cut (in warp too),
   giving the orbit it planned, the guide counting down and saying when it goes past; a node past
