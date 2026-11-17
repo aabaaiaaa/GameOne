@@ -31,6 +31,7 @@ internal sealed class Markers
     private const float Shape = 7f;                     // pixels from a marker's middle to its edge
     private const float SeenFrom = 8f, SeenBy = 20f;    // fading out as its object grows from this radius on screen to this
     private const float NearBy = Scene.NearByDistance;  // metres: a quiet marker this close is labelled anyway (the main view's near reach)
+    private const float BodySeenFrom = 0.15f, BodySeenBy = 0.3f; // a body's ring fades from this radius to this, as a share of the screen's short side
     private const float EdgeMargin = 40f;
 
     internal enum Look
@@ -211,10 +212,7 @@ internal sealed class Markers
         foreach (var marker in _candidates)
         {
             // How big its object is on the screen: none once it can be seen for itself.
-            var toIt = marker.Position - camera.Position;
-            var depth = Vector3.Dot(toIt, camera.Forward);
-            var pixels = marker.Radius / ChaseCamera.MetresPerPixel(MathF.Max(MathF.Abs(depth), toIt.Length() * 0.1f), display);
-            var fade = 1f - SmoothStep(SeenFrom, SeenBy, pixels);
+            var fade = Fade(marker, camera.Position, camera.Forward, display);
             if (fade < 0.02f)
                 continue;
 
@@ -238,9 +236,8 @@ internal sealed class Markers
 
             // Giving way: one that would sit on one before it isn't drawn at all.
             var size = marker.Loud ? Shape : Shape * 0.75f;
-            var min = F2(at - new Vector2(size + 2f));
-            var max = F2(at + new Vector2(size + 2f));
-            if (Overlaps(min, max))
+            var (min, max) = Box(at, marker.Loud);
+            if (GivesWay(marker, _taken, min, max))
                 continue;
             _taken.Add((min, max));
             _drawn.Add((marker.Name, at - display * 0.5f));
@@ -389,13 +386,49 @@ internal sealed class Markers
         }
     }
 
-    private bool Overlaps(float2 min, float2 max)
+    private bool Overlaps(float2 min, float2 max) => Overlaps(_taken, min, max);
+
+    private static bool Overlaps(List<(float2 Min, float2 Max)> taken, float2 min, float2 max)
     {
-        foreach (var (takenMin, takenMax) in _taken)
+        foreach (var (takenMin, takenMax) in taken)
             if (min.X < takenMax.X && max.X > takenMin.X && min.Y < takenMax.Y && max.Y > takenMin.Y)
                 return true;
         return false;
     }
+
+    /// <summary>
+    /// How strongly <paramref name="marker"/> shows for how big its object is on the screen (1 in
+    /// full, 0 not at all): it fades as the object grows to be seen for itself. A body's ring is the
+    /// way to point at the body, so it stays through the sizes a body is small on the screen (the
+    /// moon from its orbit) and goes only as the body fills a good part of it. (Internal, as the
+    /// tests read it: the drawing needs a window.)
+    /// </summary>
+    internal static float Fade(in Candidate marker, Vector3 cameraPosition, Vector3 forward, Vector2 display)
+    {
+        var toIt = marker.Position - cameraPosition;
+        var depth = Vector3.Dot(toIt, forward);
+        var pixels = marker.Radius / ChaseCamera.MetresPerPixel(MathF.Max(MathF.Abs(depth), toIt.Length() * 0.1f), display);
+        var (from, by) = marker.Kind == MarkerKind.Body
+            ? (BodySeenFrom * MathF.Min(display.X, display.Y), BodySeenBy * MathF.Min(display.X, display.Y))
+            : (SeenFrom, SeenBy);
+        return 1f - SmoothStep(from, by, pixels);
+    }
+
+    /// <summary>The box a marker drawn at <paramref name="at"/> takes on the screen. (Internal for the tests.)</summary>
+    internal static (float2 Min, float2 Max) Box(Vector2 at, bool loud)
+    {
+        var size = loud ? Shape : Shape * 0.75f;
+        return (F2(at - new Vector2(size + 2f)), F2(at + new Vector2(size + 2f)));
+    }
+
+    /// <summary>
+    /// Whether <paramref name="marker"/>, whose box is <paramref name="min"/> to <paramref name="max"/>,
+    /// isn't drawn for sitting on one before it. A body's ring never gives way: a marker on the
+    /// body (a landing spot on its ground) is not to take its place, and only labels are spread
+    /// (<see cref="MapLabels"/>). (Internal for the tests.)
+    /// </summary>
+    internal static bool GivesWay(in Candidate marker, List<(float2 Min, float2 Max)> taken, float2 min, float2 max) =>
+        marker.Kind != MarkerKind.Body && Overlaps(taken, min, max);
 
     private static void DrawShape(ImDrawListPtr draw, float2 at, float size, Look look, ImColor8 color, float alpha)
     {

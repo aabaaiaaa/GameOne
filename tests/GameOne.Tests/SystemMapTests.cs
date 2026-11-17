@@ -29,7 +29,7 @@ public sealed class SystemMapTests(ITestOutputHelper output)
     /// world time <paramref name="t"/>, its angles dragged by <paramref name="drag"/> pixels (as the
     /// right drag turns it there).
     /// </summary>
-    private static ChaseCamera ZoomedOut(GroundBody body, Vector3 focus, Vector2 drag, double t, float clicks = 200f)
+    internal static ChaseCamera ZoomedOut(GroundBody body, Vector3 focus, Vector2 drag, double t, float clicks = 200f)
     {
         const float dt = 1f / 60f;
         var camera = new ChaseCamera(null);

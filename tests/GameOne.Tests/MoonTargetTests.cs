@@ -687,4 +687,43 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
             Assert.Equal(bounded.Count, paths.PlannedWindow.Count);
         }
     }
+
+    [Fact]
+    public void The_moons_ring_shows_zoomed_out_with_the_landing_spot_on_it()
+    {
+        // Flying the moon mission in orbit, the camera zoomed out to fit the moon's orbit on a
+        // 1280 x 720 screen: the moon is a few tens of pixels across, its landing spot (drawn
+        // first) on it, and its ring is drawn all the same: not faded away, not given way.
+        using var sim = new Simulation(Mission.LandOnTheMoon, world: World(Start, InOrbit.Round(Planet, 0, 2000f)));
+        sim.Step(default);
+        var flight = sim.Flight;
+        var flown = flight.WorldVessels.Single(v => v.Id == 0);
+        var frames = new BodyFrames();
+        frames.Begin(flight.WorldTime, flight.Body);
+        var candidates = new List<Markers.Candidate>();
+        Markers.Gather(flight, new Settings(), frames, candidates);
+
+        var screen = new Vector2(1280f, 720f);
+        var camera = SystemMapTests.ZoomedOut(Planet, flown.CentreOfMass, Vector2.Zero, flight.WorldTime, clicks: 7f);
+        var taken = new List<(Brutal.Numerics.float2 Min, Brutal.Numerics.float2 Max)>();
+        var drawn = new List<string>();
+        foreach (var marker in candidates)
+        {
+            var fade = Markers.Fade(marker, camera.Position, camera.Forward, screen);
+            var onScreen = camera.ToScreen(marker.Position, screen, out var at, out _);
+            if (fade < 0.02f || !onScreen)
+                continue;
+            var (min, max) = Markers.Box(at, marker.Loud);
+            var gaveWay = Markers.GivesWay(marker, taken, min, max);
+            output.WriteLine($"{marker.Name}: fade {fade:0.00} at {at}, {(gaveWay ? "gives way" : "drawn")}");
+            if (gaveWay)
+                continue;
+            taken.Add((min, max));
+            drawn.Add(marker.Name);
+            if (marker.Kind == MarkerKind.Body && marker.Name == Moon.Name)
+                Assert.True(fade > 0.5f, $"the moon's ring is faded to {fade:0.00}");
+        }
+        Assert.Contains("Landing spot", drawn);
+        Assert.Contains(Moon.Name, drawn);
+    }
 }
