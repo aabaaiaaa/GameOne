@@ -209,7 +209,7 @@ internal sealed class Markers
     /// a click on one (or off them all, unless it was on the steering rings, <paramref name="ringsInUse"/>,
     /// or markers are off). Nothing is clickable while <paramref name="menuOpen"/>.
     /// </summary>
-    public void Draw(ImDrawListPtr draw, Flight flight, ChaseCamera camera, Vector2 display, Settings settings, bool ringsInUse, bool menuOpen, BodyFrames frames, MapLabels labels)
+    public void Draw(ImDrawListPtr draw, Flight flight, ChaseCamera camera, Vector2 display, Settings settings, bool ringsInUse, bool menuOpen, BodyFrames frames, MapLabels labels, SystemMap? map = null)
     {
         var pressed = _pressed;
         _pressed = false;
@@ -304,9 +304,16 @@ internal sealed class Markers
         PointerOver = _hovered is not null || onComing || hoverOnPile;
         if (menuOpen || io.WantCaptureMouse || !pressed)
             return;
+        // A press on none of them, nor on the nodes or the steering rings (ringsInUse), is on a body's
+        // path in the map, if that is what it is on.
+        var onLine = pressedComing is null && pressedOn is null && !ringsInUse && !pressOnPile && map?.BodyLineAt(pressAt, NodeEditor.PathPixels) is { } line
+            ? NavTarget.OfBody(line)
+            : (NavTarget?)null;
         var (set, clear) = pressedComing is { } comingVessel
             ? Click(onMarker: true, comingVessel, flight.Target, emptyLetsGo: false)
-            : Click(pressedOn is not null, pressedOn?.Target, flight.Target, emptyLetsGo: settings.Markers && !ringsInUse && !pressOnPile);
+            : onLine is { } lineTarget
+                ? Click(onMarker: true, lineTarget, flight.Target, emptyLetsGo: false)
+                : Click(pressedOn is not null, pressedOn?.Target, flight.Target, emptyLetsGo: settings.Markers && !ringsInUse && !pressOnPile);
         if (set is not null)
             _set = set;
         _clear |= clear; // held until TakeClick, never unset by a later frame

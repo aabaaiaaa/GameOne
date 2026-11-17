@@ -207,6 +207,8 @@ internal sealed class Paths
             Map.Lay(_view, camera.Position, display);
             Map.Draw(draw, _fade, Labels);
         }
+        else
+            Map.Forget();
         _fade = 0f;
         if (vessel.State != FlightState.Flying)
             return;

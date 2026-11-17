@@ -598,4 +598,50 @@ public sealed class SystemMapTests(ITestOutputHelper output)
         Assert.True(map.Runs.Count > 0);
         Assert.Equal(0, allocated);
     }
+
+    /// <summary>The map laid for a flight over Home from the farthest zoom, 1280 x 720.</summary>
+    private static (Simulation Sim, SystemMap Map) LaidOverHome()
+    {
+        var sim = WorldWith(1234.5, InOrbit.Round(GroundBody.Planet, 0, 2000f));
+        var flight = sim.Flight;
+        var frames = new BodyFrames();
+        frames.Begin(flight.WorldTime, flight.Body);
+        var camera = ZoomedOut(flight.Body, new Vector3(0f, 3000f, 0f), Vector2.Zero, flight.WorldTime);
+        var map = new SystemMap();
+        map.Build(flight, frames, camera.Position);
+        map.Lay(camera.ViewProjection(Screen), camera.Position, Screen);
+        return (sim, map);
+    }
+
+    [Fact]
+    public void Clicking_the_moons_orbit_line_targets_the_moon()
+    {
+        // On the middle of a piece of the moon's drawn path (and a few pixels off it) the click
+        // is the moon's; the flown vessel's own body (the planet) never counts, even on its line.
+        var (sim, map) = LaidOverHome();
+        using var _ = sim;
+        var moon = GroundBody.Moon;
+        var runs = map.Runs.Where(r => r.Body == moon.Index && r.Count >= 2).ToList();
+        Assert.NotEmpty(runs);
+        var run = runs.OrderByDescending(r => r.Count).First();
+        var (a, b) = (map.Screen[run.First + run.Count / 2 - 1], map.Screen[run.First + run.Count / 2]);
+        var middle = new Vector2((a.X + b.X) / 2f, (a.Y + b.Y) / 2f);
+        Assert.Same(moon, map.BodyLineAt(middle, 8f));
+        Assert.Same(moon, map.BodyLineAt(middle + new Vector2(3f, 3f), 8f));
+
+        foreach (var planetRun in map.Runs.Where(r => r.Body == GroundBody.Planet.Index))
+            for (var i = planetRun.First; i < planetRun.First + planetRun.Count; i++)
+                Assert.NotSame(GroundBody.Planet, map.BodyLineAt(new Vector2(map.Screen[i].X, map.Screen[i].Y), 8f));
+    }
+
+    [Fact]
+    public void A_click_off_every_line_hits_nothing()
+    {
+        var (sim, map) = LaidOverHome();
+        using var _ = sim;
+        Assert.Null(map.BodyLineAt(new Vector2(-500f, -500f), 8f));
+        Assert.Null(map.BodyLineAt(new Vector2(Screen.X * 4f, Screen.Y * 4f), 8f));
+        var empty = new SystemMap();
+        Assert.Null(empty.BodyLineAt(new Vector2(10f, 10f), 8f));
+    }
 }

@@ -696,7 +696,7 @@ internal sealed class Hud : IDisposable
         _paths.Labels.Clear();
         _paths.Draw(ImGui.GetBackgroundDrawList(), flight, camera, new Vector2(display.X, display.Y), _plan, frames);
         _nodes.Update(ImGui.GetBackgroundDrawList(), flight, camera, _plan, _paths, blocked: MenuOpen || _markers.PointerOver || navigation.InUse);
-        _markers.Draw(ImGui.GetBackgroundDrawList(), flight, camera, new Vector2(display.X, display.Y), Settings, navigation.InUse || _nodes.PointerOver, MenuOpen, frames, _paths.Labels);
+        _markers.Draw(ImGui.GetBackgroundDrawList(), flight, camera, new Vector2(display.X, display.Y), Settings, navigation.InUse || _nodes.PointerOver, MenuOpen, frames, _paths.Labels, _paths.Map);
         // The path's and the markers' labels together, over them all; a pile under the pointer
         // spread, but not from under a panel or a menu.
         _paths.Labels.Draw(ImGui.GetBackgroundDrawList(), MenuOpen || ImGui.GetIO().WantCaptureMouse ? null : _markers.Pointer, new Vector2(display.X, display.Y));

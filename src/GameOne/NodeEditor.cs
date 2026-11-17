@@ -28,7 +28,9 @@ internal sealed class NodeEditor
         Handle,
     }
 
-    private const float NodePixels = 6f, GrabPixels = 9f, PathPixels = 8f;
+    private const float NodePixels = 6f, GrabPixels = 9f;
+    /// <summary>How near the pointer must be to a path, in pixels, to be on it.</summary>
+    internal const float PathPixels = 8f;
     private const float HandleRest = 44f;     // how far out the handles sit, in pixels
     private const float HandlePull = 70f;     // and how much farther one can be pulled
     private const float FastestRate = 40f;    // m/s added each second, pulled all the way out

@@ -75,6 +75,7 @@ internal sealed class SystemMap
     private readonly List<Vector3> _radial = [];
     private Frame _frame;
     private double _now;
+    private GroundBody _flown = GroundBody.Planet;
     private BodyFrames _frames = null!;
 
     // What Lay put on the screen: every run's points, one after another, and the runs; the dots
@@ -134,6 +135,7 @@ internal sealed class SystemMap
     {
         _frames = frames;
         _frame = flight.LineFrame;
+        _flown = flight.Body;
         _now = flight.WorldTime;
         var view = flight.Body;
         var now = flight.WorldTime;
@@ -577,6 +579,41 @@ internal sealed class SystemMap
             return false;
         at = new float2((clip.X / clip.W + 1f) * display.X * 0.5f, (1f - clip.Y / clip.W) * display.Y * 0.5f);
         return true;
+    }
+
+    /// <summary>Leaves nothing laid: the map isn't on the screen, so there is nothing to point at.</summary>
+    public void Forget()
+    {
+        _screen.Clear();
+        _runs.Clear();
+        _dots.Clear();
+        SunMark = null;
+    }
+
+    /// <summary>
+    /// The body whose path (as <see cref="Lay"/> last laid it) passes within <paramref name="within"/> pixels of
+    /// <paramref name="pointer"/>, the nearest if several; null if none does. The body the flown vessel is at
+    /// never counts: it can't be a target.
+    /// </summary>
+    internal GroundBody? BodyLineAt(Vector2 pointer, float within)
+    {
+        GroundBody? best = null;
+        var bestDistance = within;
+        foreach (var run in _runs)
+        {
+            if (run.Body < 0 || run.Vessel >= 0 || Bodies.All[run.Body] == _flown)
+                continue;
+            for (var i = run.First + 1; i < run.First + run.Count; i++)
+            {
+                var (a, b) = (new Vector2(_screen[i - 1].X, _screen[i - 1].Y), new Vector2(_screen[i].X, _screen[i].Y));
+                var ab = b - a;
+                var t = ab.LengthSquared() > 1e-6f ? Math.Clamp(Vector2.Dot(pointer - a, ab) / ab.LengthSquared(), 0f, 1f) : 0f;
+                var distance = Vector2.Distance(pointer, a + ab * t);
+                if (distance < bestDistance)
+                    (bestDistance, best) = (distance, Bodies.All[run.Body]);
+            }
+        }
+        return best;
     }
 
     /// <summary>Draws what <see cref="Lay"/> left, as strongly as <paramref name="fade"/>: each run one polyline, the dots, the sun's ring, and its name into <paramref name="labels"/> (a body's: the others give way to it).</summary>
