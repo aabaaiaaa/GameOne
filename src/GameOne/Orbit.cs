@@ -428,6 +428,9 @@ internal readonly struct Orbit
         return Within(up);
     }
 
+    /// <summary>Whether <paramref name="anomaly"/> is on the path ahead: past where it is now and no further than its end (the ground, a lap on, or out at the edge for an escape).</summary>
+    public bool Ahead(double anomaly) => Within(anomaly) is not null;
+
     private double? Within(double anomaly) => anomaly > _now && anomaly <= _end + 1e-9 ? anomaly : null;
 
     /// <summary>

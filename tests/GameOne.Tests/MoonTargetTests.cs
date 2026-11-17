@@ -95,7 +95,7 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
     /// distance, burnt at <paramref name="now"/> and aimed so that when it gets there the moon is
     /// <paramref name="lead"/> radians on from it (0.22 passes about 1 km over its ground).
     /// </summary>
-    private static (Vector3 Position, Vector3 Velocity) Transfer(double now, double lead)
+    internal static (Vector3 Position, Vector3 Velocity) Transfer(double now, double lead)
     {
         double mu = Planet.Mu, low = Planet.SeaRadius + 4000.0, high = Scene.MoonDistance;
         var a = (low + high) / 2;

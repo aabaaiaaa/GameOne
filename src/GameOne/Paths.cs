@@ -499,10 +499,10 @@ internal sealed class Paths
             if (planeNormal is { } targetNormal && planeBody == leg.Body && PlaneCrossings.Of(orbit, targetNormal) is var (ascending, descending, inclination))
             {
                 var degrees = inclination * 180f / MathF.PI;
-                if (orbit.TimeTo(ascending) <= span)
+                if (orbit.Ahead(ascending) && orbit.TimeTo(ascending) <= span)
                     _marks.Add(new Mark(place.Point(frame, orbit.At(ascending), startsIn + orbit.TimeTo(ascending)), TargetColor,
                         AngleLabel(ref _anLabels[slot], ref _anLabelsFor[slot], "AN ", degrees)));
-                if (orbit.TimeTo(descending) <= span)
+                if (orbit.Ahead(descending) && orbit.TimeTo(descending) <= span)
                     _marks.Add(new Mark(place.Point(frame, orbit.At(descending), startsIn + orbit.TimeTo(descending)), TargetColor,
                         AngleLabel(ref _dnLabels[slot], ref _dnLabelsFor[slot], "DN ", degrees)));
             }
@@ -746,19 +746,20 @@ internal sealed class Paths
     /// Ap's or Pe's height, the closest approach): built again only when what it shows changes
     /// (<paramref name="shownFor"/>, see <see cref="ShownAs"/>), not as a new string every frame.
     /// </summary>
-    private static string AngleLabel(ref string label, ref double shownFor, string prefix, float degrees)
-    {
-        var key = Math.Round(degrees, 1);
-        if (key != shownFor)
-            (label, shownFor) = ($"{prefix}{key:0.0}°", key);
-        return label;
-    }
-
     private static string DistanceLabel(ref string label, ref double shownFor, string prefix, float metres)
     {
         var key = ShownAs(metres);
         if (key != shownFor)
             (label, shownFor) = (prefix + Markers.Distance(metres), key);
+        return label;
+    }
+
+    /// <summary><paramref name="prefix"/> and an angle in degrees to a tenth (a node's plane angle): built again only when what it shows changes, as <see cref="DistanceLabel"/>'s is.</summary>
+    private static string AngleLabel(ref string label, ref double shownFor, string prefix, float degrees)
+    {
+        var key = Math.Round(degrees, 1);
+        if (key != shownFor)
+            (label, shownFor) = ($"{prefix}{key:0.0}°", key);
         return label;
     }
 
