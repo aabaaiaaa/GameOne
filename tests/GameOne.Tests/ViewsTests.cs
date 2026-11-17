@@ -334,7 +334,7 @@ public sealed class ViewsTests
         Assert.Equal(display.Y - margin, Hud.StripPlace(display, 0, available, 300f).ButtonsBottom, 3);
     }
 
-    private static readonly CameraView Seen = new(true, 0.5f, 0.3f, 300f, 1f, 0.9f, 90_000f, CameraCentre.Own);
+    private static readonly CameraView Seen = new(true, 0.5f, 0.3f, 300f, 1f, 0.9f, 90_000f, true, CameraCentre.Own);
 
     /// <summary>A headless camera that takes each vessel's view as the game's does when it is flown.</summary>
     private static ChaseCamera Taking(Flight flight)

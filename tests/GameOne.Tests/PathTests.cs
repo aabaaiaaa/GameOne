@@ -320,18 +320,90 @@ public sealed class PathTests(ITestOutputHelper output)
             "it should come back to just where it was");
     }
 
-    [Fact]
-    public void The_map_looks_from_above_the_orbits_plane()
+    [Theory]
+    [InlineData(false, 0f)]
+    [InlineData(true, 0f)]
+    [InlineData(false, -60f)] // dragged to tip the camera down, still above the plane
+    public void The_map_looks_from_above_the_orbits_plane(bool onTheMoon, float dragY)
     {
         const float frame = 1f / 60f;
+        var body = onTheMoon ? GroundBody.Moon : GroundBody.Planet;
+        var focus = onTheMoon ? OnTheMoon.Standing(OnTheMoon.LandingSpot).Position : Above(4000f);
         var camera = new ChaseCamera(null);
+        camera.Update(frame, focus, null, body, 0);
+        camera.ToggleZoomOut(body.Radius + 4000f);
+        for (var i = 0; i < 120; i++)
+            camera.Update(frame, focus, null, body, 0);
+        if (dragY != 0f)
+        {
+            camera.DragOrbit(new Vector2(0f, dragY));
+            camera.Update(frame, focus, null, body, 0);
+        }
+        var pole = Vector3.Normalize(body.NorthPole);
+        Assert.True(Vector3.Dot(Vector3.Normalize(camera.Position - camera.Focus), pole) > 0.2f, "the map should look down from the north pole's side");
+    }
+
+    [Fact]
+    public void A_vessel_never_flown_opens_the_map_on_the_fit_of_its_orbit()
+    {
+        const float frame = 1f / 60f;
         var focus = Above(4000f);
+        Vector3 Opened(ChaseCamera camera)
+        {
+            camera.Update(frame, focus, null, GroundBody.Planet, 0);
+            camera.ToggleZoomOut(Planet.Radius + 4000f);
+            for (var i = 0; i < 120; i++)
+                camera.Update(frame, focus, null, GroundBody.Planet, 0);
+            return camera.Position;
+        }
+        var fresh = Opened(new ChaseCamera(null));
+        var given = new ChaseCamera(null);
+        given.Apply(GameView.DefaultView);
+        Assert.True(Vector3.Distance(fresh, Opened(given)) < 1f, "the default view opens the map as a camera never set does");
+    }
+
+    [Fact]
+    public void A_map_not_set_by_hand_is_fitted_afresh_to_each_orbit()
+    {
+        const float frame = 1f / 60f;
+        var focus = Above(4000f);
+        var camera = new ChaseCamera(null);
         camera.Update(frame, focus, null, GroundBody.Planet, 0);
-        camera.ToggleZoomOut(Planet.Radius + 4000f);
+        float OpenedAt(float reach)
+        {
+            camera.ToggleZoomOut(reach);
+            for (var i = 0; i < 120; i++)
+                camera.Update(frame, focus, null, GroundBody.Planet, 0);
+            var far = Vector3.Distance(camera.Position, camera.Focus);
+            camera.ToggleZoomOut(reach);
+            for (var i = 0; i < 120; i++)
+                camera.Update(frame, focus, null, GroundBody.Planet, 0);
+            return far;
+        }
+        var near = OpenedAt(Planet.Radius + 4000f);
+        Assert.True(OpenedAt(Planet.Radius + 400_000f) > near * 2f, "a larger orbit should be fitted farther out");
+    }
+
+    [Fact]
+    public void A_map_zoomed_by_hand_to_the_least_distance_keeps_its_view()
+    {
+        const float frame = 1f / 60f;
+        var focus = Above(4000f);
+        var camera = new ChaseCamera(null);
+        camera.Update(frame, focus, null, GroundBody.Planet, 0);
+        camera.ToggleZoomOut(Planet.Radius + 400_000f);
         for (var i = 0; i < 120; i++)
             camera.Update(frame, focus, null, GroundBody.Planet, 0);
-        var pole = Vector3.Normalize(GroundBody.Planet.NorthPole);
-        Assert.True(Vector3.Dot(camera.Position - camera.Focus, pole) > 0f, "the map should look down from the north pole's side");
+        camera.Zoom(500f); // in, as far as it goes
+        camera.Update(frame, focus, null, GroundBody.Planet, 0);
+        Assert.Equal(Scene.ZoomOutMinDistance, Vector3.Distance(camera.Position, camera.Focus), 1f);
+        camera.ToggleZoomOut(Planet.Radius + 400_000f);
+        for (var i = 0; i < 120; i++)
+            camera.Update(frame, focus, null, GroundBody.Planet, 0);
+        camera.ToggleZoomOut(Planet.Radius + 400_000f);
+        for (var i = 0; i < 120; i++)
+            camera.Update(frame, focus, null, GroundBody.Planet, 0);
+        Assert.Equal(Scene.ZoomOutMinDistance, Vector3.Distance(camera.Position, camera.Focus), 1f);
     }
 
     [Fact]

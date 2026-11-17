@@ -1102,7 +1102,7 @@ internal static class Scene
     public const float ZoomOutSeconds = 0.9f;          // real seconds, out or back, whatever the time warp
     public const float ZoomOutPitchDegrees = 62f;      // above the orbits' plane, to start with
     public const float ZoomOutMargin = 1.3f;           // the orbit fills the height of the screen less this
-    public const float ZoomOutMinDistance = 16000f;    // from its body's centre
+    public const float ZoomOutMinDistance = 16000f;    // from what it looks at (the vessel)
     public static readonly float ZoomOutMaxDistance =
         (2f * SunDistance + SunRadius) * ZoomOutMargin / MathF.Tan(float.DegreesToRadians(CameraVerticalFovDegrees) / 2);
     public const float ZoomOutSunClearance = 2f;

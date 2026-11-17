@@ -99,7 +99,7 @@ internal sealed class GameView : IDisposable
 
     /// <summary>How a vessel never flown is looked at: the chase view at its starting distance and pitch, centred on itself.</summary>
     internal static CameraView DefaultView { get; } = new(false, 0f, float.DegreesToRadians(Scene.CameraPitchDegrees), Scene.CameraDistance,
-        0f, float.DegreesToRadians(Scene.ZoomOutPitchDegrees), Scene.ZoomOutMinDistance, CameraCentre.Own);
+        0f, float.DegreesToRadians(Scene.ZoomOutPitchDegrees), Scene.ZoomOutMinDistance, false, CameraCentre.Own);
 
     /// <summary>Starts showing <paramref name="flight"/>, resetting the camera and effects whenever it starts again.</summary>
     public void Follow(Flight flight)
