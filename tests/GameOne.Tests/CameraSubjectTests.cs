@@ -318,4 +318,54 @@ public sealed class CameraSubjectTests(ITestOutputHelper output)
         Assert.Null(CameraSubject.Resolve(flight, new CameraCentre(CentreKind.Site, Sites.All.Length)));
         Assert.Null(CameraSubject.Resolve(flight, new CameraCentre(CentreKind.Point, flight.Mission.PointsOfInterest.Length)));
     }
+
+    [Fact]
+    public void Right_clicks_centre_by_the_rules()
+    {
+        using var sim = new Simulation(Mission.FreePlay, world: World(UnwatchedTests.Satellite(1, 10000f, 0f, 0f), UnwatchedTests.Satellite(2, 10000f, 0f, 90f)));
+        var flown = sim.Flight.Controlled;
+        var other = sim.Flight.WorldVessels.First(v => v != flown);
+        var site = new CameraCentre(CentreKind.Site, 2);
+        var body = new CameraCentre(CentreKind.Body, Moon.Index);
+        var onOther = new CameraCentre(CentreKind.Vessel, other.Id);
+        var elsewhere = new CameraCentre(CentreKind.Site, 1);
+
+        // In the map: a marker or a vessel clicked is the centre, the own vessel gives Own, off them all nothing.
+        Assert.Equal(site, Hud.RightClickCentre(true, CameraCentre.Own, site, null, flown));
+        Assert.Equal(body, Hud.RightClickCentre(true, elsewhere, body, null, flown));
+        Assert.Equal(onOther, Hud.RightClickCentre(true, CameraCentre.Own, null, other, flown));
+        Assert.Equal(CameraCentre.Own, Hud.RightClickCentre(true, elsewhere, null, flown, flown));
+        Assert.Equal(CameraCentre.Own, Hud.RightClickCentre(true, elsewhere, new CameraCentre(CentreKind.Vessel, flown.Id), null, flown));
+        Assert.Null(Hud.RightClickCentre(true, elsewhere, null, null, flown));
+
+        // In the chase view: another vessel is the centre; the own vessel recentres while the camera is elsewhere,
+        // and gives nothing (the actions menu opens) while it is on it; a marker there is nothing.
+        Assert.Equal(onOther, Hud.RightClickCentre(false, CameraCentre.Own, null, other, flown));
+        Assert.Equal(onOther, Hud.RightClickCentre(false, elsewhere, null, other, flown));
+        Assert.Equal(CameraCentre.Own, Hud.RightClickCentre(false, onOther, null, flown, flown));
+        Assert.Equal(CameraCentre.Own, Hud.RightClickCentre(false, elsewhere, null, flown, flown));
+        Assert.Null(Hud.RightClickCentre(false, CameraCentre.Own, null, flown, flown));
+        Assert.Null(Hud.RightClickCentre(false, CameraCentre.Own, site, null, flown));
+        Assert.Null(Hud.RightClickCentre(false, elsewhere, null, null, flown));
+    }
+
+    [Fact]
+    public void M_from_a_centred_map_goes_by_the_rules()
+    {
+        var vessel = new CameraCentre(CentreKind.Vessel, 7);
+        var site = new CameraCentre(CentreKind.Site, 3);
+        var spot = new CameraCentre(CentreKind.Point, 0);
+        var body = new CameraCentre(CentreKind.Body, 1);
+
+        // From the map: the chase view of a vessel, a site or a point of interest; a body gives the own vessel's.
+        Assert.Equal((vessel, false), GameView.Toggled(vessel, map: true));
+        Assert.Equal((site, false), GameView.Toggled(site, map: true));
+        Assert.Equal((spot, false), GameView.Toggled(spot, map: true));
+        Assert.Equal((CameraCentre.Own, false), GameView.Toggled(body, map: true));
+        Assert.Equal((CameraCentre.Own, false), GameView.Toggled(CameraCentre.Own, map: true));
+
+        // From the chase view: the map with the same centre.
+        foreach (var centre in new[] { CameraCentre.Own, vessel, site, spot })
+            Assert.Equal((centre, true), GameView.Toggled(centre, map: false));
+    }
 }

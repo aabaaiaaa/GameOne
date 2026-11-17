@@ -61,6 +61,7 @@ internal sealed class Markers
     private readonly List<MapLabels.Clickable> _clickable = [];
     private readonly List<Candidate> _clickableMarkers = [];
     private Candidate? _hovered;
+    private MapLabels? _labels; // the labels the last Draw laid out, which a click is found on
     private readonly List<(string Name, Vector2 At)> _drawn = [];
     private NavTarget? _set;
     private bool _clear;
@@ -172,6 +173,26 @@ internal sealed class Markers
         return click;
     }
 
+    /// <summary>
+    /// What <paramref name="click"/> is on, of the markers drawn this frame (a spread pile's labels
+    /// too, as a click for a target finds them), as the camera's centre: a body, a vessel, a site
+    /// or a point of interest. Null off them all.
+    /// </summary>
+    internal CameraCentre? At(Vector2 click)
+    {
+        if (_labels is not { } labels)
+            return null;
+        var (index, _) = labels.Hit(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_clickable), click);
+        return index >= 0 ? CentreOf(_clickableMarkers[index]) : null;
+    }
+
+    /// <summary>What the camera is centred on to be on <paramref name="marker"/>'s object: its body, vessel or site, or a point of interest (a place with no target, by its order in the mission).</summary>
+    internal static CameraCentre CentreOf(in Candidate marker) =>
+        marker.Of is { } body ? new CameraCentre(CentreKind.Body, body.Index)
+        : marker.Target is { Kind: TargetKind.Vessel } vessel ? new CameraCentre(CentreKind.Vessel, vessel.Id)
+        : marker.Target is { Kind: TargetKind.Site } site ? new CameraCentre(CentreKind.Site, site.Id)
+        : new CameraCentre(CentreKind.Point, marker.Order);
+
     /// <summary>A frame with the HUD hidden: nothing drawn, nothing under the pointer, and a press let go.</summary>
     public void Hide()
     {
@@ -194,6 +215,7 @@ internal sealed class Markers
         _pressed = false;
         PointerOver = false;
         _hovered = null;
+        _labels = labels;
         _clickable.Clear();
         _clickableMarkers.Clear();
         _drawn.Clear();

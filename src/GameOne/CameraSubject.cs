@@ -69,6 +69,16 @@ internal static class CameraSubject
     public static CameraCentre Kept(Flight flight, CameraCentre centre) =>
         centre.Kind == CentreKind.Vessel && centre.Id == flight.Controlled.Id || Resolve(flight, centre) is null ? CameraCentre.Own : centre;
 
+    /// <summary>What <paramref name="centre"/> names, in words, as the readout says it: "Own", "Vessel 7", "Body Moon", "Site Home pad" or "Point (its name)".</summary>
+    public static string Describe(Flight flight, CameraCentre centre) => centre.Kind switch
+    {
+        CentreKind.Own => "Own",
+        CentreKind.Vessel => $"Vessel {centre.Id}",
+        CentreKind.Body => centre.Id >= 0 && centre.Id < Bodies.All.Count ? $"Body {Bodies.All[centre.Id].Name}" : "Body",
+        CentreKind.Site => centre.Id >= 0 && centre.Id < Sites.All.Length ? $"Site {Sites.All[centre.Id].Name}" : "Site",
+        _ => centre.Id >= 0 && centre.Id < flight.Mission.PointsOfInterest.Length ? $"Point {flight.Mission.PointsOfInterest[centre.Id].Name}" : "Point",
+    };
+
     /// <summary>Whether a subject of <paramref name="kind"/> is a place, looked at from beside it rather than chased.</summary>
     public static bool IsPlace(CentreKind kind) => kind is CentreKind.Site or CentreKind.Point;
 

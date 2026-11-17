@@ -117,8 +117,29 @@ internal sealed class GameView : IDisposable
     }
 
     /// <summary>
+    /// What M does to what the camera is on (<paramref name="centre"/>) and whether it shows the map
+    /// (<paramref name="map"/>). From the map, centred on a vessel, a site or a point of interest, it
+    /// gives the chase view of it; centred on a body (or the flown vessel), the chase view of the
+    /// flown vessel. From the chase view, the map with the same centre.
+    /// </summary>
+    internal static (CameraCentre Centre, bool Map) Toggled(CameraCentre centre, bool map) =>
+        !map ? (centre, true) : centre.Kind == CentreKind.Body ? (CameraCentre.Own, false) : (centre, false);
+
+    /// <summary>
+    /// The vessel the main camera is on now, if it isn't the flown one (<see cref="Watching"/>, but
+    /// as of this moment rather than the last frame drawn): so a camera just put on a vessel is
+    /// watched, and its link-up begun, before the frame that first draws it.
+    /// </summary>
+    public Vessel? WatchingNow(Flight flight)
+    {
+        var centre = CameraSubject.Kept(flight, Camera.Centre);
+        return centre.Kind == CentreKind.Vessel ? CameraSubject.VesselOf(flight, centre) : null;
+    }
+
+    /// <summary>
     /// Zooms the camera all the way out, far enough to see the whole of the flown vessel's orbit
-    /// (or as far as it goes, if it is escaping) round the body it is at, or back to the vessel.
+    /// (or as far as it goes, if it is escaping) round the body it is at, or back to the chase view,
+    /// of what the camera is on (<see cref="Toggled"/>).
     /// </summary>
     public void ToggleZoomOut(Flight flight)
     {
@@ -127,6 +148,9 @@ internal sealed class GameView : IDisposable
         var reach = MathF.Max(1.5f * body.Radius, Vector3.Distance(vessel.Position, body.Centre));
         if (vessel.State == FlightState.Flying)
             reach = MathF.Max(reach, body.SeaRadius + MathF.Min(vessel.Apoapsis, Orbit.MaxRange));
+        var (centre, _) = Toggled(Camera.Centre, Camera.ZoomedOut);
+        if (centre != Camera.Centre)
+            Camera.CentreOn(centre); // from a body's map, to the flown vessel's chase view
         Camera.ToggleZoomOut(reach);
     }
 
@@ -201,7 +225,7 @@ internal sealed class GameView : IDisposable
         var size = _window.Size;
         Navigation.Blocked = Hud.PointerOnMarker; // a click on a marker (or a node) is for it, not the rings
         Navigation.Burn = flight.Guide is { } guide ? (guide.Left, guide.Overshot) : null;
-        Navigation.Update(dt, flight, Camera, new Vector2(size.X, size.Y), enabled: !paused && !Hud.Hidden); // (hidden, the rings can't be seen, so they take no drag)
+        Navigation.Update(dt, flight, Camera, new Vector2(size.X, size.Y), enabled: !paused && !Hud.Hidden && Camera.Centre.Kind == CentreKind.Own); // (hidden, the rings can't be seen, so they take no drag; nor on what the camera is on if not the flown vessel)
         _smokeStirs.Update(dt, exploded ? null : model, vessel.Height, flown.Nozzle, flown.Exhaust, throttle);
 
         // Sound: the listener at the camera, the engine at the nozzle, and the flight's one-off sounds.

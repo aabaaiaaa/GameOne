@@ -44,6 +44,7 @@ internal sealed class Readout
     {
         Show("Menu", hud.Screen.ToString());
         Show("Controls", hud.ControlsOpen ? "open" : "folded"); // the controls list, bottom left
+        Show("Camera", CameraSubject.Describe(flight, hud.CameraOn)); // what the main camera is on: Own, or another vessel, a body, a site or a point of interest
         if (hud.Hidden)
             Show("HUD", "hidden"); // F2: nothing over the main view but a menu
         if (hud.TimeScale != 1f)

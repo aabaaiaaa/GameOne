@@ -374,6 +374,11 @@ internal sealed class Hud : IDisposable
 
     /// <summary>The flown vessel's actions menu (a right click on it in the main view), drawn as a popup where it was clicked.</summary>
     private readonly ActionMenu _actions = new();
+    private bool _resetCameraAsked; // "Reset camera" was clicked this frame: done with the right clicks, which have the camera
+    private bool _cameraOff;        // the main camera is on something other than the flown vessel: the strip has "Reset camera"
+
+    /// <summary>What the main camera is on, as of the last frame built (the readout's).</summary>
+    public CameraCentre CameraOn { get; private set; } = CameraCentre.Own;
 
     /// <summary>The popup's opening last shown (<see cref="ActionMenu.Opened"/>): a new one opens it again where it was clicked.</summary>
     private int _actionsShown;
@@ -664,6 +669,8 @@ internal sealed class Hud : IDisposable
             (inAir ? ref _enteredAirAt : ref _leftAirAt) = time;
         _wasInAir = inAir;
 
+        CameraOn = camera.Centre;
+        _cameraOff = camera.Centre.Kind != CentreKind.Own;
         var display = ImGui.GetIO().DisplaySize;
         FlownVesselAt = null;
         if (display.X <= 0 || display.Y <= 0)
@@ -776,6 +783,44 @@ internal sealed class Hud : IDisposable
     }
 
     /// <summary>
+    /// What a right click centres the camera on, if anything (null: nothing changes, and the flown
+    /// vessel's actions menu opens if it was on that vessel). In the map (<paramref name="map"/>) a
+    /// marker clicked (<paramref name="onMarker"/>) or a vessel (<paramref name="onVessel"/>) is the
+    /// centre, the flown vessel's own giving <see cref="CentreKind.Own"/>. In the chase view only a
+    /// vessel counts: another is the centre, and the flown one gives Own while the camera is
+    /// elsewhere (<paramref name="current"/>), and nothing while it is on it.
+    /// </summary>
+    internal static CameraCentre? RightClickCentre(bool map, CameraCentre current, CameraCentre? onMarker, Vessel? onVessel, Vessel flown)
+    {
+        if (onVessel is { } vessel)
+            return vessel == flown ? map || current.Kind != CentreKind.Own ? CameraCentre.Own : null : new CameraCentre(CentreKind.Vessel, vessel.Id);
+        if (!map || onMarker is not { } marker)
+            return null;
+        return marker.Kind == CentreKind.Vessel && marker.Id == flown.Id ? CameraCentre.Own : marker;
+    }
+
+    /// <summary>The vessel in the main view under <paramref name="click"/> (the nearest to the camera of those at the flown vessel's body, in one piece), if any.</summary>
+    private static Vessel? VesselClicked(Flight flight, ChaseCamera camera, Matrix4x4 viewProjection, Vector2 display, Vector2 click)
+    {
+        Vessel? found = null;
+        var nearest = float.MaxValue;
+        var world = flight.WorldVessels;
+        for (var i = 0; i < world.Count; i++) // by index: a foreach over the interface would box its enumerator every frame
+        {
+            var vessel = world[i];
+            if (vessel.Body != flight.Body || vessel.State == FlightState.Crashed)
+                continue;
+            var (bottom, top) = vessel.AxisOffsets(vessel.Rotation);
+            if (!VesselActions.OnVessel(vessel.CentreOfMass + bottom, vessel.CentreOfMass + top, vessel.Width, viewProjection, display, click))
+                continue;
+            var distance = Vector3.DistanceSquared(camera.Position, vessel.CentreOfMass);
+            if (distance < nearest)
+                (found, nearest) = (vessel, distance);
+        }
+        return found;
+    }
+
+    /// <summary>
     /// The flown vessel's actions menu: kept or closed as the flight has changed (<see cref="ActionMenu.Keep"/>),
     /// opened by a right click on the vessel in the main view (the camera's, so not on a panel or a
     /// small view; not under a game menu or zoomed out), and drawn as a popup where it was clicked,
@@ -788,11 +833,22 @@ internal sealed class Hud : IDisposable
         if (!camera.ZoomedOut && camera.ToScreen(vessel.CentreOfMass, display, out var screen, out _)
             && screen.X >= 0f && screen.Y >= 0f && screen.X <= display.X && screen.Y <= display.Y)
             FlownVesselAt = screen - display / 2f;
-        _actions.Keep(flight, MenuOpen, camera.ZoomedOut);
-        if (camera.TakeRightClick() is { } click && !MenuOpen && !camera.ZoomedOut)
+        // The camera is on what the flown vessel's actions are for only while it is on the flown vessel.
+        _actions.Keep(flight, MenuOpen, camera.ZoomedOut || camera.Centre.Kind != CentreKind.Own);
+        if (_resetCameraAsked)
+            camera.CentreOn(CameraCentre.Own);
+        _resetCameraAsked = false;
+        if (camera.TakeRightClick() is { } click && !MenuOpen)
         {
-            var (bottom, top) = vessel.AxisOffsets(vessel.Rotation);
-            if (VesselActions.OnVessel(vessel.CentreOfMass + bottom, vessel.CentreOfMass + top, vessel.Width, camera.ViewProjection(display), display, click))
+            var viewProjection = camera.ViewProjection(display);
+            var onVessel = VesselClicked(flight, camera, viewProjection, display, click);
+            var onMarker = camera.ZoomedOut ? _markers.At(click) : null;
+            if (RightClickCentre(camera.ZoomedOut, camera.Centre, onMarker, onVessel, vessel) is { } centre)
+            {
+                camera.CentreOn(centre);
+                _actions.Close();
+            }
+            else if (!camera.ZoomedOut && onVessel == vessel)
                 _actions.Open(vessel, click); // none for a vessel with no actions
             else
                 _actions.Close();
@@ -2598,7 +2654,7 @@ internal sealed class Hud : IDisposable
     private float? Strip(Flight flight, Views views, float2 display, BodyFrames frames)
     {
         _stripRect = RectangleF.Empty; // the views and the buttons over them, as they are drawn
-        if (flight.WorldVessels.Count < 2)
+        if (flight.WorldVessels.Count < 2 && !_cameraOff) // (one camera put elsewhere has "Reset camera" here)
             return null;
 
         const float gap = StripGap, header = 40f;
@@ -2804,7 +2860,7 @@ internal sealed class Hud : IDisposable
     /// </summary>
     private (Vector2 At, float Scale) OpenListPlace(Flight flight, float2 display)
     {
-        var buttons = flight.WorldVessels.Count >= 2 ? StripGap + StripButtonsHeight : 0f; // the strip's buttons, when there is a strip
+        var buttons = (flight.WorldVessels.Count >= 2 || _cameraOff) ? StripGap + StripButtonsHeight : 0f; // the strip's buttons, when there is a strip
         var bottom = display.Y - Margin;
         // Beside the instruments, or at the left edge while they aren't drawn.
         var beside = _instrumentsRect.IsEmpty ? Margin : _instrumentsRect.Right + StripGap;
@@ -2877,6 +2933,13 @@ internal sealed class Hud : IDisposable
                 if (!any)
                     ImGui.TextColored(Quiet, "Every vessel has a view."u8);
                 ImGui.EndPopup();
+            }
+            if (_cameraOff)
+            {
+                ImGui.SameLine();
+                if (ImGui.SmallButton("Reset camera"u8))
+                    _resetCameraAsked = true;
+                _buttons.Add(("Reset camera", ItemMiddle()));
             }
             ImGui.SameLine();
             if (ImGui.SmallButton(_controlsOpen ? "Back to the views (H)"u8 : "Controls (H)"u8))
