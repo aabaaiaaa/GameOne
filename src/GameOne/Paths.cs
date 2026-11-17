@@ -239,7 +239,7 @@ internal sealed class Paths
         var matched = flight.Guide is { Matched: true };
         var secondNodeLeg = plan.NodeLeg(1) ?? int.MaxValue;
         for (var i = 0; i < _legs.Count; i++)
-            DrawLine(draw, _legs[i], i <= _firstNodeLeg ? pathColor : matched && i <= secondNodeLeg ? Scene.NodeMatchedColor : PlanColor, 0.9f, Scene.PathWidth);
+            DrawLine(draw, _legs[i], i <= _firstNodeLeg ? pathColor : LegColorOf(matched, i, _firstNodeLeg, secondNodeLeg), 0.9f, Scene.PathWidth);
         Window(draw);
         // The collisions: each one's lead-ins (faint for a vessel neither flown nor the target, whose
         // path is otherwise not drawn at all), then its cross over them, soonest first; one within
@@ -306,6 +306,18 @@ internal sealed class Paths
     /// marks and the nodes stay on the line in either, and a leg round another body (the moon's,
     /// on a path from the planet) is drawn as that body sees it, where the path comes to it.
     /// </summary>
+    /// <summary>A node's colour: green if it is the next node (index 0) and matched, else the plan's.</summary>
+    internal static (byte R, byte G, byte B) NodeColorOf(bool matched, int index) =>
+        matched && index == 0 ? Scene.NodeMatchedColor : PlanColor;
+
+    /// <summary>
+    /// A planned leg's colour (one after the first node's leg, <paramref name="firstNodeLeg"/>): green
+    /// if the next node is matched and the leg is one it plans, up to the leg ending at the second
+    /// node's burn (<paramref name="secondNodeLeg"/>), else the plan's.
+    /// </summary>
+    internal static (byte R, byte G, byte B) LegColorOf(bool matched, int leg, int firstNodeLeg, int secondNodeLeg) =>
+        matched && leg > firstNodeLeg && leg <= secondNodeLeg ? Scene.NodeMatchedColor : PlanColor;
+
     internal void Build(Flight flight, ManoeuvrePlan plan)
     {
         var frame = flight.LineFrame;

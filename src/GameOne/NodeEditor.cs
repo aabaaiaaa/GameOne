@@ -34,9 +34,11 @@ internal sealed class NodeEditor
     internal const float PathPixels = 8f;
     /// <summary>How far the pointer must move from where a node was grabbed, in pixels, before it is dragged: a click to select it (to use its handles) leaves it where it is.</summary>
     internal const float DragPixels = 4f;
-    private const float HandleRest = 44f;     // how far out the handles sit, in pixels
-    private const float HandlePull = 70f;     // and how much farther one can be pulled
-    private const float FastestRate = 40f;    // m/s added each second, pulled all the way out
+    internal const float HandleRest = 44f;     // how far out the handles sit, in pixels
+    internal const float HandlePull = 70f;     // and how much farther one can be pulled
+    internal const float FastestRate = 40f;    // m/s added each second, pulled all the way out
+    private const float HandleInnermost = 14f; // the nearest a handle is drawn to its node, in pixels, however far in it is pushed (clear of the node and its label)
+    private const float HandleDeadZone = 3f;   // how far either side of its rest the pointer must be before a handle does anything
 
     private static readonly (byte R, byte G, byte B) ProgradeColor = (200, 255, 90), RadialColor = (90, 220, 255), NormalColor = (240, 120, 255);
     private static readonly string[] HandleNames = ["Prograde", "Retrograde", "Radial out", "Radial in", "Normal", "Antinormal"];
@@ -83,8 +85,12 @@ internal sealed class NodeEditor
 
     private int Count => _pending?.Nodes.Length ?? 0;
 
-    /// <summary>Whether a node is selected, its handles out: a click on the steering rings' place is then for the handles, not the rings.</summary>
-    public bool Selected => _selected >= 0;
+    /// <summary>Whether a node's handles are drawn (see <see cref="ShowsHandles"/>): a click on the steering rings' place is then for them, not the rings.</summary>
+    public bool Selected { get; private set; }
+
+    /// <summary>Whether a node's handles are drawn: one is selected, the editor is showing and that node is on the screen.</summary>
+    internal static bool ShowsHandles(bool editing, int selected, ReadOnlySpan<bool> shown) =>
+        editing && selected >= 0 && selected < shown.Length && shown[selected];
 
     /// <summary>
     /// How fast a handle adds to its speed (m/s each second, negative to take away) with the
@@ -128,6 +134,7 @@ internal sealed class NodeEditor
     {
         (_pressed, _rightPressed) = (false, false);
         PointerOver = false;
+        Selected = false;
         _grab = Grab.None;
     }
 
@@ -143,6 +150,7 @@ internal sealed class NodeEditor
         var (pressed, rightPressed) = (_pressed, _rightPressed);
         (_pressed, _rightPressed) = (false, false);
         PointerOver = false;
+        Selected = false;
         var now = flight.WorldTime;
         var frame = flight.LineFrame;
         if (paths.Fade < 0.5f || flight.Controlled.State != FlightState.Flying)
@@ -225,8 +233,8 @@ internal sealed class NodeEditor
                 var along = _grab == Grab.Handle && _handle == k
                     ? Math.Clamp(Vector2.Dot(V2(pointer) - V2(onScreen[_selected]), V2(handleWay[k])) - HandleRest, -HandleRest, HandlePull)
                     : 0f;
-                handleAt[k] = onScreen[_selected] + handleWay[k] * (HandleRest + along);
-                if (Math.Abs(along) > 3f)
+                handleAt[k] = onScreen[_selected] + handleWay[k] * (HandleRest + Math.Max(along, HandleInnermost - HandleRest));
+                if (Math.Abs(along) > HandleDeadZone)
                 {
                     var add = Rate(along) * dt * (k % 2 == 0 ? 1f : -1f);
                     var node = _pending!.Nodes[_selected];
@@ -302,6 +310,8 @@ internal sealed class NodeEditor
             }
         }
 
+        Selected = ShowsHandles(true, _selected == selectedAtStart ? _selected : -1, shown);
+
         // Drawing: the nodes, the selected one's handles and delete button, and the ghost.
         var matched = flight.Guide is { Matched: true };
         var color = Paths.PlanColor;
@@ -314,7 +324,7 @@ internal sealed class NodeEditor
                 continue;
             var at = onScreen[i];
             var hot = i == _selected || (hovered == Hover.Node && hoveredIndex == i);
-            var nodeColor = i == 0 && matched ? Scene.NodeMatchedColor : color;
+            var nodeColor = Paths.NodeColorOf(matched, i);
             draw.AddCircleFilled(at, hot ? NodePixels + 1.5f : NodePixels, Color(nodeColor, alpha));
             draw.AddCircle(at, (hot ? NodePixels + 1.5f : NodePixels) + 1f, Color((0, 0, 0), alpha * 0.6f), 0, 1.5f);
             var node = _pending!.Nodes[i];
@@ -323,7 +333,7 @@ internal sealed class NodeEditor
         if (_selected >= 0 && _selected == selectedAtStart && _selected < shown.Length && _selected < Count && shown[_selected])
         {
             var at = onScreen[_selected];
-            draw.AddCircle(at, NodePixels + 5f, Color(_selected == 0 && matched ? Scene.NodeMatchedColor : color, alpha), 0, 1.5f);
+            draw.AddCircle(at, NodePixels + 5f, Color(Paths.NodeColorOf(matched, _selected), alpha), 0, 1.5f);
             for (var k = 0; k < 6; k++)
             {
                 if (!handleShown[k])

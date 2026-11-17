@@ -451,10 +451,10 @@ internal sealed class Hud : IDisposable
     /// <summary>How many predicted collisions' crosses the map drew on the screen this frame: for the readout.</summary>
     public int CollisionsDrawn => _paths.CollisionsDrawn;
 
-    /// <summary>Whether the pointer was over a marker, or the path or a node to plan with, last frame, so a click there isn't for the steering rings.</summary>
-    /// <summary>Whether a node is selected, its handles out over the steering rings' place.</summary>
+    /// <summary>Whether a node's handles were drawn last frame, over the steering rings' place: a click there is for them.</summary>
     public bool NodeSelected => _nodes.Selected;
 
+    /// <summary>Whether the pointer was over a marker, or the path or a node to plan with, last frame, so a click there isn't for the steering rings.</summary>
     public bool PointerOnMarker => _markers.PointerOver || _nodes.PointerOver;
 
     /// <summary>The flown vessel's frame has changed to another body's (<see cref="Flight.ViewRebased"/>): what the paths keep from frame to frame in the old one is dropped (<see cref="Paths.Rebase"/>), so the change itself isn't needed.</summary>
