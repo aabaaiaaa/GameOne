@@ -400,6 +400,10 @@ public sealed class ViewsTests
             Assert.Equal(Seen, camera.View);
             Assert.Equal(before, first.View);
             Assert.Same(first, views.Small[0].Vessel);
+            // The vessel that left the main view looks as it was left, not as the one now flown does.
+            var small = views.Small[0].Camera.View;
+            Assert.Equal((before.Yaw, before.Pitch, before.Distance), (small.Yaw, small.Pitch, small.Distance));
+            Assert.NotEqual(Seen.Distance, small.Distance);
         }
     }
 
@@ -412,7 +416,7 @@ public sealed class ViewsTests
         using (saved)
         {
             var flight = saved.Flight;
-            sim.ShowLinkUp = true;
+            saved.ShowLinkUp = true;
             var camera = Taking(flight);
             var views2 = new Views();
             views2.Follow(flight);
@@ -420,11 +424,16 @@ public sealed class ViewsTests
             ThroughLinkUp(saved, views2, camera);
             Assert.Equal(Seen, camera.View);
 
-            // A different view given, then the rewind to the carry-on: the saved one again, after a link-up.
-            saved.Step(new FlightInput(View: Seen with { Distance = 120f }));
+            // The camera and the vessel's view both changed, then the rewind to the carry-on: the
+            // rewind raises ViewTaken again and the camera is given the saved view back, after a link-up.
+            var taken = 0;
+            flight.ViewTaken += _ => taken++;
+            camera.Apply(GameView.DefaultView);
+            saved.Step(new FlightInput(View: GameView.DefaultView));
             Assert.NotEqual(Seen, flight.Controlled.View);
             saved.Step(new FlightInput(Rewind: true));
             ThroughLinkUp(saved, views2, camera);
+            Assert.Equal(1, taken);
             Assert.Equal(Seen, camera.View);
         }
     }

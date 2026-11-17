@@ -172,7 +172,7 @@ internal sealed class Readout
         Show("Position", $"{flight.Position.X:0.00} {flight.Position.Y:0.00} {flight.Position.Z:0.00}"); // in metres, in its body's frame: where it is to the centimetre
         Show("Body", flight.Body.Name); // where the flown vessel is: the body its readings below are of
         if (flight.LinkUp.Reading is { } link)
-            Show("Link", link); // the link-up over the main view, switching to a vessel at a body with no physics yet: connecting, then connected
+            Show("Link", link); // the link-up over the main view, switching to or carrying on a vessel: connecting, then connected
         foreach (var viewLink in flight.ViewLinks)
             if (viewLink is { Vessel: { } linked, Reading: { } reading })
                 Show($"Link {WorldLog.Named(linked)}", reading); // a small view's link-up, given to a vessel at a body with no physics yet

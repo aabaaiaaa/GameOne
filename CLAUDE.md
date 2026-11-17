@@ -346,11 +346,12 @@ dotnet run --project src/GameOne
   (its crossing, or a switch to one at another body) raises `Flight.ViewRebased` with the change.
   Every switch, carry-on and rewind shows the communications link-up first, and the view comes
   back as that vessel left it (`Flight.ViewTaken`, raised as it is flown: `GameView` gives the
-  camera `Vessel.View`, or `GameView.DefaultView` for one never flown; `LinkUp`, drawn by `Hud`: the picture breaking into static, clearing as it connects,
-  `Scene.LinkUpSeconds` (1 s) of real time in all, the same however soon the physics is made,
-  which is the frame after it is first drawn, never the switch's own, and longer only if the
-  physics takes longer), flavour only, telling the player nothing to
-  do; the readout's `Link`. A small view given to a vessel at a body whose physics isn't made has
+  camera `Vessel.View`, or `GameView.DefaultView` for one never flown; `LinkUp`, drawn by `Hud`:
+  the picture breaking into static, clearing as it connects, `Scene.LinkUpSeconds` (1 s) of real
+  time in all, the same however soon the physics is made; the vessel is flown, its body's
+  physics made if it isn't, the frame after the link-up is first drawn, never the switch's own,
+  and the link-up is longer only if that takes longer), flavour only, telling the player nothing
+  to do; the readout's `Link`. A small view given to a vessel at a body whose physics isn't made has
   its own link-up over it (`Flight.OpenView`, `ViewLink`): the HUD opens a view after drawing the
   others, so it is first drawn, with its static, the frame after the click, and the physics is
   made and the vessel brought in the frame after that, behind the static; until then the vessel

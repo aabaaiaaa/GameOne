@@ -984,7 +984,7 @@ public sealed class CrossingTests(ITestOutputHelper output)
         var frames = 0;
         while (sim.Flight.LinkUp.On && frames++ < 600)
             sim.Step(default);
-        Assert.NotSame(first, sim.Flight.Controlled);
+        Assert.Same(second, sim.Flight.Controlled);
         Assert.False(sim.Flight.LinkUp.On);
     }
 }

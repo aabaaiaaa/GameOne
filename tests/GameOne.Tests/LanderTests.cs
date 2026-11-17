@@ -108,8 +108,31 @@ public sealed class LanderTests(ITestOutputHelper output)
         var at = SpotSky.Place;
         var state = Drops.Placed(at, Moon.East(at), speed, Alone, clearance: clearance, legsOut: legsOut, mission: Mission.FreePlay, body: Moon);
         var sim = new Simulation(Mission.FreePlay, world: new WorldState { Vessels = [state], NextVesselId = 1 }, body: Moon);
-        sim.Step(new FlightInput(SwitchTo: sim.Flight.WorldVessels.First(v => v.Id == 0)));
+        // Carried on, so it is flown from the first step (a switch's own frame would let it fall, unflown, before the test begins).
+        sim.Flight.CarryOn(sim.Flight.WorldVessels.First(v => v.Id == 0));
+        sim.Step(default);
         return sim;
+    }
+
+    [Fact]
+    public void A_vessel_switched_to_that_is_lost_before_it_is_flown_cancels_the_link_up_and_leaves_the_old_one_flown()
+    {
+        // Behind its link-up a vessel switched to is in the physics, unflown, for the frame the
+        // switch is made in: one about to touch down is judged by the ordinary rules there.
+        var at = SpotSky.Place;
+        var state = Drops.Placed(at, Moon.East(at), 4f, Alone, clearance: 0.05f, legsOut: false, mission: Mission.FreePlay, body: Moon);
+        using var sim = new Simulation(Mission.FreePlay, world: new WorldState { Vessels = [state], NextVesselId = 1 }, body: Moon);
+        sim.ShowLinkUp = true;
+        var pad = sim.Flight.Controlled;
+        var lander = sim.Flight.WorldVessels.First(v => v.Id == 0);
+
+        sim.Step(new FlightInput(SwitchTo: lander));
+        Assert.True(sim.Flight.LinkUp.Waiting);
+        sim.Step(default);
+        Assert.Equal(FlightState.Crashed, lander.State);
+        Assert.Equal(lander.OnItsBell(lander.TouchdownSpeed), lander.CrashReason);
+        Assert.False(sim.Flight.LinkUp.On);
+        Assert.Same(pad, sim.Flight.Controlled);
     }
 
     [Fact]
@@ -139,7 +162,7 @@ public sealed class LanderTests(ITestOutputHelper output)
     {
         foreach (var (speed, safe) in (ReadOnlySpan<(float, bool)>)[(2f, true), (4f, false)])
         {
-            using var sim = Dropped(speed, 0.05f + speed * 0.05f, legsOut: false); // clear of the ground for the frame its switch is made in
+            using var sim = Dropped(speed, 0.05f, legsOut: false);
             var lander = sim.Flight.Controlled;
             sim.Run(Nobody, _ => lander.State != FlightState.Flying, maxSeconds: 20);
             output.WriteLine($"at {speed} m/s: {lander.State} {lander.CrashReason}, touchdown {lander.TouchdownSpeed:0.00} m/s");

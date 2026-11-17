@@ -643,8 +643,8 @@ internal sealed class Flight : IDisposable
     public event Action<FrameChange>? ViewRebased;
 
     /// <summary>
-    /// The communications link-up, while a vessel at a body whose physics isn't made yet is being
-    /// switched to (see <see cref="LinkUp"/>): what the HUD draws over the main view, and the
+    /// The communications link-up, while a vessel is being switched to or carried on
+    /// (see <see cref="LinkUp"/>): what the HUD draws over the main view, and the
     /// readout's <c>Link</c>.
     /// </summary>
     public LinkUp LinkUp { get; } = new();
@@ -1527,8 +1527,8 @@ internal sealed class Flight : IDisposable
     {
         _frames++;
         _realTime += realSeconds;
-        // A vessel switched to at a body with no physics last frame: its physics made now, behind
-        // the link-up drawn since, and the vessel flown in it.
+        // A vessel switched to (or carried on) last frame: its body's physics made now if it isn't
+        // (behind the link-up drawn since), and the vessel flown in it.
         if (LinkUp.Due(_frames))
         {
             var vessel = LinkUp.Vessel!;

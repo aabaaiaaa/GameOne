@@ -184,8 +184,7 @@ public sealed class SlowdownTests(ITestOutputHelper output)
         }, maxSeconds: 2), "never eased back");
         output.WriteLine($"crashed at a scale of {crashedAt:0.0000}: back to 1 after {Real(frames):0.000} s of real time ({frames} frames); {a.CrashReason}");
         Assert.True(crashedAt < 0.5f, $"only slowed to {crashedAt} as they hit");
-        // (the switch is made a frame after it is asked, behind its link-up)
-        Assert.True(Real(frames) <= Scene.SlowdownEaseSeconds + 2 * Simulation.FrameSeconds + 1e-6, $"{Real(frames):0.000} s to ease back");
+        Assert.True(Real(frames) <= Scene.SlowdownEaseSeconds + Simulation.FrameSeconds + 1e-6, $"{Real(frames):0.000} s to ease back");
         Assert.Null(sim.Flight.Slowed);
         Assert.Equal(1f, sim.Physics.StepScale);
     }
@@ -445,7 +444,8 @@ public sealed class SlowdownTests(ITestOutputHelper output)
             return false;
         }, maxSeconds: Scene.SlowdownEaseSeconds + 1f), "never eased back");
         output.WriteLine($"eased back {Real(frames):0.000} s of real time after the switch");
-        // (the switch is made a frame after it is asked, behind its link-up)
+        // The vessel switched to is flown a frame after the switch is asked (behind its link-up), so the
+        // slow-down for the one switched away from is let go a frame later than the ask: one frame more to ease.
         Assert.True(Real(frames) <= Scene.SlowdownEaseSeconds + 2 * Simulation.FrameSeconds + 1e-6, $"{Real(frames):0.000} s to ease back");
         Assert.Equal(1f, sim.Flight.TimeScale);
     }

@@ -1,9 +1,9 @@
 namespace GameOne;
 
 /// <summary>
-/// The communications link-up shown as a vessel at a body whose physics isn't made yet is
-/// switched to (<see cref="Flight"/>): pure flavour, covering the moment the physics takes to
-/// make, as if a connection to the vessel were being established. The picture breaks up into
+/// The communications link-up shown as any vessel is switched to or carried on, and over a small
+/// view given to a vessel at a body whose physics isn't made (<see cref="Flight"/>): pure flavour,
+/// covering the moment the physics may take to make, as if a connection to the vessel were being established. The picture breaks up into
 /// static while it connects (<see cref="Connecting"/>), then clears over the last
 /// <see cref="Scene.LinkUpClearShare"/> of it (<see cref="Static"/>): <see cref="Scene.LinkUpSeconds"/>
 /// of real time in all, however soon the vessel is flown in its body's physics (<see cref="Ready"/>),
