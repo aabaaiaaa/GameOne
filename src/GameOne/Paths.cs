@@ -1148,18 +1148,78 @@ internal sealed class Paths
     private void DrawLine(ImDrawListPtr draw, List<Vector3> points, (byte R, byte G, byte B) color, float alpha, float width) =>
         DrawLine(draw, points, 0, points.Count, color, alpha, width);
 
-    /// <summary>The <paramref name="count"/> points of <paramref name="points"/> from <paramref name="first"/> as a line, but where a body hides them.</summary>
+    /// <summary>The <paramref name="count"/> points of <paramref name="points"/> from <paramref name="first"/> as a line, but where a body hides them, with its chevrons.</summary>
     private void DrawLine(ImDrawListPtr draw, List<Vector3> points, int first, int count, (byte R, byte G, byte B) color, float alpha, float width)
     {
         var line = Color(color, alpha);
         var hasLast = false;
         var last = default(float2);
+        _stretch.Clear();
         for (var i = first; i < first + count; i++)
         {
             var shown = InView(points[i], out var at);
             if (shown && hasLast)
                 draw.AddLine(last, at, line, width);
+            if (shown)
+                _stretch.Add(new Vector2(at.X, at.Y));
+            else
+                DrawChevrons(draw, _stretch, _chevrons, Color(color, alpha * Scene.ChevronAlpha));
             (hasLast, last) = (shown, at);
+        }
+        DrawChevrons(draw, _stretch, _chevrons, Color(color, alpha * Scene.ChevronAlpha));
+    }
+
+    private readonly List<Vector2> _stretch = [];
+    private readonly (Vector2 At, Vector2 Way)[] _chevrons = new (Vector2, Vector2)[MaxChevrons];
+
+    /// <summary>The most chevrons a line is given (<see cref="Chevrons"/>): a line many screens long gets no more.</summary>
+    internal const int MaxChevrons = 64;
+
+    /// <summary>
+    /// Places chevrons along <paramref name="line"/> (a polyline on the screen, in the order it is
+    /// flown), one every <paramref name="every"/> pixels with the first half that in, each pointing
+    /// along the line there, into <paramref name="into"/>: how many were placed.
+    /// </summary>
+    internal static int Chevrons(ReadOnlySpan<Vector2> line, float every, Span<(Vector2 At, Vector2 Way)> into)
+    {
+        var placed = 0;
+        var next = every / 2f; // the length along the line the next one is at
+        var walked = 0f;
+        for (var i = 1; i < line.Length && placed < into.Length; i++)
+        {
+            var step = line[i] - line[i - 1];
+            var length = step.Length();
+            if (length < 1e-4f)
+                continue;
+            var way = step / length;
+            while (next <= walked + length && placed < into.Length)
+            {
+                into[placed++] = (line[i - 1] + way * (next - walked), way);
+                next += every;
+            }
+            walked += length;
+        }
+        return placed;
+    }
+
+    /// <summary>The chevrons of <paramref name="stretch"/> (<see cref="Chevrons"/>), each two short lines back from its tip; the stretch is emptied.</summary>
+    internal static void DrawChevrons(ImDrawListPtr draw, List<Vector2> stretch, (Vector2 At, Vector2 Way)[] into,
+        ImColor8 c)
+    {
+        var n = stretch.Count >= 2 ? Chevrons(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(stretch), Scene.ChevronEveryPixels, into) : 0;
+        stretch.Clear();
+        if (n == 0)
+            return;
+        var s = Scene.ChevronPixels;
+        for (var k = 0; k < n; k++)
+        {
+            var (at, way) = into[k];
+            var side = new Vector2(-way.Y, way.X);
+            var tip = at + way * (s / 2f);
+            var a = tip - way * s + side * s;
+            var b = tip - way * s - side * s;
+            draw.AddLine(new float2(tip.X, tip.Y), new float2(a.X, a.Y), c, Scene.ChevronWidth);
+            draw.AddLine(new float2(tip.X, tip.Y), new float2(b.X, b.Y), c, Scene.ChevronWidth);
         }
     }
 

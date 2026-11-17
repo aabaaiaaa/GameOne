@@ -621,7 +621,13 @@ internal sealed class SystemMap
     {
         var screen = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_screen);
         foreach (var run in _runs)
+        {
             draw.AddPolyline(screen.Slice(run.First, run.Count), Color(run.Color, run.Alpha * fade), ImDrawFlags.None, Scene.PathWidth);
+            _stretch.Clear();
+            for (var i = run.First; i < run.First + run.Count; i++)
+                _stretch.Add(new Vector2(screen[i].X, screen[i].Y));
+            Paths.DrawChevrons(draw, _stretch, _chevrons, Color(run.Color, run.Alpha * fade * Scene.ChevronAlpha));
+        }
         foreach (var (at, color, _) in _dots)
             draw.AddCircleFilled(at, Scene.MapBodyMinPixels / 2f, Color(color, fade));
         if (SunMark is { } mark)
@@ -630,6 +636,9 @@ internal sealed class SystemMap
             labels.Add("Sun", mark.At + new float2(mark.Ring + 4f, -8f), mark.At, Scene.MapSunColor, fade, 0.8f * fade, over: true);
         }
     }
+
+    private readonly List<Vector2> _stretch = [];
+    private readonly (Vector2 At, Vector2 Way)[] _chevrons = new (Vector2, Vector2)[Paths.MaxChevrons];
 
     private static ImColor8 Color((byte R, byte G, byte B) color, float alpha) =>
         new(color.R, color.G, color.B, (byte)(255 * Math.Clamp(alpha, 0f, 1f)));

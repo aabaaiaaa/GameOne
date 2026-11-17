@@ -1136,6 +1136,10 @@ internal static class Scene
     public const float PathFadeFrom = 250f, PathFadeTo = 1200f;
     public static readonly Vector3 PathColor = new(0.45f, 0.85f, 1.0f);
     public const float PathWidth = 2f;                 // pixels
+    // Each orbit line shows which way it is flown by small faint chevrons along it (Paths.Chevrons):
+    // one every this many pixels, this big, at this share of the line's own strength.
+    public const float ChevronEveryPixels = 120f, ChevronPixels = 5f, ChevronAlpha = 0.5f;
+    public const float ChevronWidth = 1.5f;            // pixels
 
     // The map's predicted collisions between any two vessels in the world (CollisionSearch, drawn by
     // Paths): a cross where they hit, and the stretch of each one's path it covers in the lead

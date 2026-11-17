@@ -30,6 +30,42 @@ public sealed class PathTests(ITestOutputHelper output)
     private static bool OnTerrain(Vector3 p) => MathF.Abs(Distance(p) - Planet.SeaRadius - Terrain.SurfaceHeight(Planet.Up(p))) < 1f;
 
     [Fact]
+    public void Chevrons_are_spaced_along_a_line_and_point_its_way()
+    {
+        var line = new[] { new Vector2(10f, 20f), new Vector2(610f, 20f) };
+        var into = new (Vector2 At, Vector2 Way)[16];
+
+        var n = Paths.Chevrons(line, 120f, into);
+
+        Assert.Equal(5, n);
+        for (var i = 0; i < n; i++)
+        {
+            Assert.True(Vector2.Distance(into[i].Way, Vector2.UnitX) < 1e-3f);
+            Assert.Equal(10f + 60f + 120f * i, into[i].At.X, 1e-2f);
+        }
+
+        // Round a corner each one points along the piece it is on.
+        var bent = new[] { new Vector2(0f, 0f), new Vector2(100f, 0f), new Vector2(100f, 300f) };
+        n = Paths.Chevrons(bent, 120f, into);
+        Assert.Equal(3, n);
+        Assert.True(Vector2.Distance(into[0].Way, Vector2.UnitX) < 1e-3f);
+        Assert.True(Vector2.Distance(into[1].Way, Vector2.UnitY) < 1e-3f);
+    }
+
+    [Fact]
+    public void Chevrons_allocate_nothing()
+    {
+        var line = new[] { new Vector2(0f, 0f), new Vector2(600f, 0f), new Vector2(600f, 600f) };
+        var into = new (Vector2 At, Vector2 Way)[16];
+        Paths.Chevrons(line, 120f, into);
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 100; i++)
+            Paths.Chevrons(line, 120f, into);
+        Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
+    }
+
+    [Fact]
     public void A_circular_orbit_goes_once_round_at_its_height_and_back_to_the_start()
     {
         var start = Above(5000f);
