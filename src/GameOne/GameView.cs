@@ -175,6 +175,7 @@ internal sealed class GameView : IDisposable
         }
         (Watching, _subjectBody) = Aim(Camera, flight, dt, realDt);
         _subjectAt = flight.WorldTime;
+        CameraVelocity = Camera.Centre.Kind == CentreKind.Own ? null : Watching?.Velocity ?? Vector3.Zero;
         Views.Update(dt, flight, Camera, realDt);
 
         // Every vessel as drawn, in the scene's frame; and every engine firing, for the plumes and the smoke they leave behind.
@@ -229,7 +230,7 @@ internal sealed class GameView : IDisposable
         _lightSets.Choose(camera, flight.Lights.Lit, vesselLights, ref Views.MainShadowPlace);
         _sunAreas.Clear();
         var mainShared = false;
-        _sunAreas.Choose(exploded ? null : model, camera, ref mainShared);
+        _sunAreas.Choose(MainSunArea(flight, exploded ? null : model), camera, ref mainShared);
         var screen = new Vector2(size.X, size.Y);
         if (screen.X > 0 && screen.Y > 0)
             for (var i = 0; i < Views.Small.Count; i++) // by index: a foreach over the interface would box its enumerator every frame
@@ -300,6 +301,27 @@ internal sealed class GameView : IDisposable
     /// (<see cref="Aim"/>): watched, so witnessed (<see cref="FlightInput.Watching"/>).
     /// </summary>
     public Vessel? Watching { get; private set; }
+
+    /// <summary>
+    /// How fast what the main camera is on moves over its body's ground, as of the last frame drawn
+    /// (<see cref="FlightInput.CameraVelocity"/>): the watched vessel's, none for a place or a body;
+    /// null on the flown vessel (the flight knows its own).
+    /// </summary>
+    public Vector3? CameraVelocity { get; private set; }
+
+    /// <summary>
+    /// What the main view's sun shadows are drawn round, in the scene's frame: what its camera is on.
+    /// The flown vessel's <paramref name="flown"/> model (null once it has blown up), another
+    /// vessel's, or for a place or a body, a model standing at the camera's focus.
+    /// </summary>
+    private Matrix4x4? MainSunArea(Flight flight, Matrix4x4? flown)
+    {
+        if (Camera.Centre.Kind == CentreKind.Own)
+            return flown;
+        if (Watching is { } watched)
+            return _frames.ToScene(watched.Body).Model(watched.Model, Vector3Double.Zero);
+        return Matrix4x4.CreateTranslation(_frames.ToScene(flight.Body).Point(Camera.Focus).ToSingle());
+    }
 
     /// <summary>
     /// Where the main camera is, as of the last frame drawn, in the frame of the body what it is on

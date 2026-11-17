@@ -923,10 +923,12 @@ say) stalls frames and spoils the timing.
   body's centre, a site's top, a point of interest), and none for a number naming nothing; a
   vessel it is on kept in its body's physics (`FlightInput.Watching`), and let go once it is off;
   a stage round the moon followed from the planet's frame within 1 cm, each frame's step within
-  1 cm of its own motion; one lost (crashed, or no such vessel) giving the camera back to the
+  1 cm of its own motion, and the camera's target and place in line frame to frame within 1 cm;
+  one crossing into the moon's sphere while the flown one stays at the planet, its view kept at the
+  crossing and its up eased round to the moon's, under 5 degrees a frame; one lost (crashed, or no such vessel) giving the camera back to the
   flown one (`CameraSubject.Kept`); one at a body with no physics shown its link-up over the main
   view (`Flight.WatchLink`, the readout's `Camera link`), the physics made behind it the frame
-  after; and a place (Home's pad) looked at from `Scene.PlaceViewHeight` over it and
+  after, and one taken off it before that lets it go, nothing made; and a place (Home's pad) looked at from `Scene.PlaceViewHeight` over it and
   `Scene.PlaceViewAside` aside, turned and zoomed round it.
 - **`BodiesInPlayTests`:** a physics at each body in use (`Worlds`), every vessel at its own body,
   all played out at once: flying a lander in a moon orbit (the moon's physics), a small view's

@@ -71,6 +71,9 @@ public sealed class CameraSubjectTests(ITestOutputHelper output)
         Vector3? lastFed = null;
         Vector3Double lastTrue = default;
         var worst = 0.0;
+        // And the camera's own target and place, frame to frame: each frame's step against the one
+        // before (a jitter is a step out of line with its neighbours), beside the stage's own.
+        var (targets, places, truths) = (new List<Vector3>(), new List<Vector3>(), new List<Vector3Double>());
         for (var i = 0; i < 120; i++)
         {
             var watching = GameView.Aim(camera, sim.Flight, Dt, Dt).Watching;
@@ -85,10 +88,90 @@ public sealed class CameraSubjectTests(ITestOutputHelper output)
                 worst = Math.Max(worst, ((Vector3Double)(fed - before) - (truly - lastTrue)).Length());
             Assert.True(Vector3.Distance(camera.Focus, fed) <= Scene.CameraMaxLag + 0.01f, $"frame {i}: the camera keeps up with it");
             (lastFed, lastTrue) = (fed, truly);
+            targets.Add(camera.Target);
+            places.Add(camera.Position);
+            truths.Add(truly);
             sim.Step(new FlightInput(Watching: watching, Camera: camera.Position, CameraBody: sim.Flight.Body));
         }
         output.WriteLine($"the worst frame's step off the stage's own motion: {worst * 1000:0.000} mm");
         Assert.True(worst < 0.01, $"stepped {worst * 1000:0.0} mm off the stage's own motion");
+
+        // Past the first few frames (the follower settling from its snap), each frame's step of the
+        // camera's target and place is in line with its neighbours', as the stage's own is.
+        double Kink(Func<int, Vector3Double> at, int i) => (at(i + 1) - at(i) * 2.0 + at(i - 1)).Length();
+        var (worstTarget, worstPlace) = (0.0, 0.0);
+        for (var i = 10; i < truths.Count - 1; i++)
+        {
+            var own = Kink(k => truths[k], i);
+            worstTarget = Math.Max(worstTarget, Math.Abs(Kink(k => targets[k], i) - own));
+            worstPlace = Math.Max(worstPlace, Math.Abs(Kink(k => places[k], i) - own));
+        }
+        output.WriteLine($"the camera's worst kink frame to frame, off the stage's own: target {worstTarget * 1000:0.000} mm, place {worstPlace * 1000:0.000} mm");
+        Assert.True(worstTarget < 0.01, $"its target kinked {worstTarget * 1000:0.0} mm");
+        Assert.True(worstPlace < 0.01, $"its place kinked {worstPlace * 1000:0.0} mm");
+    }
+
+    private static float Degrees(Vector3 a, Vector3 b) =>
+        float.RadiansToDegrees(MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(a), Vector3.Normalize(b)), -1f, 1f)));
+
+    [Fact]
+    public void A_camera_on_a_vessel_crossing_into_the_moons_sphere_eases_round_to_the_moons_up()
+    {
+        // The upper stage at the planet coming at the moon's sphere at 100 m/s past its side (where
+        // the planet's up and the moon's are far apart), to cross in about a second, watched while
+        // the rocket on the pad is flown, so the main view stays in the planet's frame. One camera
+        // is on it as the game's is; the other follows the same focus by the planet's up throughout,
+        // to show where the view would have been.
+        var (out_, side) = CrossingTests.Ways();
+        const float Aside = 4_500f, Speed = 100f;
+        var into = MathF.Sqrt(Moon.SphereRadius * Moon.SphereRadius - Aside * Aside);
+        var (at, velocity) = CrossingTests.FromMoon(out_ * (into + 1f * Speed) + side * Aside, -out_ * Speed, Home);
+        using var sim = new Simulation(Mission.FreePlay, world: World(CrossingTests.Craft(1, Home, at, velocity, velocity)));
+        var stage = Get(sim, 1);
+        var (crosses, stays) = (new ChaseCamera(null), new ChaseCamera(null));
+        crosses.CentreOn(new CameraCentre(CentreKind.Vessel, stage.Id));
+        sim.Step(default);
+
+        void Frame()
+        {
+            var watching = GameView.Aim(crosses, sim.Flight, Dt, Dt).Watching;
+            stays.Update(Dt, CameraSubject.Seen(sim.Flight, crosses.Centre)!.Value.Focus, Dt, Home, sim.Flight.WorldTime);
+            sim.Step(new FlightInput(Watching: watching, Camera: crosses.Position, CameraBody: Home));
+        }
+        for (var i = 0; i < 600 && stage.Body == Home; i++)
+            Frame();
+        Assert.Same(Moon, stage.Body);
+        Assert.Same(Home, sim.Flight.Body);
+        var ups = Degrees(Home.Up(stays.Focus), Bodies.Change(Moon, Home, sim.Flight.WorldTime).Direction(Moon.Up(Views.Focus(stage))).ToSingle());
+        Assert.True(ups > 60f, $"the two ups are {ups:0.0} degrees apart");
+
+        // The frame it is first followed at the moon: where the planet's camera is, its view unturned.
+        var (lastUp, lastPlace) = (crosses.WorldUp, crosses.Position);
+        Frame();
+        var off = Vector3.Distance(stays.Position, crosses.Position);
+        var turned = Degrees(stays.Forward, crosses.Forward);
+        Assert.True(off < 0.05f, $"{off * 1000:0.0} mm from where it would have been");
+        Assert.True(turned < 0.1f, $"looking {turned:0.000} degrees away from where it would have");
+
+        // Then its up eases round to the moon's, never more than 5 degrees in a frame, and its place
+        // with it, until it is the moon's.
+        var (worst, worstMove) = (Degrees(lastUp, crosses.WorldUp), 0f);
+        var frames = (int)MathF.Ceiling(Scene.CameraBodyEaseSeconds / Dt) + 1;
+        for (var i = 0; i < frames; i++)
+        {
+            (lastUp, lastPlace) = (crosses.WorldUp, crosses.Position);
+            var focusBefore = crosses.Focus;
+            Frame();
+            worst = MathF.Max(worst, Degrees(lastUp, crosses.WorldUp));
+            // How far its place moved besides following the stage: its turn round the stage at the view's distance.
+            worstMove = MathF.Max(worstMove, Vector3.Distance(crosses.Position - lastPlace, crosses.Focus - focusBefore));
+        }
+        output.WriteLine($"its up turned {worst:0.00} degrees at most in a frame, its place {worstMove:0.00} m besides the stage's own");
+        Assert.True(worst < 5f, $"its up turned {worst:0.00} degrees in a frame");
+        Assert.True(worstMove < Scene.CameraDistance * MathF.Sin(float.DegreesToRadians(5f)), $"its place jumped {worstMove:0.00} m in a frame");
+        var moonUp = Bodies.Change(Moon, Home, sim.Flight.WorldTime).Direction(Moon.Up(Views.Focus(stage))).ToSingle();
+        var still = Degrees(crosses.WorldUp, moonUp);
+        Assert.True(still < 0.1f, $"its up is still {still:0.000} degrees off the moon's");
     }
 
     [Fact]
@@ -165,10 +248,27 @@ public sealed class CameraSubjectTests(ITestOutputHelper output)
         Assert.False(link.On);
         Assert.Null(Reading());
         Assert.InRange(frames * Simulation.FrameSeconds, Scene.LinkUpSeconds - 1e-4, Scene.LinkUpSeconds + Simulation.FrameSeconds + 1e-4);
+    }
 
-        // The camera taken off it before a second link-up is due lets that go: nothing is left over.
+    [Fact]
+    public void A_camera_taken_off_a_vessel_before_its_link_up_is_due_lets_it_go()
+    {
+        using var sim = new Simulation(Mission.FreePlay, world: World(OnTheMoon.Lander(0, OnTheMoon.LandingSpot)));
+        var lander = Get(sim, 0);
+        sim.Step(default);
+        Assert.True(lander.OnFormula);
+
+        // Put on it: its link-up begun. Taken off it in the next frame, before that is due: let go at
+        // once, nothing made for it, and the lander left under formula however long on.
+        sim.Step(new FlightInput(Watching: lander, Camera: Views.Focus(lander), CameraBody: Moon));
+        Assert.True(sim.Flight.WatchLink.Waiting);
         sim.Step(default);
         Assert.False(sim.Flight.WatchLink.On);
+        Assert.Null(Readout.FlightReadings(sim.Flight).GetValueOrDefault("Camera link"));
+        for (var i = 0; i < 60; i++)
+            sim.Step(default);
+        Assert.Null(sim.Flight.PhysicsAt(Moon));
+        Assert.True(lander.OnFormula);
     }
 
     [Fact]

@@ -76,6 +76,7 @@ internal sealed class ChaseCamera
     private Quaternion _easeTurn = Quaternion.Identity, _easePoleTurn = Quaternion.Identity;
     private Vector3 _easeCentre;
     private float _ease = 1f;
+    private GroundBody? _around; // the body what it followed was at, at the last Update (see Update)
 
     public Vector3 Position { get; private set; }
     public Vector3 Target { get; private set; }
@@ -409,8 +410,8 @@ internal sealed class ChaseCamera
         Centre = centre;
         if (CameraSubject.IsPlace(centre.Kind))
             Place(_yaw, MathF.Atan2(Scene.PlaceViewHeight, Scene.PlaceViewAside), MathF.Sqrt(Scene.PlaceViewHeight * Scene.PlaceViewHeight + Scene.PlaceViewAside * Scene.PlaceViewAside));
-        else
-            (_free, _snap) = (false, true);
+        _free = false;
+        Snap(); // (any rebase's ease under way ended: there is nothing to keep)
     }
 
     /// <summary>
@@ -502,6 +503,15 @@ internal sealed class ChaseCamera
         _pendingDrag = Vector2.Zero;
         _pendingZoom = 0f;
         _out = Math.Clamp(_out + (_zoomedOut ? 1f : -1f) * (realDt ?? dt) / Scene.ZoomOutSeconds, 0f, 1f);
+
+        // What it follows crossing into another body (its own body's up, ground and pole change, but
+        // not the frame the camera is in): eased round from the frames it had, as across a rebase,
+        // its trail kept as it was. Not if it is to snap (put on something new), nor through a
+        // rebase's ease just begun, which has carried them already.
+        if (_around is { } was && was != around && !_snap && !_easePending)
+            (_carried, _carriedPole, _carriedCentre, _carriedTrail, _easePending) =
+                ((_up, _east, _south), (_poleUp, _poleEast, _poleSouth), _zoomCentre, _lastFocus - _seen, true);
+        _around = around;
 
         _focus = _snap ? focus : Vector3.Lerp(_focus, focus, 1f - MathF.Exp(-Scene.CameraFollowRate * dt));
         _snap = false;

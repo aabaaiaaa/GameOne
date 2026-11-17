@@ -115,7 +115,7 @@ internal sealed class Simulation : IDisposable
         // of no time, so that the pair take the one frame's time.
         RunOne(new FlightInput(SwitchTo: input.SwitchTo, SwitchVessel: input.SwitchVessel, CarryOn: input.CarryOn, Rewind: input.Rewind,
             Watched: input.Watched, Camera: input.Camera, NearMisses: input.NearMisses, View: input.View,
-            Watching: input.Watching, CameraBody: input.CameraBody));
+            Watching: input.Watching, CameraBody: input.CameraBody, CameraVelocity: input.CameraVelocity));
         Flight.RunFrame(0f, input with { SwitchTo = null, SwitchVessel = false, CarryOn = null, Rewind = false, View = null });
     }
 
