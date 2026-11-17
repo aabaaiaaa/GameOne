@@ -186,7 +186,7 @@ internal sealed class Markers
         return index >= 0 ? CentreOf(_clickableMarkers[index]) : null;
     }
 
-    /// <summary>What the camera is centred on to be on <paramref name="marker"/>'s object: its body, vessel or site, or a point of interest (a place with no target, by its order in the mission).</summary>
+    /// <summary>What the camera is centred on to be on <paramref name="marker"/>'s object: its body, vessel or site, or a point of interest (a place, by its order in the mission).</summary>
     internal static CameraCentre CentreOf(in Candidate marker) =>
         marker.Of is { } body ? new CameraCentre(CentreKind.Body, body.Index)
         : marker.Target is { Kind: TargetKind.Vessel } vessel ? new CameraCentre(CentreKind.Vessel, vessel.Id)

@@ -158,14 +158,29 @@ public sealed class PointOfInterestTests
         Assert.Equal(PointOfInterest.MoonLandingSpot.Place, at.Own);
         // Across the bodies, from the vessel's centre of mass (the distance is to that, the point's from its origin).
         var vessel = flight.Controlled;
-        var slack = Vector3.Distance(vessel.CentreOfMass, vessel.Position) + 1f;
-        var expected = PointOfInterest.MoonLandingSpot.DistanceFrom(vessel, flight.WorldTime);
-        Assert.InRange(flight.DistanceToTarget!.Value, expected - slack, expected + slack);
+        var spotInView = Bodies.Change(Moon, vessel.Body, flight.WorldTime).Point((Vector3Double)PointOfInterest.MoonLandingSpot.Place).ToSingle();
+        Assert.InRange(flight.DistanceToTarget!.Value, Vector3.Distance(vessel.CentreOfMass, spotInView) - 1f, Vector3.Distance(vessel.CentreOfMass, spotInView) + 1f);
 
         // The second point is a target too, by its place in the mission.
         sim.Step(new FlightInput(SetTarget: NavTarget.OfPoint(1)));
         Assert.Equal(NavTarget.OfPoint(1), flight.Target);
         Assert.Equal(Second.Place, flight.TargetAt!.Value.Own);
+    }
+
+    [Fact]
+    public void A_point_past_the_sites_is_placed_on_its_own_body_not_a_sites_ship()
+    {
+        var points = Enumerable.Range(0, Sites.All.Length + 2).Select(i => new PointOfInterest($"Point {i}", GroundBody.Moon, i % 80, i * 3f)).ToArray();
+        var many = new Mission { Name = "TEST MANY", Briefing = "", Vehicle = Vehicle.ThreeStage, Steps = [new("Never done", _ => false)], PointsOfInterest = points };
+        using var sim = new Simulation(many, world: World(OnTheMoon.Lander(0, OnTheMoon.LandingSpot)));
+        foreach (var i in new[] { 2, Sites.All.Length + 1 }) // one that is a drone ship's number, and one past every site's
+        {
+            sim.Step(new FlightInput(SetTarget: NavTarget.OfPoint(i)));
+            Assert.Equal(NavTarget.OfPoint(i), sim.Flight.Target);
+            var at = sim.Flight.TargetAt!.Value;
+            Assert.Same(Moon, at.Body);
+            Assert.Equal(points[i].Place, at.Own);
+        }
     }
 
     [Fact]

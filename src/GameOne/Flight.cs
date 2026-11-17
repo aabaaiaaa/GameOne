@@ -2323,16 +2323,16 @@ internal sealed class Flight : IDisposable
             return Across(vessel.Body, vessel.CentreOfMass, vessel.Velocity, vessel.State == FlightState.Flying);
         if (target.Kind == TargetKind.Body)
             return Across(Bodies.All[index], Bodies.All[index].Centre, Vector3.Zero, true);
+        if (target.Kind == TargetKind.Point)
+        {
+            var point = Mission.PointsOfInterest[index];
+            return Across(point.Body, point.Place, Vector3.Zero, false);
+        }
         if (Sites.RaftOf(index) is { } raft)
         {
             var ship = Rafts.Now(raft);
             var deck = Vector3.Transform(new Vector3(0f, ship.Freeboard, 0f), ship.Current.Model);
             return Across(Sites.Body, deck, ship.VelocityAt(deck), false);
-        }
-        if (target.Kind == TargetKind.Point)
-        {
-            var point = Mission.PointsOfInterest[index];
-            return Across(point.Body, point.Place, Vector3.Zero, false);
         }
         return Across(Sites.Body, Sites.Top(index), Vector3.Zero, false);
     }
