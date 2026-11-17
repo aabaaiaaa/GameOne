@@ -116,6 +116,18 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
     }
 
     [Fact]
+    public void A_rings_hold_round_trips()
+    {
+        var world = Busy();
+        world = world with { Vessels = [world.Vessels[0] with { Hold = HoldMode.Rings, RingHeading = 2.1f, RingPitch = -0.4f }, .. world.Vessels.Skip(1)] };
+        Store.Save(world);
+        var back = Store.Load("busy");
+        Assert.Equal(HoldMode.Rings, back.Vessels[0].Hold);
+        Assert.Equal((2.1f, -0.4f), (back.Vessels[0].RingHeading, back.Vessels[0].RingPitch));
+        AssertSameVessels(world, back);
+    }
+
+    [Fact]
     public void A_view_centred_elsewhere_round_trips()
     {
         var world = Busy();

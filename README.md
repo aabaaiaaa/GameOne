@@ -284,7 +284,7 @@ The controls are the same for every mission:
 |---|---|
 | Space | Light the engine, at once, at the throttle set (75% until you change it: it lifts off once that beats its weight), then drop a stage, whenever you like: empty or not, flying, landed or afloat. Before a payload in a fairing (a satellite, a lander) is let go, it jettisons the fairing first. |
 | Shift / Ctrl | Throttle up / down. Z: full throttle, X: cut the engine. |
-| Left drag on the rings | Steer: see below. |
+| Left drag / click on the rings | Steer: see below. |
 | W A S D (or arrows) | Lean the nose forward, left, back or right, in the vessel's own frame: they turn with it, never with the camera, so holding one keeps it turning (round in a loop, above the air). On the pad, as the starting camera sees it, D leans it east (the gravity turn) and W away from the camera. The steering rings show while a key is held, following the nose. |
 | Hold buttons (top left, under the frame buttons) | Prograde, Retrograde, Manoeuvre: keep the nose pointed the way the rocket is moving, against it (to slow down, as for a landing burn), or along the burn still needed for the next node (Manoeuvre, only with a node: it lets go once the last node is gone). Prograde and retrograde go by its velocity in the frame of reference in use: over the ground (surface), along its orbit among the stars (orbit), or relative to its target (target). One at a time: choosing one turns the other off, choosing the one in use turns it off, and steering (the keys or the rings) lets go of any. Below 5 m/s (0.2 m/s relative to a flying target, or in orbit) prograde and retrograde leave the nose where it is. P and R no longer do anything. |
 | Frame buttons (top left, in the instruments) | Auto, Surface, Orbit, Target (with a target): which frame of reference the speeds, the holds and the travel markers go by. Auto turns from surface to orbit as the orbit clears the air, and back; the frame in use is shown beside them (lit for 3 s after it changes). |
@@ -306,7 +306,12 @@ The controls are the same for every mission:
 flat blue one marked N E S W (the heading: which compass direction to point the nose) and an
 upright orange one standing along that heading (the pitch: how far up from the horizon). The ring
 nearest the pointer lights up; press the left button on it and drag its handle round. While the
-button is held the rocket is asked to hold that direction. Hollow markers on the rings (and on the
+button is held the rocket is asked to hold that direction. A click on a ring (pressed and let go
+at once) sets that one angle and the rocket turns there and keeps it, the other angle left as it was
+(or, with none held, where the nose points); clicking the other ring too changes that angle, and both
+turn together. A diamond on each ring marks the angle held. The angles are by the body the rocket is
+at (the planet's north, or the moon's). Steering by the keys, or dragging a ring, lets go of it,
+as the hold buttons do. Hollow markers on the rings (and on the
 heading tape) show where the rocket is actually going, as prograde holds it: through the air, low
 down, and round its orbit among the stars above the air. Nothing about the steering is special to a mission:
 

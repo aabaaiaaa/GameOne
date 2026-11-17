@@ -125,7 +125,8 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
         // Steering: the keys in the flown vessel's own frame, or a ring held by the mouse (which
         // shows while the keys are used too, following the nose).
         view.Navigation.KeysHeld = controls.Steering;
-        var input = controls.Read(flight.Controlled) with { Hold = view.Navigation.Hold };
+        var (ringHeading, ringPitch) = view.Navigation.TakeClick();
+        var input = controls.Read(flight.Controlled) with { Hold = view.Navigation.Hold, RingHeading = ringHeading, RingPitch = ringPitch };
         if (controls.Take(ControlAction.GameMenu))
             hud.PressEsc(haveWorld: flight.WorldId.Length > 0 && flight.Chosen); // (one with nothing chosen in it is picked again, not flown)
         if (controls.Take(ControlAction.ToggleControlsList))

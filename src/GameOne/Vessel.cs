@@ -118,6 +118,7 @@ internal sealed class Vessel
         Throttle = state.Throttle;
         _aim = state.Aim;
         Hold = state.Hold;
+        RingAim = (state.RingHeading, state.RingPitch);
         _legsWanted = state.LegsWanted;
         LegDeploy = state.LegDeploy;
         _bayDoorsWanted = state.BayDoorsWanted;
@@ -208,6 +209,8 @@ internal sealed class Vessel
         Throttle = Throttle,
         Aim = _aim,
         Hold = Hold,
+        RingHeading = RingAim.Heading,
+        RingPitch = RingAim.Pitch,
         LegsWanted = _legsWanted,
         LegDeploy = LegDeploy,
         BayDoorsWanted = _bayDoorsWanted,
@@ -873,6 +876,27 @@ internal sealed class Vessel
     /// <summary>Which way the steering is keeping the nose pointed, if it is (see <see cref="HoldMode"/>); one at a time.</summary>
     public HoldMode Hold { get; private set; }
 
+    /// <summary>
+    /// The compass heading (radians clockwise from north) and the pitch (up from the horizon along it;
+    /// past 90 degrees it tips back the other way) the rings' hold keeps the nose at, round its own body
+    /// (see <see cref="HoldMode.Rings"/>); the last asked for, whether or not that hold is on.
+    /// </summary>
+    public (float Heading, float Pitch) RingAim { get; private set; }
+
+    /// <summary>The nose's heading and pitch now, round its own body (its heading as it was held when it points straight up or down).</summary>
+    private (float Heading, float Pitch) NoseAngles()
+    {
+        var up = Body.Up(_centreOfMass);
+        var upward = Vector3.Dot(_aim, up);
+        var across = _aim - up * upward;
+        var heading = across.Length() > 0.02f ? Body.Bearing(_centreOfMass, across) : RingAim.Heading;
+        return (heading, MathF.Atan2(upward, Vector3.Dot(_aim, Body.Towards(_centreOfMass, heading))));
+    }
+
+    /// <summary>The direction the rings' hold keeps the nose in.</summary>
+    private Vector3 RingDirection() =>
+        Body.Towards(_centreOfMass, RingAim.Heading) * MathF.Cos(RingAim.Pitch) + Body.Up(_centreOfMass) * MathF.Sin(RingAim.Pitch);
+
     /// <summary>What its pilot has picked to fly to, if anything (see <see cref="GameOne.Flight.TargetOf"/>, which checks it is still there).</summary>
     public NavTarget? Target { get; internal set; }
 
@@ -1369,14 +1393,24 @@ internal sealed class Vessel
         if (input.ToggleBayDoors && HasBay)
             _bayDoorsWanted = !_bayDoorsWanted;
         // The holds are one at a time: choosing one turns the other off, and choosing the one that is on
-        // turns it off. The manoeuvre hold needs a node to steer by; the rings' hold is refused until
-        // there is something to steer it by.
+        // turns it off. The manoeuvre hold needs a node to steer by. A click on a ring gives the rings'
+        // hold an angle, the other being the one already held, or with none, the nose's.
         if (input.ChooseHold is { } mode)
         {
             if (mode == Hold)
                 Hold = HoldMode.None;
-            else if (mode == HoldMode.Manoeuvre ? Chain is not null : mode != HoldMode.Rings)
+            else if (mode != HoldMode.Manoeuvre || Chain is not null)
+            {
+                if (mode == HoldMode.Rings)
+                    RingAim = NoseAngles();
                 Hold = mode;
+            }
+        }
+        if (input.RingHeading is not null || input.RingPitch is not null)
+        {
+            var (heading, pitch) = Hold == HoldMode.Rings ? RingAim : NoseAngles();
+            RingAim = (input.RingHeading ?? heading, input.RingPitch ?? pitch);
+            Hold = HoldMode.Rings;
         }
     }
 
@@ -1536,6 +1570,8 @@ internal sealed class Vessel
             TurnAimTowards(holdVelocity, TurnRate * dt);
         else if (Hold == HoldMode.Retrograde && holdVelocity.Length() > holdFloor) // slower than that, the nose stays where it is
             TurnAimTowards(-holdVelocity, TurnRate * dt);
+        else if (Hold == HoldMode.Rings)
+            TurnAimTowards(RingDirection(), TurnRate * dt);
         else if (Hold == HoldMode.Manoeuvre && burnLeft is { } left && left.LengthSquared() > 1e-8f)
             TurnAimTowards(left, TurnRate * dt);
 

@@ -118,6 +118,8 @@ internal readonly record struct Coming(Vessel Watched, SolidKind With, Vessel? O
 /// <param name="FullThrottle">Throttle straight to full.</param>
 /// <param name="CutThrottle">Cut the engine.</param>
 /// <param name="ChooseHold">Keep the nose pointed by a hold (<see cref="HoldMode"/>: along the way the rocket is moving, against it to slow down as for a landing burn, or along the burn left), or, choosing the one already on, stop doing so. The manoeuvre hold is refused without a node.</param>
+/// <param name="RingHeading">A click on the heading ring: the compass heading, radians clockwise from north, to turn the nose to and hold (the rings' hold: see <see cref="Vessel.RingAim"/>); the pitch is the one already held, or the nose's.</param>
+/// <param name="RingPitch">A click on the pitch ring: the pitch, radians up from the horizon, to turn the nose to and hold; the heading is the one already held, or the nose's. With <paramref name="RingHeading"/>, both at once.</param>
 /// <param name="StartAgain">Start the flown vessel's mission again ("Start the mission again"): its run abandoned if it is in progress, and a new run of that mission begun at its site, a fresh rocket on its pad; nothing else in the world changes. A menu choice, as <paramref name="Choose"/> is.</param>
 /// <param name="Rewind">Bring the world back as it was at the last menu choice this session and make that choice again (see <see cref="Flight.CanRewind"/>); nothing, if none has been made.</param>
 /// <param name="Choose">Start a flight of this mission (a new run), whatever is happening.</param>
@@ -151,6 +153,8 @@ internal readonly record struct FlightInput(
     bool FullThrottle = false,
     bool CutThrottle = false,
     HoldMode? ChooseHold = null,
+    float? RingHeading = null,
+    float? RingPitch = null,
     bool StartAgain = false,
     bool Rewind = false,
     Mission? Choose = null,
@@ -568,6 +572,9 @@ internal sealed class Flight : IDisposable
     public bool HasBay => Controlled.HasBay;
     public Vector3 Aim => Controlled.Aim;
     public HoldMode Holding => Controlled.Hold;
+
+    /// <summary>The heading and pitch the flown vessel's rings' hold is set to (see <see cref="Vessel.RingAim"/>), radians.</summary>
+    public (float Heading, float Pitch) RingAim => Controlled.RingAim;
     public float TurnRate => Controlled.TurnRate;
     public float Altitude => Controlled.Altitude;
     public float Ground => Controlled.Ground;
@@ -1650,7 +1657,7 @@ internal sealed class Flight : IDisposable
         var held = input with
         {
             Launch = false, Stage = false, ToggleLegs = false, FullThrottle = false, CutThrottle = false,
-            ChooseHold = null, StartAgain = false, Rewind = false, Choose = null, From = null,
+            ChooseHold = null, RingHeading = null, RingPitch = null, StartAgain = false, Rewind = false, Choose = null, From = null,
             SwitchVessel = false, SwitchTo = null, SetTarget = null, ClearTarget = false, Plan = null, ChooseFrame = null,
             Slower = false, Faster = false, ToggleBayDoors = false, CarryOn = null, CompleteRun = false, AbandonRun = false,
             View = null, // taken once, in the first step, before a switch there changes which vessel is flown

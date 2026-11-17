@@ -18,7 +18,9 @@ namespace GameOne;
 /// round it. While the button is held, the rocket is asked to hold that direction
 /// (<see cref="Hold"/>); it turns there only as fast as it can (see <see cref="Flight.TurnRate"/>),
 /// and in thick, fast air it can't hold far off its direction of travel. Let go and the handles go
-/// back to following the nose, wherever the air (or nothing, above it) turns it.</para>
+/// back to following the nose, wherever the air (or nothing, above it) turns it. A click (press and
+/// release together) on a ring sends that angle once (<see cref="TakeClick"/>), and the rocket turns
+/// to it and keeps it (<see cref="HoldMode.Rings"/>), each ring marked at the angle held.</para>
 /// <para>The cursor is followed from its move events, not read from the window, so a test
 /// driver's posted mouse messages work too.</para>
 /// </remarks>
@@ -53,6 +55,7 @@ internal sealed class NavigationControl
     private bool _centreShown; // the rocket's middle is on the screen, so the burn's mark can be placed (the rings may not fit)
     private Vector3 _centre, _up, _travel;
     private Vector3? _towards;
+    private (float Heading, float Pitch)? _ringHeld; // the angles the rings' hold is set to, while it is on
     private float _slowest; // the slowest travel its markers show (Flight.MarkerFloor)
     private Vector2 _centreOnScreen, _display;
     private float _radius;
@@ -60,6 +63,16 @@ internal sealed class NavigationControl
 
     /// <summary>The direction the pilot is holding the nose at, while dragging a ring; otherwise null.</summary>
     public Vector3? Hold { get; private set; }
+
+    private float? _clickHeading, _clickPitch;
+
+    /// <summary>The angle a click on a ring set this frame (compass heading, or pitch, radians), each once; none if there was no click.</summary>
+    public (float? Heading, float? Pitch) TakeClick()
+    {
+        var click = (_clickHeading, _clickPitch);
+        (_clickHeading, _clickPitch) = (null, null);
+        return click;
+    }
 
     /// <summary>Whether the pilot is steering with the keys (set before <see cref="Update"/>): the rings show meanwhile, following the nose round.</summary>
     public bool KeysHeld { get; set; }
@@ -123,6 +136,7 @@ internal sealed class NavigationControl
             _visibility = 0f;
             _onScreen = _centreShown = false;
             Hold = null;
+            _ringHeld = null;
             return;
         }
 
@@ -133,6 +147,7 @@ internal sealed class NavigationControl
         _travel = flight.FrameVelocity; // the way the holds steer by, in the frame in use
         _towards = flight.TowardsTarget;
         _slowest = flight.MarkerFloor;
+        _ringHeld = flight.Holding == HoldMode.Rings ? flight.RingAim : null;
         if (_dragging == Ring.None)
             FollowNose(flight.Aim);
 
@@ -162,7 +177,14 @@ internal sealed class NavigationControl
 
         if (_dragging != Ring.None && _onScreen)
             Drag(tap ? _pressAt : _cursor);
-        Hold = _dragging != Ring.None ? Direction(_heading, _pitch) : null;
+        Hold = _dragging != Ring.None && !tap ? Direction(_heading, _pitch) : null;
+        if (tap && _onScreen)
+        {
+            if (_dragging == Ring.Heading)
+                _clickHeading = _heading;
+            else
+                _clickPitch = _pitch;
+        }
         if (tap)
             _dragging = Ring.None;
 
@@ -307,6 +329,13 @@ internal sealed class NavigationControl
             var inPlane = heading * Vector3.Dot(burn.Way, heading) + _up * Vector3.Dot(burn.Way, _up);
             if (inPlane.Length() > 0.01f * burn.Way.Length())
                 Diamond(draw, _centre + Vector3.Normalize(inPlane) * _radius, color);
+        }
+
+        // The angles the rings' hold is set to, a mark on each ring.
+        if (_ringHeld is { } held)
+        {
+            Diamond(draw, _centre + Planet.Towards(_centre, held.Heading) * _radius, HeadingColor);
+            Diamond(draw, _centre + Direction(_heading, held.Pitch) * _radius, PitchColor);
         }
 
         // The handles, where the nose points; a line from the centre out to the pitch handle is the nose.

@@ -122,6 +122,95 @@ public sealed class SteeringTests(ITestOutputHelper output)
         Assert.True(flight.Ground < 0.1f);
     }
 
+    // The rings' hold: one click on a ring sends its angle, and the vessel turns there and keeps it,
+    // the other angle left as it was.
+
+    /// <summary>A satellite in a round orbit round <paramref name="body"/>, flown, its nose turned to <paramref name="heading"/> and <paramref name="pitch"/> (degrees) and settled there.</summary>
+    private static (Simulation Sim, Vessel Flown) Pointed(GroundBody body, float heading, float pitch)
+    {
+        var (sim, flown) = MoonTargetTests.Flying(5000.0, InOrbit.Round(body, 0, 2000f));
+        sim.Run((_, _) => new FlightInput(Hold: Direction(flown, heading, pitch)), f => Angle(f.Aim, Direction(flown, heading, pitch)) < 0.5f, maxSeconds: 30);
+        return (sim, flown);
+    }
+
+    private static Vector3 Direction(Vessel v, float heading, float pitch) =>
+        v.Body.Towards(v.CentreOfMass, float.DegreesToRadians(heading)) * MathF.Cos(float.DegreesToRadians(pitch)) + v.Body.Up(v.CentreOfMass) * MathF.Sin(float.DegreesToRadians(pitch));
+
+    private static float HeadingOf(Vessel v) => float.RadiansToDegrees(v.Body.Bearing(v.CentreOfMass, v.Aim));
+
+    private static float PitchOf(Vessel v) => float.RadiansToDegrees(MathF.Asin(Math.Clamp(Vector3.Dot(v.Aim, v.Body.Up(v.CentreOfMass)), -1f, 1f)));
+
+    private static float Between(float a, float b) => MathF.Abs((a - b + 540f) % 360f - 180f);
+
+    [Fact]
+    public void One_click_on_the_heading_ring_turns_to_that_heading_and_holds_it()
+    {
+        var (sim, flown) = Pointed(GroundBody.Planet, 0f, 45f);
+        using (sim)
+        {
+            sim.Step(new FlightInput(RingHeading: float.DegreesToRadians(120f)));
+            Assert.Equal(HoldMode.Rings, sim.Flight.Holding);
+            sim.Run((_, _) => default, _ => false, maxSeconds: 15);
+            output.WriteLine($"heading {HeadingOf(flown):0.0}°, pitch {PitchOf(flown):0.0}°");
+            Assert.True(Between(HeadingOf(flown), 120f) < 2f, $"heading {HeadingOf(flown):0.0}°");
+            Assert.True(MathF.Abs(PitchOf(flown) - 45f) < 2f, $"pitch {PitchOf(flown):0.0}°, which was left as it was");
+            Assert.Equal(HoldMode.Rings, sim.Flight.Holding);
+        }
+    }
+
+    [Fact]
+    public void Clicking_both_rings_turns_on_both_together()
+    {
+        var (sim, flown) = Pointed(GroundBody.Planet, 0f, 60f);
+        using (sim)
+        {
+            sim.Step(new FlightInput(RingHeading: float.DegreesToRadians(180f), RingPitch: float.DegreesToRadians(20f)));
+            var pitchBegun = false;
+            sim.Run((_, _) => default, _ =>
+            {
+                pitchBegun |= MathF.Abs(PitchOf(flown) - 60f) > 3f && Between(HeadingOf(flown), 180f) > 10f;
+                return false;
+            }, maxSeconds: 20);
+            output.WriteLine($"heading {HeadingOf(flown):0.0}°, pitch {PitchOf(flown):0.0}°");
+            Assert.True(pitchBegun, "the pitch only began to turn once the heading had finished");
+            Assert.True(Between(HeadingOf(flown), 180f) < 2f, $"heading {HeadingOf(flown):0.0}°");
+            Assert.True(MathF.Abs(PitchOf(flown) - 20f) < 2f, $"pitch {PitchOf(flown):0.0}°");
+        }
+    }
+
+    [Fact]
+    public void Steering_by_the_keys_ends_the_ring_hold()
+    {
+        var (sim, _) = Pointed(GroundBody.Planet, 0f, 45f);
+        using (sim)
+        {
+            sim.Step(new FlightInput(RingPitch: float.DegreesToRadians(30f)));
+            Assert.Equal(HoldMode.Rings, sim.Flight.Holding);
+            sim.Step(new FlightInput(Lean: Vector3.UnitX));
+            Assert.Equal(HoldMode.None, sim.Flight.Holding);
+
+            // And so does dragging a ring.
+            sim.Step(new FlightInput(RingPitch: float.DegreesToRadians(30f)));
+            sim.Step(new FlightInput(Hold: Vector3.UnitY));
+            Assert.Equal(HoldMode.None, sim.Flight.Holding);
+        }
+    }
+
+    [Fact]
+    public void The_ring_hold_works_round_the_moon()
+    {
+        var (sim, flown) = Pointed(GroundBody.Moon, 0f, 45f);
+        using (sim)
+        {
+            Assert.Same(GroundBody.Moon, flown.Body);
+            sim.Step(new FlightInput(RingHeading: float.DegreesToRadians(250f)));
+            sim.Run((_, _) => default, _ => false, maxSeconds: 15);
+            output.WriteLine($"heading {HeadingOf(flown):0.0}°, pitch {PitchOf(flown):0.0}°");
+            Assert.True(Between(HeadingOf(flown), 250f) < 2f, $"heading {HeadingOf(flown):0.0}°");
+            Assert.True(MathF.Abs(PitchOf(flown) - 45f) < 2f, $"pitch {PitchOf(flown):0.0}°");
+        }
+    }
+
     private static float Angle(Vector3 a, Vector3 b) =>
         float.RadiansToDegrees(MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(a), Vector3.Normalize(b)), -1f, 1f)));
 

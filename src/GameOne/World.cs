@@ -56,6 +56,8 @@ internal sealed record VesselState
     public float Throttle { get; init; }
     public required Vector3 Aim { get; init; }
     public HoldMode Hold { get; init; }
+    public float RingHeading { get; init; } // the rings' hold's compass heading and pitch, radians (see Vessel.RingAim)
+    public float RingPitch { get; init; }
     public bool LegsWanted { get; init; }
     public float LegDeploy { get; init; }
     public bool BayDoorsWanted { get; init; }

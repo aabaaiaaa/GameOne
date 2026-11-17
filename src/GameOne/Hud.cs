@@ -2925,7 +2925,7 @@ internal sealed class Hud : IDisposable
     {
         0 => "Shift / Ctrl    throttle up / down"u8,
         1 => "Z / X           full throttle / cut engine"u8,
-        2 => "Left drag       on the rocket's rings: steer (held while held)"u8,
+        2 => "Left drag       on the rocket's rings: steer (held while held); click: hold that angle"u8,
         3 => "W / S           lean the nose forward / back (its own frame)"u8,
         4 => "A / D           lean it left / right (D: east, off the pad)"u8,
         5 => "Right drag      orbit the rocket;  wheel: zoom"u8,
