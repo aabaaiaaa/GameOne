@@ -2980,31 +2980,35 @@ internal sealed class Hud : IDisposable
     }
 
     /// <summary>How many lines the open controls list has (see <see cref="ControlLine"/>).</summary>
-    private const int ControlLineCount = 20;
+    internal const int ControlLineCount = 24;
 
     /// <summary>The open controls list's line <paramref name="i"/>: the controls, the same for every mission.</summary>
-    private static ReadOnlySpan<byte> ControlLine(int i) => i switch
+    internal static ReadOnlySpan<byte> ControlLine(int i) => i switch
     {
         0 => "Shift / Ctrl    throttle up / down"u8,
         1 => "Z / X           full throttle / cut engine"u8,
-        2 => "Left drag       on the rocket's rings: steer (held while held); click: hold that angle (a drag or a key lets go)"u8,
-        3 => "W / S           lean the nose forward / back (its own frame)"u8,
-        4 => "A / D           lean it left / right (D: east, off the pad)"u8,
-        5 => "Right drag      orbit the rocket;  wheel: zoom"u8,
-        6 => "Right click     on the vessel: its actions (bay doors, legs)"u8,
-        7 => "Middle drag     look around: turn the view in place"u8,
-        8 => "M               zoom right out to the planet and path (and back)"u8,
-        9 => "Click a marker  make it your target (again, or elsewhere: none)"u8,
-        10 => "Click the path  plan a burn there (zoomed out); pull its handles"u8,
-        11 => "Space           launch, then drop a stage (any time)"u8,
-        12 => "G               landing legs"u8,
-        13 => "Hold buttons    Prograde, Retrograde, Manoeuvre: keep the nose that way (again: off)"u8,
-        14 => "Frame buttons   Auto, Surface, Orbit, Target: what speeds and holds go by"u8,
-        15 => "Tab             fly another vessel (or click its view)"u8,
-        16 => ", / .           time: slower / faster (1/4x to 32x warp)"u8,
-        17 => "H               this list: open or fold it (over the small views)"u8,
-        18 => "F2              hide the HUD, for a screenshot (and back)"u8,
-        19 => "Esc             pause: restart, missions, worlds, quit"u8,
+        2 => "Left drag       on the rocket's rings: steer (held while held)"u8,
+        3 => "Click a ring    turn to that angle and hold it (a drag, a key or a hold: off)"u8,
+        4 => "W / S           lean the nose forward / back (its own frame)"u8,
+        5 => "A / D           lean it left / right (D: east, off the pad)"u8,
+        6 => "Right drag      turn round what the camera is on;  wheel: zoom"u8,
+        7 => "Right click     your vessel: its actions (bay doors, legs)"u8,
+        8 => "Right click     another vessel, a body, a site (map): put the camera on it"u8,
+        9 => "Reset camera    (strip button) the camera back on your vessel"u8,
+        10 => "Middle drag     look around: turn the view in place"u8,
+        11 => "M               the map, or back to the chase view, of what the camera is on"u8,
+        12 => "Click a marker  make it your target (again, or elsewhere: none)"u8,
+        13 => "Click a body    target it, by its path round in the map or its disc"u8,
+        14 => "Click the path  plan a burn there (zoomed out); pull its handles"u8,
+        15 => "Space           launch, then drop a stage (any time)"u8,
+        16 => "G               landing legs"u8,
+        17 => "Hold buttons    Prograde, Retrograde, Manoeuvre: keep the nose that way (again: off)"u8,
+        18 => "Frame buttons   Auto, Surface, Orbit, Target: what speeds and holds go by"u8,
+        19 => "Tab             fly another vessel (or click its view)"u8,
+        20 => ", / .           time: slower / faster (1/4x to 32x warp)"u8,
+        21 => "H               this list: open or fold it (over the small views)"u8,
+        22 => "F2              hide the HUD, for a screenshot (and back)"u8,
+        23 => "Esc             pause: restart, missions, worlds, quit"u8,
         _ => throw new ArgumentOutOfRangeException(nameof(i)),
     };
 

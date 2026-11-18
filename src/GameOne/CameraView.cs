@@ -3,7 +3,7 @@ namespace GameOne;
 /// <summary>What a view is centred on (see <see cref="CameraCentre"/>).</summary>
 internal enum CentreKind
 {
-    /// <summary>Its own vessel (the chase view) or its vessel's body (the map).</summary>
+    /// <summary>Its own vessel, in the chase view or the map.</summary>
     Own,
     /// <summary>A vessel, by id.</summary>
     Vessel,
@@ -18,18 +18,15 @@ internal enum CentreKind
 /// <summary>What a view is centred on: <paramref name="Id"/> is a vessel id, a body's index, a site's index or a point of interest's index, by <paramref name="Kind"/>.</summary>
 internal readonly record struct CameraCentre(CentreKind Kind, int Id)
 {
-    /// <summary>Its own vessel, or its vessel's body in the map.</summary>
+    /// <summary>Its own vessel, in the chase view or the map.</summary>
     public static CameraCentre Own => new(CentreKind.Own, 0);
 }
 
 /// <summary>
 /// How a vessel is looked at: the chase view's angles and distance, the map's (and whether
-/// <paramref name="MapSet"/>: the player has turned or zoomed the map by hand, so it opens on those, not
-/// on the fit of the orbit), whether it is the map that is shown, and what it is centred on. Kept with the vessel, so switching back to it, or
-/// carrying on in a saved world, finds the view as it was left.
+/// <paramref name="MapSet"/>: the player has turned or zoomed the map by hand, so it opens on
+/// those, not on the fit of the orbit), whether it is the map that is shown, and what it is
+/// centred on. Kept with the vessel, so switching back to it, or carrying on in a saved world,
+/// finds the view as it was left.
 /// </summary>
-internal sealed record CameraView(bool Map, float Yaw, float Pitch, float Distance, float MapYaw, float MapPitch, float MapDistance, bool MapSet, CameraCentre Centre)
-{
-    /// <summary>No view kept: the camera keeps the one it has.</summary>
-    public static CameraView? None => null;
-}
+internal sealed record CameraView(bool Map, float Yaw, float Pitch, float Distance, float MapYaw, float MapPitch, float MapDistance, bool MapSet, CameraCentre Centre);

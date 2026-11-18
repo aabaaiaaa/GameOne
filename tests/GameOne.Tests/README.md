@@ -516,7 +516,9 @@ say) stalls frames and spoils the timing.
   offset (`Hud.TapeOffset`: the shorter way round, held at its ends); and the main view's red mark
   on a vessel coming at the flown one, never on the ground, the sea, a floe, the drone ship, the
   tower or a mast (`Markers.ComingVessel`); and what a click does to the target, on a marker or the
-  red mark (its vessel targeted, or let go if it already is) or off them all (`Markers.Click`).
+  red mark (its vessel targeted, or let go if it already is) or off them all (`Markers.Click`); and
+  what a press is on, first of these: the red mark, a marker, a body's path in the map or its disc
+  (a body whose ring has faded, or with markers off), else nothing (`Markers.Pressed`).
 - **`CollisionTests`:** each witnessed vessel's soonest fast collision predicted ahead (`Collisions`):
   two boosters head on (at 500 and 8,000 m/s closing) seen coming with the right time and
   speeds, a collision 19 s out (head on and 15 m aside) seen from the first step, a pass timed to its closest approach, a collision just over the threshold found
@@ -618,7 +620,8 @@ say) stalls frames and spoils the timing.
   debris, then vessels of no run, then runs', never the one flown; and the readout's runs, rewind,
   vessel id and position.
 - **`NodeEditorTests`:** the node editor's handle rate: out as it adds, in a quarter of that
-  taking away, past zero.
+  taking away, past zero; and a chain changed by the flight rather than the editor told apart
+  (`NodeEditor.ChangedElsewhere`: a node gone as it matched), by which a grab is let go.
 - **`NodeTests`:** manoeuvre nodes as a chain (`ManoeuvreChain`): a prograde node raising the far
   side, one flown by its guide turning matched and going as the engine is cut (in warp too),
   giving the orbit it planned, the guide counting down and saying when it goes past; a node past
@@ -647,6 +650,8 @@ say) stalls frames and spoils the timing.
   anchored round the moon loading back as it was; the world list
   (the latest first, what is in each, a file it can't read listed with why); a file from a newer
   version refused; a world flown in free play saved and loaded; worlds made from presets with names of their own, renamed, reset and deleted; a vessel afloat saving and coming back floating (and one saved while still settling in the water, coming back and floating with nobody near); vessels saved while out of the physics, under formula, saved where the formula had them and loading back there.
+- **`ControlsListTests`:** every line of the HUD's controls list (`Hud.ControlLine`) short enough to
+  fit a small window.
 - **`CreditsTests`:** the BRUTAL credits panel (licence §2.1 and §2.2): shown before play and in
   every menu, and in flight for `Scene.CreditsSeconds` once play first begins, then gone; and no
   menu screen over it at 800 to 1920 px across (`Hud.MenuAcross`: each clear of it, on the screen,
@@ -673,7 +678,8 @@ say) stalls frames and spoils the timing.
   default; and a world picked and carried on, each frame's input carrying the camera's view as it
   stands, still bringing back the saved view (the camera's taken as the vessel's only once it is);
   a new rocket getting the default view whatever the camera was on, and a world restored putting
-  the camera back on the flown vessel.
+  the camera back on the flown vessel; and the frame a vessel is flown in after its link-up taking
+  nothing of that frame's input made for the vessel left (its view, plan, hold, ring angle, target).
 - **`PadLightTests`:** where each pad's, zone's and drone ship's lamps and masts stand (the masts
   only where the ground allows, clear of the towers, in a zone's own frame, aimed at the place's
   top, solid); which place's floods cast shadows, held for a few metres; the nearest lights and
@@ -956,7 +962,7 @@ say) stalls frames and spoils the timing.
   where the two ups are 80 degrees apart: its place and view kept within 1 cm and 0.1 degrees, at
   once and after the next frame against a camera left in the planet's frame, then its up easing
   round to the moon's over `Scene.CameraBodyEaseSeconds`, under 5 degrees a frame, still well
-  short half way. In `PathTests`, zoomed out (M): the vessel looked at from far enough to fit the orbit, and back to just where it
+  short half way; and "Reset camera" after a place bringing back the chase view as it was left. In `PathTests`, zoomed out (M): the vessel looked at from far enough to fit the orbit, and back to just where it
   was, in the same real time in a warp; the map looking down from the pole's side; and the map
   opening on the view its vessel left (turned or zoomed by hand, or given with a view brought back).
 - **`CameraSubjectTests`:** the main camera on something other than the flown vessel
@@ -973,7 +979,11 @@ say) stalls frames and spoils the timing.
   `Scene.PlaceViewAside` aside, turned and zoomed round it; and the markers' distances measured
   from the flown vessel wherever the camera is (`Markers.DistancesFrom`: on the moon, not 0 m to it);
   and the map centred on a body, the one the flown vessel is at as well as another, looking at its
-  centre from over its pole, nothing in the camera not a number.
+  centre from over its pole, nothing in the camera not a number; a right click finding a vessel
+  seen at another body (`Hud.VesselClicked`, changed into the view's frame); a click on a body's
+  disc finding it, and none off it, behind the camera or behind the sun (`Hud.BodyDisc`); and the
+  compass tape keeping the facing it had on the flown vessel while the camera is elsewhere
+  (`Hud.TapeFacing`).
 - **`BodiesInPlayTests`:** a physics at each body in use (`Worlds`), every vessel at its own body,
   all played out at once: flying a lander in a moon orbit (the moon's physics), a small view's
   booster flies its landing burn down onto Home's zone by its retrograde hold (the planet's
