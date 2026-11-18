@@ -709,16 +709,12 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
         var drawn = new List<string>();
         foreach (var marker in candidates)
         {
-            var fade = Markers.Fade(marker, camera.Position, camera.Forward, screen);
-            var onScreen = camera.ToScreen(marker.Position, screen, out var at, out _);
-            if (fade < 0.02f || !onScreen)
+            // The drawing's own pass over each (Markers.Draw takes the same).
+            var placed = Markers.Place(marker, isTarget: false, camera.Position, camera.Forward, camera.ViewProjection(screen), screen, frames, taken,
+                out var at, out _, out var fade);
+            output.WriteLine($"{marker.Name}: fade {fade:0.00} at {at}, {placed}");
+            if (placed != Markers.Placed.Drawn)
                 continue;
-            var (min, max) = Markers.Box(at, marker.Loud);
-            var gaveWay = Markers.GivesWay(marker, taken, min, max);
-            output.WriteLine($"{marker.Name}: fade {fade:0.00} at {at}, {(gaveWay ? "gives way" : "drawn")}");
-            if (gaveWay)
-                continue;
-            taken.Add((min, max));
             drawn.Add(marker.Name);
             if (marker.Kind == MarkerKind.Body && marker.Name == Moon.Name)
                 Assert.True(fade > 0.5f, $"the moon's ring is faded to {fade:0.00}");

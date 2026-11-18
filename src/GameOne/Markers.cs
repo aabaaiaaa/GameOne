@@ -29,9 +29,7 @@ namespace GameOne;
 internal sealed class Markers
 {
     private const float Shape = 7f;                     // pixels from a marker's middle to its edge
-    private const float SeenFrom = 8f, SeenBy = 20f;    // fading out as its object grows from this radius on screen to this
     private const float NearBy = Scene.NearByDistance;  // metres: a quiet marker this close is labelled anyway (the main view's near reach)
-    private const float BodySeenFrom = 0.15f, BodySeenBy = 0.3f; // a body's ring fades from this radius to this, as a share of the screen's short side
     private const float EdgeMargin = 40f;
 
     internal enum Look
@@ -246,35 +244,19 @@ internal sealed class Markers
         _taken.Clear();
         foreach (var marker in _candidates)
         {
-            // How big its object is on the screen: none once it can be seen for itself.
-            var fade = Fade(marker, camera.Position, camera.Forward, display);
-            if (fade < 0.02f)
+            var isTarget = marker.Target is { } t && flight.Target == t;
+            var placed = Place(marker, isTarget, camera.Position, camera.Forward, view, display, frames, _taken, out var at, out var clip, out var fade);
+            if (placed == Placed.Hidden)
                 continue;
-
-            // Off the screen: an arrow the way to it, for the few that get one, even if the planet
-            // is in the way (it is still the way to turn, and it may be over the horizon).
-            var clip = Vector4.Transform(new Vector4(marker.Position, 1f), view);
-            var at = clip.W > 1e-4f ? new Vector2(clip.X / clip.W + 1f, 1f - clip.Y / clip.W) * display * 0.5f : Vector2.Zero;
             var distance = Vector3.Distance(from, marker.Position);
             var label = $"{marker.Name}  {Distance(LabelDistance(marker, from))}";
-            var isTarget = marker.Target is { } t && flight.Target == t;
             var rgb = isTarget ? marker.Color.Brighter : marker.Color;
-            if (clip.W <= 1e-4f || at.X < EdgeMargin || at.Y < EdgeMargin || at.X > display.X - EdgeMargin || at.Y > display.Y - EdgeMargin)
+            if (placed == Placed.Arrow)
             {
-                if (marker.Arrow)
-                    EdgeArrow(draw, clip, display, rgb.At(1f), label);
+                EdgeArrow(draw, clip, display, rgb.At(1f), label);
                 continue;
             }
-            if (Through(marker, isTarget, frames, camera.Position) is not { } through)
-                continue;
-            fade *= through;
-
-            // Giving way: one that would sit on one before it isn't drawn at all.
             var size = marker.Loud ? Shape : Shape * 0.75f;
-            var (min, max) = Box(at, marker.Loud);
-            if (GivesWay(marker, _taken, min, max))
-                continue;
-            _taken.Add((min, max));
             _drawn.Add((marker.Name, at - display * 0.5f));
 
             var text = ImGui.CalcTextSize(label);
@@ -452,9 +434,41 @@ internal sealed class Markers
         var depth = Vector3.Dot(toIt, forward);
         var pixels = marker.Radius / ChaseCamera.MetresPerPixel(MathF.Max(MathF.Abs(depth), toIt.Length() * 0.1f), display);
         var (from, by) = marker.Kind == MarkerKind.Body
-            ? (BodySeenFrom * MathF.Min(display.X, display.Y), BodySeenBy * MathF.Min(display.X, display.Y))
-            : (SeenFrom, SeenBy);
+            ? (Scene.BodyRingSeenFrom * MathF.Min(display.X, display.Y), Scene.BodyRingSeenBy * MathF.Min(display.X, display.Y))
+            : (Scene.MarkerSeenFromPixels, Scene.MarkerSeenByPixels);
         return 1f - SmoothStep(from, by, pixels);
+    }
+
+    /// <summary>How a marker is shown this frame (see <see cref="Place"/>).</summary>
+    internal enum Placed { Hidden, Arrow, Drawn }
+
+    /// <summary>
+    /// How <paramref name="marker"/> is shown this frame, the markers before it having taken
+    /// <paramref name="taken"/> (to which it adds its box, drawn): hidden once its object can be seen
+    /// for itself (<see cref="Fade"/>), behind a body (<see cref="Through"/>) or sitting on one
+    /// before it (<see cref="GivesWay"/>); off the screen, an arrow the way to it for the few that
+    /// get one, even if the planet is in the way (it is still the way to turn, and it may be over
+    /// the horizon); else drawn, at <paramref name="at"/> on the screen, as strongly as
+    /// <paramref name="fade"/>. The drawing's one pass over each, so the tests take the same.
+    /// </summary>
+    internal static Placed Place(in Candidate marker, bool isTarget, Vector3 cameraPosition, Vector3 forward, Matrix4x4 view, Vector2 display,
+        BodyFrames frames, List<(float2 Min, float2 Max)> taken, out Vector2 at, out Vector4 clip, out float fade)
+    {
+        fade = Fade(marker, cameraPosition, forward, display);
+        clip = Vector4.Transform(new Vector4(marker.Position, 1f), view);
+        at = clip.W > 1e-4f ? new Vector2(clip.X / clip.W + 1f, 1f - clip.Y / clip.W) * display * 0.5f : Vector2.Zero;
+        if (fade < 0.02f)
+            return Placed.Hidden;
+        if (clip.W <= 1e-4f || at.X < EdgeMargin || at.Y < EdgeMargin || at.X > display.X - EdgeMargin || at.Y > display.Y - EdgeMargin)
+            return marker.Arrow ? Placed.Arrow : Placed.Hidden;
+        if (Through(marker, isTarget, frames, cameraPosition) is not { } through)
+            return Placed.Hidden;
+        fade *= through;
+        var (min, max) = Box(at, marker.Loud);
+        if (GivesWay(marker, taken, min, max))
+            return Placed.Hidden;
+        taken.Add((min, max));
+        return Placed.Drawn;
     }
 
     /// <summary>The box a marker drawn at <paramref name="at"/> takes on the screen. (Internal for the tests.)</summary>

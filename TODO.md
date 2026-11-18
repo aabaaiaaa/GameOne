@@ -685,6 +685,10 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   6. Which show by the flight's phase (on the pad, in orbit, landed): the most automatic, the
      hardest to predict.
   Note that the keys are for flying (CLAUDE.md): a marker key would be a second exception beside F2.
+  A question beside them: a body's ring never gives way (a landing spot on the body is not to take
+  its place), even to another body's, so far out the moon's ring can sit on the planet's, both drawn
+  (their labels spread apart). Should the farther body's ring give way to the nearer's there, or
+  is two rings, each the way to point at its body, what is wanted?
 - **The mission brief, to read again and to close** (the user; to discuss before building): the
   brief shown in the middle as a flight begins (the mission's name and what it asks) can be
   opened again later from the mission objectives panel, top right. The brief gets an x so the

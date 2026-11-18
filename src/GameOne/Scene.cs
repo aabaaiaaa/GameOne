@@ -379,6 +379,11 @@ internal static class Scene
     // ... and the main view's near reach: metres from its camera that a vessel is near enough to
     // be witnessed, and its marker labelled however quiet (see Markers).
     public const float NearByDistance = 2000f;
+    // A marker fades out as its object grows on the screen to be seen for itself (see Markers.Fade):
+    // from this radius in pixels to this; a body's ring, the way to point at the body, only from
+    // this share of the screen's short side to this, as the body fills a good part of it.
+    public const float MarkerSeenFromPixels = 8f, MarkerSeenByPixels = 20f;
+    public const float BodyRingSeenFrom = 0.15f, BodyRingSeenBy = 0.3f;
     // Who is in the physics (see Unwatched): the witnessed, and whatever could come within
     // HandoverDistance of something in the physics, or of the
     // main view's camera, within HandoverSeconds at their closing speed now; the rest are moved by
