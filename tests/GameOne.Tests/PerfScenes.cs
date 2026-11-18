@@ -329,12 +329,12 @@ internal static class PerfScenes
     /// <summary>
     /// The speeds the sweep coasts low over the rough slope at (m/s), each in a low arc inside the
     /// urgent band (<see cref="Drops.Level"/>): low orbit is about 313, and faster isn't skimming
-    /// the ground for long; the top speed's pass, rising away from it as it goes, is the costliest
+    /// the ground for long; the pass at the ground's top speed, rising away from it as it goes, is the costliest
     /// low pass there is, and hits nothing, so it is never slowed for.
     /// </summary>
     public static readonly float[] SweepLevelSpeeds = [50f, 100f, 200f, 300f, Scene.GroundTopSpeed];
 
-    /// <summary>The speeds (m/s) and angles below level the sweep crashes at, as the crash theory in <see cref="TerrainTileTests"/>, up to the top speed (each over a fast collision's speed slowed for as it comes).</summary>
+    /// <summary>The speeds (m/s) and angles below level the sweep crashes at, as the crash theory in <see cref="TerrainTileTests"/>, up to the ground's top speed (each over a fast collision's speed slowed for as it comes).</summary>
     public static readonly float[] SweepCrashSpeeds = [100f, 300f, 1000f, 3000f, Scene.GroundTopSpeed];
     public static readonly float[] SweepCrashAngles = [90f, 45f, 10f];
 
@@ -432,10 +432,10 @@ internal static class PerfScenes
 
     /// <summary>
     /// The fast collisions <see cref="ShortPerfTests"/>' paced check flies, each over its whole
-    /// slow-down: two boosters head on at twice the top speed closing, in the vacuum at 5 km,
-    /// passing 10 m apart and colliding; and one into the rough slope at the top speed, low and
+    /// slow-down: two boosters head on at twice the ground's top speed closing, in the vacuum at 5 km,
+    /// passing 10 m apart and colliding; and one into the rough slope at the ground's top speed, low and
     /// shallow (10° below level: the ground's tiles laid fastest) and steeply (45°); and one at
-    /// the top speed into the field of 49 boosters frozen on the zone, which its wake wakes
+    /// the ground's top speed into the field of 49 boosters frozen on the zone, which its wake wakes
     /// together mid-slow-down; and a near miss the setting slows for (<see cref="NearMissTests.NearMissPass"/>,
     /// flown with <see cref="FlightInput.NearMisses"/> on). Each starts a little before its slow-down would.
     /// </summary>
@@ -452,7 +452,7 @@ internal static class PerfScenes
                 cases.Add(Fly($"a collision head on, {closing:#,0} m/s closing at 5 km", FastCollisionTests.Pair(closing, 5000f, 3f)));
                 cases.Add(Fly($"into the rough slope at {Scene.GroundTopSpeed:#,0} m/s, 10° below level", new WorldState { Vessels = [Drops.Crashing(Scene.GroundTopSpeed, 10f).State], NextVesselId = 1 }));
                 cases.Add(Fly($"into the rough slope at {Scene.GroundTopSpeed:#,0} m/s, 45° below level", new WorldState { Vessels = [Drops.Crashing(Scene.GroundTopSpeed, 45f).State], NextVesselId = 1 }));
-                // A dive at the top speed into the field of 49 boosters frozen on the zone
+                // A dive at the ground's top speed into the field of 49 boosters frozen on the zone
                 // (TerrainTileTests' field), at the one nearest its centre: the wake reaches the
                 // field along the dive's way and wakes the lot together, mid-slow-down, so what
                 // that costs a frame is measured.
@@ -463,7 +463,7 @@ internal static class PerfScenes
                 var dive = Vector3.Normalize(Planet.East(middle) - Planet.Up(middle));
                 cases.Add(Fly($"a dive at {Scene.GroundTopSpeed:#,0} m/s, 45° below level, into a field of {field.Count} frozen boosters",
                     new WorldState { Vessels = [FastCollisionTests.Flying(middle, dive, Scene.GroundTopSpeed, 3f, 0), .. field], NextVesselId = field.Count + 1 }));
-                // And a pass that hits nothing, never slowed for: level at the top speed 30 m over
+                // And a pass that hits nothing, never slowed for: level at the ground's top speed 30 m over
                 // the floe band, the seabed's tiles and the floes laid as fast as they ever are, at
                 // full speed. Its frames are all "before" ones, printed for the record.
                 var band = Planet.Centre + IceTests.FloeBand("Boreal Sea") * Planet.SeaRadius;

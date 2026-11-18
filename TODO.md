@@ -98,7 +98,7 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   lap, the rendezvous) are mostly these costs. Also the game's own step in a busy world (the
   floe band, many landed vessels near the player). Costs or risks: a check skipped that should
   have run (a touchdown, a hit or a splashdown missed): the margins must cover a step's travel at
-  the top speed, a vessel come near between checks must still be caught, and water skipped where
+  the ground's top speed, a vessel come near between checks must still be caught, and water skipped where
   no part can reach the sea must still catch a craft coming down onto it; the contact and
   splashdown tests must all still pass. Jolt's contacts replaced most of these checks in part 1
   of the collisions work (built 2026-11-07), and part 3
@@ -176,7 +176,7 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   `SeekSlack`, each), and the steps a real second are unchanged, so the tiles cost as much a real
   second slowed as at full speed. The urgent quarter second's (`Scene.TerrainTileUrgentSeconds`)
   is built that way already (in the final fixes, 2026-11-07: in full-length steps, shortened with
-  the step), as its burst broke the frame rate at the shipped top speed: as a slowed dive turned
+  the step), as its burst broke the frame rate at the ground's top speed as shipped: as a slowed dive turned
   urgent, its whole quarter second of urgent cells (a kilometre at 4,000 m/s) was made in the step
   at once. Measured (Release, paced, a 4,000 m/s dive at the rough slope at 10°, slowed, worst
   frame): 8.7, 9.3, 12.5 and 22.8 ms (42 tiles made in one step) before; with a wreck given no
@@ -632,7 +632,7 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   point they happened at for this. The start of the longest chain here: fuel lines, parachutes,
   the crew pod and the crewed vessel all need it. To discuss before building.
 - **Near misses at orbital speed over an airless body** (the user, 2026-11-03): 6,000 m/s close
-  passes and crashes over a body without air; the speed sweep (to the top speed, 4,000 m/s, now) extended to them
+  passes and crashes over a body without air; the speed sweep (to the ground's top speed, 4,000 m/s, now) extended to them
   now there is one: the moon (40 km out, 2.5 km round, airless) is the first.
 - **Raising the ground's top speed** (to discuss before raising it). Open space has no cap:
   Jolt's own is set far past anything flown, so an escape far from the axis (where the ground's

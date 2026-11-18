@@ -105,6 +105,11 @@ internal readonly record struct NearMiss(Vessel Watched, Vessel Other, double Se
 /// what the vessels' thrust takes off it on the way: <c>√max(0, c² − 2 b d)</c>, <c>b</c> the
 /// deceleration of their closing by thrust along the line of approach, <c>d</c> the distance to the
 /// collision. So a landing burn, slowing as it falls, is no fast collision.</para>
+/// <para>The paths are flown unheld: a craft coming down into the band low over the ground faster
+/// than <see cref="Scene.GroundTopSpeed"/> (<see cref="GroundBody.LowOverTheGround"/>), where the game
+/// will hold it, is predicted to hit sooner and harder than it will, so its warning and slow-down
+/// come earlier and deeper than needed, never later; it is asked again each step, and a hit found
+/// late is given the least scale at once.</para>
 /// </remarks>
 internal sealed class Collisions
 {

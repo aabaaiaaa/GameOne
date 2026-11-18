@@ -478,7 +478,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
     [Fact]
     public void Two_unwatched_vessels_crossing_at_5657_are_both_wrecked()
     {
-        // Each at the top speed, 4,000 m/s, at right angles: closing at 5,657 m/s.
+        // Each at the ground's top speed, 4,000 m/s, at right angles: closing at 5,657 m/s.
         var hitPoint = Opposite;
         var (sim, a, b) = Unflown(FastCollisionTests.Pair(4000f * MathF.Sqrt(2f), 5000f, HitsAt, crossing: true, over: hitPoint), hitPoint);
         using var _ = sim;

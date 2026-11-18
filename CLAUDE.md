@@ -184,9 +184,11 @@ dotnet run --project src/GameOne
   highest ground, the furthest the ground's systems reach ahead at the cap) the game holds a
   craft's speed over the ground to `Scene.GroundTopSpeed` (4,000 m/s, so two close at up to
   8,000 m/s there), in the physics (`Fall`, Jolt's velocity and its double copy together) and under
-  formula (its steps; never on its orbit while held) alike. That figure is written in that one
-  place: every limit that follows from it (the urgent tiles', the wake's and the floes' reaches, the
-  floes' room from a face's edge) is worked out from it, and every other bound (the slow-down's
+  formula (each step that starts or would end in the band; stepped there while faster, its orbit
+  asked at every flight step's place, so it can't pass over the band unheld) alike. That figure is written in that one
+  place: every limit that follows from it (the band's height, from the urgent tiles', the wake's and
+  the floes' reaches at it; the floes' reach, clamped to it, and their room from a face's edge) is
+  worked out from it, and every other bound (the slow-down's
   least scale, the predictions' horizons, the reach to the towers) from the speeds hit at or the
   vessel's own speed, never tuned to it by hand. A fast collision is one closing
   faster than `Scene.FastCollisionSpeed` (a satellite's width a Jolt step, 216 m/s) as it hits,

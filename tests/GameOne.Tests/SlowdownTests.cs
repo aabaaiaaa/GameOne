@@ -498,7 +498,7 @@ public sealed class SlowdownTests(ITestOutputHelper output)
     [Fact]
     public void A_fast_craft_wakes_a_frozen_one_in_time()
     {
-        // A craft at the top speed, 10 km off a booster frozen on the zone: woken by the time the
+        // A craft at the ground's top speed, 10 km off a booster frozen on the zone: woken by the time the
         // craft is its wake's reach away (its speed's Scene.WakeSeconds), so it is awake well
         // before it is hit.
         var (sim, flier, standing) = FastCollisionTests.Fly(FastCollisionTests.Into("frozen", Scene.GroundTopSpeed, 10000f / Scene.GroundTopSpeed));
@@ -525,7 +525,7 @@ public sealed class SlowdownTests(ITestOutputHelper output)
     [Fact]
     public void A_fast_craft_wakes_nothing_beside_or_behind_it()
     {
-        // At the top speed, level 1 km over a booster frozen on the zone: beside it as it passes
+        // At the ground's top speed, level 1 km over a booster frozen on the zone: beside it as it passes
         // and behind it after, within the 1 km a sphere round it would reach (its speed's
         // Scene.WakeSeconds), but never within Scene.WakeMargin of its body's way ahead. It
         // wakes only what it is coming at, so the frozen one sleeps through.
@@ -553,7 +553,7 @@ public sealed class SlowdownTests(ITestOutputHelper output)
     [Fact]
     public void A_wreck_lays_no_new_tiles()
     {
-        // Into the rough slope at the top speed, 10° below level: the hit throws the wreck along a
+        // Into the rough slope at the ground's top speed, 10° below level: the hit throws the wreck along a
         // new way, and while it is left in the world (Scene.WreckSeconds, slowed: seconds of real
         // time) the tiles there are kept, but none is made for that new way (a kilometre's urgent
         // stretch at once, which cost a frame 12 ms).

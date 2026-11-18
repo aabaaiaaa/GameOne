@@ -370,9 +370,12 @@ internal static class Scene
     // ... "low" being this far (metres) above a body's highest ground, its fine detail included:
     // the furthest any of those reaches from a craft at GroundTopSpeed (the floes': FloeReach, the
     // let-go and the widest floe, then GroundTopSpeed × FloeReachSeconds; 1,144 m, the tiles'
-    // 1,030 m and the wake's 1,005 m inside it). A faster craft above it is held as it comes in,
-    // and from there goes no further in those seconds than one at the cap, so nothing of the
-    // ground's is within their reach of it before it is held.
+    // 1,030 m and the wake's 1,005 m inside it). Only the floes' reach relies on it: it is worked
+    // out from the speed clamped to the cap (RocketPhysics.UpdateFloes), so that none is further
+    // than Floes made room for, which holds because a faster craft is above this height, where that
+    // reach finds no floe, and is held as it comes in. The tiles' and the wake's reaches go by the
+    // real speed, unclamped, so they hold above it whatever it is; the height covers them too, as
+    // it would have to were they ever clamped.
     public static readonly float GroundTopSpeedHeight = MathF.Max(
         TerrainTileUrgent + GroundTopSpeed * TerrainTileUrgentSeconds,
         MathF.Max(WakeMargin + GroundTopSpeed * WakeSeconds, FloeReach + Physics.RocketPhysics.FloeLetGo + FloeMaxRadius + GroundTopSpeed * FloeReachSeconds));

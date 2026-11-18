@@ -29,8 +29,8 @@ public sealed class TopSpeedTests(ITestOutputHelper output)
     /// half its acceleration times its step times the time flown, the same lead it has everywhere
     /// (see Formula's Step), and something still among the stars is pulled round in the ground's
     /// frame by its turn's Ω²r (32 m/s² 1,000 km out): 2.7 m in 20 s, measured 2.9 (growing evenly,
-    /// 0.14 m a second), with half as much again for room. Held to Jolt's old cap of 4,000 m/s, it
-    /// was 1,145 m off.
+    /// 0.14 m a second), with half as much again for room. With Jolt capping it at 4,000 m/s, the
+    /// same flight leaves its path by over a kilometre.
     /// </summary>
     private static double EscapeMiss(double r) =>
         1.5 * 0.5 * Home.SpinRate * (double)Home.SpinRate * r * Physics.RocketPhysics.StepSeconds * EscapeSeconds;
@@ -85,39 +85,77 @@ public sealed class TopSpeedTests(ITestOutputHelper output)
     private static VesselState Skimming(int id, Vector3 at, float clearance, float speed) =>
         Drops.Placed(at, Home.North(at), 0f, sideways: Home.East(at) * speed, clearance: clearance, legsOut: false, id: id, flight: 1);
 
-    /// <summary>Runs <paramref name="seconds"/> after its first frame, failing if <paramref name="v"/>, still flying, is ever faster than the ground's top speed or out of the band low over the ground: the fastest it went.</summary>
-    private float HeldFor(Simulation sim, Vessel v, double seconds, bool onFormula)
-    {
-        sim.Step(default); // its first step holds it
-        var fastest = 0f;
-        sim.Run(Nobody, _ =>
-        {
-            Assert.Equal(FlightState.Flying, v.State);
-            Assert.Equal(onFormula, v.OnFormula);
-            Assert.True(Home.LowOverTheGround(v.CentreOfMass));
-            fastest = MathF.Max(fastest, v.Velocity.Length());
-            return false;
-        }, maxSeconds: seconds);
-        output.WriteLine($"{(onFormula ? "under formula" : "in the physics")}: at most {fastest:0.000} m/s over the ground, {Home.SurfaceAltitude(v.CentreOfMass):0} m up");
-        Assert.InRange(fastest, Scene.GroundTopSpeed - 50f, Scene.GroundTopSpeed + 0.01f);
-        return fastest;
-    }
-
     [Fact]
     public void Fast_low_over_the_ground_is_held_at_the_ground_cap()
     {
         // At half as fast again as the ground's top speed, 1 km over the ground: flown (in the
         // physics) off the pad, and another (under formula) over the far side of the planet,
-        // where nothing near would hold it in the physics.
+        // where nothing near would hold it in the physics; both checked every frame for half a
+        // second (some 2 km, and five of the formula's steps), from the first step, which holds them.
         var far = Home.Centre - (Scene.RocketStart - Home.Centre);
         using var sim = new Simulation(Mission.FreePlay, world: World(
             Skimming(0, Scene.RocketStart, 1000f, 1.5f * Scene.GroundTopSpeed), Skimming(1, far, 1000f, 1.5f * Scene.GroundTopSpeed)));
         var (flown, other) = (sim.Flight.WorldVessels.Single(x => x.Id == 0), sim.Flight.WorldVessels.Single(x => x.Id == 1));
         sim.Step(new FlightInput(SwitchTo: flown));
-        Assert.False(flown.OnFormula);
-        Assert.True(other.OnFormula, "far from everything, it should be under formula");
-        HeldFor(sim, flown, 0.5, onFormula: false);
-        HeldFor(sim, other, 0.1, onFormula: true);
+        var fastest = new float[2];
+        var frames = 0;
+        sim.Run(Nobody, _ =>
+        {
+            foreach (var (v, i, onFormula) in new[] { (flown, 0, false), (other, 1, true) })
+            {
+                Assert.Equal(FlightState.Flying, v.State);
+                Assert.Equal(onFormula, v.OnFormula);
+                Assert.True(Home.LowOverTheGround(v.CentreOfMass));
+                fastest[i] = MathF.Max(fastest[i], v.Velocity.Length());
+            }
+            frames++;
+            return false;
+        }, maxSeconds: 0.5);
+        output.WriteLine($"over {frames} frames: at most {fastest[0]:0.000} m/s in the physics, {fastest[1]:0.000} m/s under formula; "
+            + $"{Home.SurfaceAltitude(flown.CentreOfMass):0} m and {Home.SurfaceAltitude(other.CentreOfMass):0} m up");
+        Assert.True(frames >= 29);
+        Assert.All(fastest, f => Assert.InRange(f, Scene.GroundTopSpeed - 50f, Scene.GroundTopSpeed + 0.01f));
+    }
+
+    [Fact]
+    public void Fast_low_over_the_moon_under_formula_is_stepped_and_held()
+    {
+        // The upper stage under formula at the moon (no air: low over its highest ground, with its
+        // engine off, it would be on its orbit), 500 m over its highest ground at 6,000 m/s across:
+        // loaded stepped, not on its orbit, as it is faster than the ground's top speed there; held
+        // to that speed from its first step (a tenth of a second on); and no faster from then until it has risen out of the
+        // band (at the cap and no faster, it may go on its orbit, which is asked again each step).
+        var moon = GroundBody.Moon;
+        var up = Vector3.Normalize(new Vector3(0.3f, 1f, 0.2f));
+        var at = moon.Centre + up * (moon.SeaRadius + moon.MaxHeight + Scene.FineDetailMargin + 500f);
+        var across = Vector3.Normalize(Vector3.Cross(up, moon.NorthPole));
+        using var sim = new Simulation(Mission.FreePlay, world: World(CrossingTests.Craft(0, moon, at, across * 1.5f * Scene.GroundTopSpeed, across)));
+        var v = sim.Flight.WorldVessels.Single(x => x.Id == 0);
+        Assert.Same(moon, v.Body);
+        Assert.True(v.OnFormula, "at the moon, nobody watching it, it should be under formula");
+        Assert.False(v.EngineLit);
+        Assert.True(moon.LowOverTheGround(v.CentreOfMass));
+        // Clear of its ground and with no air, only the hold keeps it off its orbit.
+        Assert.True(Formula.OnItsOrbitAt(v, v.CentreOfMass, Vector3.Zero));
+        Assert.False(Formula.OnItsOrbitAt(v, v.CentreOfMass, v.Velocity));
+        Assert.True(v.Motion.Stepping, "held, it should be stepped, not on its orbit");
+        var loaded = v.Motion.Time;
+        while (v.Motion.Time == loaded)
+            sim.Step(default); // until its first formula step, which holds it
+        var (inBand, fastest) = (0, 0f);
+        sim.Run(Nobody, _ =>
+        {
+            Assert.Equal(FlightState.Flying, v.State);
+            Assert.True(v.OnFormula);
+            if (!moon.LowOverTheGround(v.CentreOfMass))
+                return true;
+            fastest = MathF.Max(fastest, v.Velocity.Length());
+            inBand++;
+            return false;
+        }, maxSeconds: 2);
+        output.WriteLine($"{inBand} frames in the band, at most {fastest:0.000} m/s over the moon's ground; out of it at {moon.Altitude(v.CentreOfMass) - moon.MaxHeight:0} m over its highest ground");
+        Assert.True(inBand >= 10, $"only {inBand} frames in the band");
+        Assert.InRange(fastest, Scene.GroundTopSpeed - 50f, Scene.GroundTopSpeed + 0.01f);
     }
 
     [Theory]

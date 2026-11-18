@@ -346,7 +346,7 @@ public sealed class FastCollisionTests(ITestOutputHelper output)
     [InlineData(8000f, 5000f)]
     [InlineData(500f, 1000f)]
     [InlineData(2000f, 1000f)]
-    [InlineData(8000f, 2500f)] // in thin air, higher: at the top speed the ground's tiles are laid under it 4 km up, and costly so fast
+    [InlineData(8000f, 2500f)] // in thin air, higher: at the ground's top speed the ground's tiles are laid under it 4 km up, and costly so fast
     public void Two_crafts_head_on_collide(float closing, float altitude) => PairCollides(Pair(closing, altitude, HitsAt));
 
     [Theory]

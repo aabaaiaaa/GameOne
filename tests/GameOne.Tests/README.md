@@ -785,10 +785,14 @@ say) stalls frames and spoils the timing.
 - **`TopSpeedTests`:** no speed cap in open space, one low over the ground: the upper stage
   1,000 km from the planet's axis, escaping at about 5,800 m/s over the ground, flown in the physics
   for 20 s on the path drawn at its start (`Patched.Legs`), within half as much again as the
-  physics' own step lead there (measured 2.9 m; held to Jolt's old 4,000 m/s cap, 1,145 m off);
-  boosters at 6,000 m/s 1 km over the ground held to `Scene.GroundTopSpeed` from their first step,
-  the flown one in the physics and one on the far side of the planet under formula; and the upper
-  stage burning 20 km up past 4,000 and 16,000 m/s over the ground.
+  physics' own step lead there (measured 2.9 m; with Jolt capping it at 4,000 m/s it would leave
+  its path by over a kilometre);
+  boosters at 6,000 m/s 1 km over the ground held to `Scene.GroundTopSpeed`, checked every frame
+  for half a second, the flown one in the physics and one on the far side of the planet under
+  formula; the upper stage under formula 500 m over the moon's highest ground at 6,000 m/s, loaded
+  stepped rather than on its orbit (only the hold keeps it off it there, with no air), and held from
+  its first formula step until it rises out of the band; and the upper stage burning 20 km up past
+  4,000 and 16,000 m/s over the ground.
 - **`MoonTargetTests`:** a body as a target and the path drawn round each body: the moon targeted
   as a vessel is (its centre in the view's frame within 1 m, flying, its velocity over the
   planet's ground as its centre moves; the planet, the body it is at, refused; the readout's

@@ -91,8 +91,9 @@ internal struct FormulaMotion
 /// <see cref="Vessel.Aim"/>, which its holds turn as they do in the physics (the fuel burns in
 /// <see cref="Vessel.Run"/>, as for every vessel). Its attitude follows its aim at once (no turning
 /// time: a simplification allowed under formula); one that can't be steered keeps turning as it was.
-/// Low over the ground its speed over it is held to <see cref="Scene.GroundTopSpeed"/> each step, as the
-/// physics holds it, and so it is stepped there while faster, never on its orbit.
+/// Low over the ground its speed over it is held to <see cref="Scene.GroundTopSpeed"/> each step that
+/// starts or would end there, as the physics holds it; so while faster there it is stepped, not on
+/// its orbit (which is asked at each flight step's place, and so can't pass over the band unasked).
 /// Landed or afloat it doesn't move: each body's physics is in its ground's frame.</para>
 /// <para>Each step is checked for its touch (<see cref="Touch"/>): the service towers and light
 /// masts (<see cref="TowersAndMasts"/>, the predictions' own check, so the two can't drift), and its
@@ -361,8 +362,10 @@ internal static class Formula
         var read = p + u * Lead;
         var drag = Scene.DragRate * v.Body.AirDensity(v.Body.Altitude(read.ToSingle()));
         next += v.Body.FallStep(next, v.Body.Pull(read), drag, StepSeconds);
-        if (Held(v.Body, p.ToSingle(), next))
-            next *= Scene.GroundTopSpeed / next.Length(); // low over the ground, as the physics holds it (see RocketPhysics' Fall)
+        // Low over the ground, held as the physics holds it (see RocketPhysics' Fall): if either
+        // end of the step is, so it is held no later than the physics would (at most a step sooner).
+        if (Held(v.Body, p.ToSingle(), next) || Held(v.Body, (p + u * StepSeconds).ToSingle(), next))
+            next *= Scene.GroundTopSpeed / next.Length();
         var change = next - u;
         var end = p + (u + next) * (StepSeconds / 2.0) + change * (RocketPhysics.StepSeconds / 2.0);
         if (Touch(v, ref m, p.ToSingle(), u.ToSingle(), end.ToSingle(), next.ToSingle()))
