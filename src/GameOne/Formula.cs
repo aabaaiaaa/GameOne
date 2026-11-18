@@ -105,7 +105,12 @@ internal static class Formula
 
     /// <summary>
     /// How far on, in seconds of its velocity, a step reads its pull and air from where it is
-    /// (see <see cref="Step"/>): half of how much longer its step is than the physics'.
+    /// (see <see cref="Step"/>): half of how much longer its step is than the physics'. That is
+    /// the mean of where the physics' own steps across one of the formula's (twelve of
+    /// <see cref="RocketPhysics.StepSeconds"/> in <see cref="Scene.FormulaStepSeconds"/>) read
+    /// theirs, the first where it is and each after one of its steps on, so under a pull that
+    /// changes along the way (an orbit's, bending) the formula falls as the physics does; under
+    /// a steady one, where it is read changes nothing.
     /// </summary>
     private const double Lead = ((double)StepSeconds - RocketPhysics.StepSeconds) / 2;
 
@@ -327,10 +332,11 @@ internal static class Formula
     /// <remarks>
     /// That drift is a plain kick and drift of the place <see cref="Lead"/> on by the velocity (the
     /// place plus the lead, moved by the velocity the kick leaves), so the pull and the air are
-    /// read there: read at the place itself, the kick would hang on the velocity as well as the
-    /// place, and an orbit stepped so would gain some 34 m of its size a lap low over the moon
-    /// (a plain kick and drift holds it, as the physics' does). Under a steady pull where it is
-    /// read changes nothing. In double, as the physics' copy is stepped.
+    /// read there, which is also where the physics' own steps read it on the whole (see
+    /// <see cref="Lead"/>): read at the place itself, the kick would hang on the velocity as well
+    /// as the place, and an orbit stepped so would gain some 34 m of its size a lap low over the
+    /// moon (a plain kick and drift holds it, as the physics' does). Under a steady pull where it
+    /// is read changes nothing. In double, as the physics' copy is stepped.
     /// </remarks>
     private static bool Step(Vessel v, ref FormulaMotion m)
     {

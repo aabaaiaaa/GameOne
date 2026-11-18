@@ -271,14 +271,16 @@ public sealed class PrecisionTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void A_stepped_vessel_under_formula_holds_its_orbit_as_in_the_physics()
+    public void A_stepped_vessel_under_formula_holds_its_orbit()
     {
         // The lander alone low over the moon, under its highest ground's height (so the formula
         // steps it, never on its orbit by Kepler), burning a little (prograde, a second at a 50th
         // of its thrust, till its tank is dry), then coasting two laps. Each lap's mean size (the
-        // size worked out at each step swings some 15 mm round a lap) is the one before's, as the
-        // physics holds an orbit: stepped in floats, or with its pull read where it is rather than
-        // where its drift takes it, it gained some 34 m a lap.
+        // size worked out at each step swings some 15 mm round a lap) is the one before's, within
+        // the millimetre the physics' copy holds an orbit to a lap (WorldTests' creep test). With
+        // its pull read where it is rather than where its drift takes it, the formula gains some
+        // 34 m a lap; stepped in floats with its pull read there, its size read a lap on is some
+        // 0.15 m out (0.03 m of that the size's swing, read at one moment rather than a lap's mean).
         const float Throttle = 0.02f, BurnSeconds = 1f;
         var stage = LanderTests.Alone.Stages[0];
         var start = LowPass.Start(0, Moon, 0, 3) with { Throttle = Throttle, Fuel = [stage.FuelMass / stage.BurnSeconds * Throttle * BurnSeconds] };

@@ -177,6 +177,9 @@ internal sealed class Vessel
         _model = Matrix4x4.CreateFromQuaternion(state.Rotation);
         // Its centre of mass from its origin where a body would have it (RocketGeometry's, as the
         // physics gives its bodies), whatever was saved: a world written by hand may say otherwise.
+        // Flying, the saved centre of mass (in double) is the truth and the origin is placed from
+        // it by this offset, so it can sit off the saved origin by the gap between this and the
+        // offset measured as it was saved (about 6 cm with its legs out: see RocketPhysics.CreateShape).
         _centreOffset = RocketGeometry.CentreOfMassOffset(Vehicle, Stage, TopStage);
         _rotation = state.Rotation;
         if (still)
