@@ -19,23 +19,20 @@ internal readonly record struct RocketControl(Craft Craft, float ThrustAccelerat
 /// (<see cref="RocketPhysics.TakeOut"/>, <see cref="RocketPhysics.TakeIn"/>): the craft itself
 /// (its stages, shapes, legs, fairing and parting go with it), and its motion in a body's frame:
 /// its body's origin and centre of mass, attitude, velocity (its centre of mass's) and turning,
-/// over that body's ground.
+/// over that body's ground. The centre of mass and velocity are the physics' double copy
+/// (<see cref="RocketPhysics.TrueCentreOfMass"/>), so a crossing rounds nothing.
 /// </summary>
-internal readonly record struct CraftState(Craft Craft, Vector3 Position, Vector3 CentreOfMass, Quaternion Rotation, Vector3 Velocity, Vector3 AngularVelocity)
+internal readonly record struct CraftState(Craft Craft, Vector3 Position, Vector3Double CentreOfMass, Quaternion Rotation, Vector3Double Velocity, Vector3 AngularVelocity)
 {
     /// <summary>The same motion in the other frame of <paramref name="change"/> (worked out in double).</summary>
-    public CraftState Changed(in FrameChange change)
+    public CraftState Changed(in FrameChange change) => this with
     {
-        var centre = (Vector3Double)CentreOfMass;
-        return this with
-        {
-            Position = change.Point((Vector3Double)Position).ToSingle(),
-            CentreOfMass = change.Point(centre).ToSingle(),
-            Rotation = change.Rotation(Rotation),
-            Velocity = change.Velocity(centre, (Vector3Double)Velocity).ToSingle(),
-            AngularVelocity = change.Spin((Vector3Double)AngularVelocity).ToSingle(),
-        };
-    }
+        Position = change.Point((Vector3Double)Position).ToSingle(),
+        CentreOfMass = change.Point(CentreOfMass),
+        Rotation = change.Rotation(Rotation),
+        Velocity = change.Velocity(CentreOfMass, Velocity),
+        AngularVelocity = change.Spin((Vector3Double)AngularVelocity).ToSingle(),
+    };
 }
 
 /// <summary>One stage to draw: which it is, where it is, how far its legs are out (if it has them), and whether its fairing is still round it.</summary>
@@ -223,6 +220,7 @@ internal sealed class Craft(Vehicle vehicle, int first, int last, uint id, Shape
         TouchesBegun.Clear();
         Array.Clear(Touches);
         FeetDown = 0;
+        Kept = false; // its motion in the new frame is handed in with it (see RocketPhysics.TakeIn)
     }
 
     /// <summary>
@@ -319,6 +317,22 @@ internal sealed class Craft(Vehicle vehicle, int first, int last, uint id, Shape
     internal Vector3 StepSpin { get; set; }
     internal Vector3 StepCentre { get; set; }
     internal Quaternion StepRotation { get; set; } = Quaternion.Identity;
+
+    /// <summary>
+    /// The physics' own copy of its centre of mass and velocity, in double, in its world's frame,
+    /// while <see cref="Kept"/> (see <see cref="RocketPhysics.TrueCentreOfMass"/>): stepped by the
+    /// game while it flies free, and handed to Jolt rounded once a step, so Jolt's float rounding
+    /// is never carried from one step to the next.
+    /// </summary>
+    internal Vector3Double KeptCentre { get; set; }
+    internal Vector3Double KeptVelocity { get; set; }
+
+    /// <summary>
+    /// Whether <see cref="KeptCentre"/> and <see cref="KeptVelocity"/> are its motion: taken from
+    /// Jolt at the start of each step unless Jolt's still matches them (see <c>RocketPhysics.Resync</c>),
+    /// and let go for a step it doesn't fly free; never for one frozen.
+    /// </summary>
+    internal bool Kept { get; set; }
 
     /// <summary>What it touched over the last update's steps, oldest first (see <see cref="RocketPhysics.TouchesBegun"/>).</summary>
     internal List<Touch> TouchesBegun { get; } = [];
@@ -1368,7 +1382,7 @@ internal sealed class RocketPhysics : IDisposable
     /// </summary>
     public CraftState TakeOut(Craft craft)
     {
-        var state = new CraftState(craft, Position(craft), CentreOfMass(craft), Rotation(craft), Velocity(craft), AngularVelocity(craft));
+        var state = new CraftState(craft, Position(craft), TrueCentreOfMass(craft), Rotation(craft), TrueVelocity(craft), AngularVelocity(craft));
         Remove(craft, wakeWhatRestsOnIt: true, keep: true);
         return state;
     }
@@ -1379,15 +1393,18 @@ internal sealed class RocketPhysics : IDisposable
     /// its own shapes (with its feet if its legs are out and its ramps if its doors are open, its mass as without them, as
     /// <see cref="Restore"/> has it), moving and turning so, still parting from what it was
     /// parting from if that crosses too (each vessel crosses on its own: one left in the other
-    /// world can touch nothing here, and <see cref="EndParting"/> lets it go). The same craft, now this world's.
+    /// world can touch nothing here, and <see cref="EndParting"/> lets it go). The same craft, now this world's,
+    /// its double copy of its motion carried across (see <see cref="TrueCentreOfMass"/>) and Jolt handed it rounded.
     /// </summary>
     public Craft TakeIn(in CraftState state)
     {
         var craft = state.Craft;
-        var id = AddBody(craft.Stowed, state.Position, state.Rotation, state.Velocity, state.AngularVelocity, frozen: false, craft.PartingFrom is not null);
+        var id = AddBody(craft.Stowed, state.Position, state.Rotation, state.Velocity.ToSingle(), state.AngularVelocity, frozen: false, craft.PartingFrom is not null);
         craft.Rehome(id, this);
         if (craft.LegsDeployed || craft.DoorsOpen)
             _bodies.SetShape(id, craft.Collider, updateMassProperties: false, Activation.Activate);
+        (craft.KeptCentre, craft.KeptVelocity, craft.Kept) = (state.CentreOfMass, state.Velocity, true);
+        PutCentre(craft, state.CentreOfMass);
         _crafts.Add(craft);
         _craftBodies[id] = craft;
         return craft;
@@ -2087,6 +2104,9 @@ internal sealed class RocketPhysics : IDisposable
         for (; _accumulator >= StepLength; _accumulator -= StepLength)
         {
             var time = worldTime is { } end ? end - _accumulator : _time;
+            foreach (var craft in _crafts)
+                Resync(craft); // anything that moved it since the last step, its copy follows
+            Timings.Lap(StepPart.Rest);
             if (_body.HasSea)
             {
                 Sea.Phases(time, _phases); // once a step, for every craft
@@ -2119,7 +2139,11 @@ internal sealed class RocketPhysics : IDisposable
                     continue; // another body's, or gone, or held still
                 var up = Up(control.Craft);
                 if (control.ThrustAcceleration > 0)
+                {
                     _bodies.AddLinearVelocity(control.Craft.Id, ToFloat3(up * (control.ThrustAcceleration * StepLength)));
+                    if (control.Craft.Kept)
+                        control.Craft.KeptVelocity += (Vector3Double)up * (control.ThrustAcceleration * (double)StepLength);
+                }
                 if (control.Steer)
                     Steer(control.Craft, up, control.DesiredUp);
             }
@@ -2139,6 +2163,9 @@ internal sealed class RocketPhysics : IDisposable
                 Cushion(craft);
                 Timings.Lap(StepPart.Water);
             }
+            foreach (var craft in _crafts)
+                HandOver(craft);
+            Timings.Lap(StepPart.Rest);
             started = Timings.Start();
             KeepStepMotion();
             Timings.Stop(StepDetail.Touches, started);
@@ -2885,11 +2912,125 @@ internal sealed class RocketPhysics : IDisposable
         var drag = Scene.DragRate * _body.AirDensity(altitude);
         var change = _body.FallStep(velocity, Weight(craft, position), drag, StepLength, noHalfKick: craft.Grounded); // see the remarks for why not on the ground
         _bodies.AddLinearVelocity(craft.Id, ToFloat3(change));
+        if (craft.Kept)
+        {
+            // The same kick, of its double copy, while it may be flying free (see HandOver);
+            // Jolt's own is what one that turns out not to goes on from, as it always has.
+            if (craft.Grounded || craft.WreckedFor is not null || TouchingAnything(craft))
+                craft.Kept = false;
+            else
+            {
+                var at = craft.KeptCentre;
+                var thick = Scene.DragRate * _body.AirDensity(_body.Altitude(at.ToSingle()));
+                craft.KeptVelocity += _body.FallStep(craft.KeptVelocity, _body.Pull(at), thick, StepLength);
+            }
+        }
         if (_body.AboveAir(position))
         {
             var w = _bodies.GetAngularVelocity(craft.Id);
             var turning = new Vector3(w.X, w.Y, w.Z) - _body.Spin * (1f - MathF.Exp(-AngularDamping * StepLength));
             _bodies.SetAngularVelocity(craft.Id, ToFloat3(turning));
+        }
+    }
+
+    /// <summary>
+    /// <paramref name="craft"/>'s centre of mass, from the physics' own copy in double while it has
+    /// one (<see cref="Craft.Kept"/>), else Jolt's. Jolt is built in single precision: stepping a
+    /// float place and velocity, each step's rounding is carried into the next, and in a body's
+    /// turning frame it leans the same way lap after lap, so an orbit would creep (a part in 100,000 a
+    /// lap, tilted). So while a craft flies free (no live contact, not in the water, its legs not
+    /// holding it) the game steps the copy itself, as Jolt would (the fall's kick, the thrust, the
+    /// drift), and hands Jolt the copy rounded once a step (<see cref="HandOver"/>): rounded once,
+    /// with nothing carried over. Anything else that moves it (a contact, the water, the legs, a
+    /// stage parting, a raft, freezing and waking, or any set) is Jolt's: its result is the truth,
+    /// and the copy is taken from it again (<see cref="Resync"/>). What the crossing, the edge's
+    /// check, the handover to formula and saving take; every other read may read Jolt's float,
+    /// which is the copy rounded.
+    /// </summary>
+    public Vector3Double TrueCentreOfMass(Craft craft)
+    {
+        Resync(craft);
+        return craft.Kept ? craft.KeptCentre : CentreOfMass(craft);
+    }
+
+    /// <summary><paramref name="craft"/>'s velocity (its centre of mass's), as <see cref="TrueCentreOfMass"/> has its place.</summary>
+    public Vector3Double TrueVelocity(Craft craft)
+    {
+        Resync(craft);
+        return craft.Kept ? craft.KeptVelocity : Velocity(craft);
+    }
+
+    /// <summary>
+    /// How many of a float's steps (at its size) Jolt's place may be from the copy's, and still be
+    /// the copy rounded and drifted by Jolt (each a step within half of one); and its velocity
+    /// (which Jolt leaves as it was handed, if nothing touched it).
+    /// </summary>
+    private const double PlaceSteps = 4, VelocitySteps = 2;
+
+    /// <summary>
+    /// Keeps <paramref name="craft"/>'s copy if Jolt's centre of mass and velocity are still the
+    /// copy's as far as their rounding goes; otherwise (a contact in the step, any set since, or a
+    /// craft with none) takes the copy from Jolt. None for one frozen (Jolt holds it still) or gone.
+    /// </summary>
+    private void Resync(Craft craft)
+    {
+        if (craft.Removed || craft.Frozen)
+        {
+            craft.Kept = false;
+            return;
+        }
+        var (centre, velocity) = (CentreOfMass(craft), Velocity(craft));
+        if (craft.Kept && Within(centre, craft.KeptCentre, PlaceSteps) && Within(velocity, craft.KeptVelocity, VelocitySteps))
+            return;
+        (craft.KeptCentre, craft.KeptVelocity, craft.Kept) = (centre, velocity, true);
+    }
+
+    /// <summary>Whether each part of <paramref name="jolt"/> is within <paramref name="steps"/> of a float's steps of <paramref name="kept"/>, at the size of <paramref name="kept"/>.</summary>
+    private static bool Within(Vector3 jolt, Vector3Double kept, double steps)
+    {
+        var size = (float)kept.Length();
+        var most = steps * (MathF.BitIncrement(size) - size);
+        return Math.Abs(jolt.X - kept.X) <= most && Math.Abs(jolt.Y - kept.Y) <= most && Math.Abs(jolt.Z - kept.Z) <= most;
+    }
+
+    /// <summary>
+    /// Hands Jolt <paramref name="craft"/>'s copy, rounded, for the step it is about to take, and
+    /// moves the copy on by the drift Jolt will make, if it flew free this step: no live contact,
+    /// not in the water, its legs not holding it (all as found this step, before Jolt's). One that
+    /// didn't lets its copy go, and is Jolt's until it does again (see <see cref="Resync"/>).
+    /// </summary>
+    private void HandOver(Craft craft)
+    {
+        if (!craft.Kept)
+            return;
+        if (craft.Frozen || craft.Removed || craft.Submerged > 0f || TouchingAnything(craft))
+        {
+            craft.Kept = false;
+            return;
+        }
+        PutCentre(craft, craft.KeptCentre);
+        _bodies.SetLinearVelocity(craft.Id, ToFloat3(craft.KeptVelocity.ToSingle()));
+        craft.KeptCentre += craft.KeptVelocity * StepLength;
+    }
+
+    /// <summary>
+    /// Moves <paramref name="craft"/> so that its centre of mass is <paramref name="centre"/>
+    /// rounded, as near as Jolt can put it: Jolt is given its body's origin, and works out its
+    /// centre of mass from that in floats, so the origin is put right once or twice by what that
+    /// missed. Its attitude and turning are left as they are.
+    /// </summary>
+    private void PutCentre(Craft craft, Vector3Double centre)
+    {
+        var target = centre.ToSingle();
+        var now = CentreOfMass(craft);
+        if (now == target)
+            return;
+        var origin = Position(craft);
+        for (var put = 0; put < 2 && now != target; put++)
+        {
+            origin += target - now;
+            _bodies.SetPosition(craft.Id, ToFloat3(origin), Activation.DontActivate);
+            now = CentreOfMass(craft);
         }
     }
 

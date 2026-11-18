@@ -2071,10 +2071,14 @@ internal sealed class Flight : IDisposable
                 }
                 continue;
             }
-            if (v.State == FlightState.Crashed || ((Vector3Double)v.CentreOfMass - v.Body.Centre).Length() < clear[v.Body.Index])
+            if (v.State == FlightState.Crashed)
+                continue;
+            // In the physics, its place is the physics' double copy (a float steps a kilometre out there).
+            var place = v.Physics is { } physics ? physics.TrueCentreOfMass(v.Craft) : v.CentreOfMass;
+            if ((place - v.Body.Centre).Length() < clear[v.Body.Index])
                 continue;
             asked++;
-            if (SolarSystem.FromSun(v.Body, v.CentreOfMass, MotionTime(v, now)) < Scene.SolarSystemEdge)
+            if (SolarSystem.FromSun(v.Body, place, MotionTime(v, now)) < Scene.SolarSystemEdge)
                 continue;
             v.LeaveTheSystem();
             v.LossLogged = true;

@@ -592,8 +592,15 @@ say) stalls frames and spoils the timing.
   never launched is just replaced); Tab goes round the flown vessel's flight, and another flight's
   vessel is flown through its view; a captured world comes back exactly and carries on the same; the
   satellites preset's satellites hold their orbits for a lap of the highest (each its height all the way round, and
-  the size of each orbit, among the stars, not creeping lap by lap as the ground turns under it); a world of a hundred vessels can still
+  the size of each orbit, among the stars, held within 0.01 m a lap, tilted or not, as the ground turns under it); a world of a hundred vessels can still
   put another in orbit.
+- **`PrecisionTests`:** each craft's place and velocity kept in double by the physics
+  (`RocketPhysics.TrueCentreOfMass`, `TrueVelocity`): a satellite flying free for a quarter of a lap,
+  Jolt's centre of mass and velocity never more than two float steps from the copy's; a two-stage rocket
+  staged in orbit, each part's copy Jolt's from the step after and going on with no jump; a craft
+  crossing into the moon's sphere in the physics, its copy changed across in double onto the orbit round
+  the moon worked out again in double (exact to a micrometre), and keeping to that path; and the
+  autopilot's landing on the landing zone, its touchdown within 0.01 m/s of Jolt's floats alone.
 - **`MissionRunTests`:** runs (`MissionRun`): two in progress at once, each ticking its own steps
   whichever vessel is flown; the mission panel's run (`Flight.Run`) following the flown vessel;
   a new mission at Home leaving another site's waiting rocket, and its run, in place; the
@@ -764,9 +771,9 @@ say) stalls frames and spoils the timing.
   than a lap's samples a leg, built again allocating nothing. A vessel past the edge is taken out
   and logged "left the solar system" (`WorldLog.LeftTheSolarSystem`, no speed): one under formula
   1 km inside going out at 2,000 m/s (unseen), one 50 km inside at the highest warp, and one in a
-  world loaded past it, on the first step; the flown one, standing over the ground as the sun's
-  circle carries the edge past it (Jolt, in floats, can't move a craft by a step's travel that far
-  out), lost as a crash ("Left the solar system.", still the one flown, seen, its run failed and
+  world loaded past it, on the first step; the flown one, flying out across it at 2,000 m/s in the
+  physics (its place the physics' double copy: Jolt's floats, a kilometre a step out there, can't move
+  it by a step's travel), lost as a crash ("Left the solar system.", still the one flown, seen, its run failed and
   in no capture), written once, and gone from the world once Tab flies its run's booster; and
   `Flight.EdgeAsked` counting only the vessel 1,000 km inside, never the one in orbit or on the
   pad, at warp too.

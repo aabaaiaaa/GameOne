@@ -277,14 +277,18 @@ public sealed class WorldTests(ITestOutputHelper output)
         // The lowest's Ap and Pe are watched for about one lap (its slow drift, over many, is the drift check's).
         Assert.InRange(apoapsisOff, 0f, 10f); // measured 0.5 m
         Assert.InRange(periapsisOff, 0f, 10f); // and 0.4 m
-        Assert.InRange(drift[0]!.Value, -0.25f, 0.25f); // the lowest, in the equator's plane: it holds to about 0.01 m a lap
-        // The one tilted 60° creeps more, 0.15 to 0.2 m a lap, steadily (0.585 m over three): held
-        // within twice that, so a step that begins to lose more on inclined orbits shows. (The
-        // Euler kick, measured, costs it only 0.35 m a lap, against 3.15 m for the lowest: the
-        // lowest's check above is the one that catches that.) Its creep is float rounding, a known
-        // limit accepted for now (see "Known limits" in TODO.md): the same step in doubles holds
-        // it exactly, and in floats with no Jolt it creeps just as here.
-        Assert.InRange(drift[2]!.Value, -0.4f, 0.4f);
+        // The orbits' sizes hold, every one, tilted or not: within 0.01 m a lap. A craft flying
+        // free is stepped in double by the physics' own copy (RocketPhysics.TrueCentreOfMass) and
+        // Jolt handed it rounded once a step, so no float rounding is carried from step to step:
+        // worked out from the copy, every one's size is back within 0.0001 m at its lap's end
+        // (the tilted ones wander up to 0.45 m within it, and come back). What is read here is
+        // the vessels' Ap and Pe, worked out from Jolt's floats, which read it only to a few
+        // millimetres (measured -0.008 to 0.003 m). (Stepped in Jolt's floats, the 60° one creeps
+        // 0.2 m a lap, steadily, the same way: each step's rounding leans one way in the turning
+        // frame. A plain Euler kick of the turning pulls costs the lowest 3.15 m a lap and the 60°
+        // one 0.35 m: either shows here.)
+        for (var i = 0; i < count; i++)
+            Assert.InRange(drift[i]!.Value, -0.01f, 0.01f);
     }
 
     [Fact]

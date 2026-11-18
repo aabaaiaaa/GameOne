@@ -347,7 +347,7 @@ dotnet run --project src/GameOne
   physics is kept at the same leftover of a step, `Worlds.Lag`): its place, velocity, attitude,
   turning, aim and a burn begun changed into the new frame in double (`Bodies.Change`), so nothing
   jumps. In the physics its craft is taken out of the one world and into the other, the same
-  craft and shapes (`RocketPhysics.TakeOut`, a `CraftState`, then `TakeIn`), into the new body's
+  craft and shapes (`RocketPhysics.TakeOut`, a `CraftState`, its centre of mass and velocity the double copy's, then `TakeIn`), into the new body's
   physics made ahead of need: the path of each vessel flying in the physics (the witnessed, and
   what is in it near them) is looked along `Scene.PhysicsAheadSeconds` (times the rate in warp)
   across the spheres (`Patched.Legs`)
@@ -551,7 +551,17 @@ dotnet run --project src/GameOne
   terrain's, the sea's, the air's and orbits'; Home's pad (the planet's origin) is
   `Scene.HomeElevation` (35 m) up. `Radius` is only the geometry of the sphere through the
   origin. Gravity and drag are applied per body in `RocketPhysics`, by its body's pull and air:
-  Jolt's own gravity is off.
+  Jolt's own gravity is off. **A craft's place and velocity are kept in double** by the physics
+  (`Craft.KeptCentre`, `KeptVelocity`; read by `RocketPhysics.TrueCentreOfMass` and
+  `TrueVelocity`): Jolt is single precision, and a float state stepped step after step leans one
+  way in a turning frame, so an orbit would creep. While a craft flies free (no live contact, not
+  in the water, its legs not holding it) the game steps the copy (the fall's kick, the thrust, the
+  drift, as Jolt would) and hands Jolt it rounded once a step (`HandOver`); anything else that
+  moves it (a contact, the water, the legs, any set) is Jolt's, and the copy is taken from Jolt
+  again whenever Jolt's state is no longer the copy's to its rounding (`Resync`, at each step's
+  start and on each read). The copy is what a crossing, the edge's check, the handover to formula
+  and saving take; every other read may read Jolt's float, which is the copy rounded. Anything
+  new that changes a free craft's velocity in the step goes into the copy too.
 - **The planet turns, and the world's frame turns with it:** each body's Jolt world is its
   ground's frame (ground-fixed: the pad, the sea and the terrain don't move in it), and each body
   turns about its own `NorthPole` once every `TurnSeconds`: the planet's (`Planet.NorthPole`,

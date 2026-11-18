@@ -392,6 +392,28 @@ internal sealed class GroundBody
     }
 
     /// <summary>
+    /// <see cref="FallStep(Vector3, Vector3, float, float, bool)"/> in double, step for step, for the
+    /// physics' own copy of a craft flying free (<c>RocketPhysics.TrueCentreOfMass</c>): in floats
+    /// each step's rounding leans the same way lap after lap in the turning frame, so an orbit would creep.
+    /// </summary>
+    public Vector3Double FallStep(Vector3Double velocity, Vector3Double pull, double drag, double seconds)
+    {
+        var half = velocity + pull * (seconds / 2);
+        var t = (Vector3Double)Spin * seconds;
+        var turn = Vector3Double.Cross(half + Vector3Double.Cross(half, t), t) * (2 / (1 + t.LengthSquared()));
+        return pull * seconds + turn - velocity * (1 - Math.Exp(-drag * seconds));
+    }
+
+    /// <summary><see cref="Gravity(Vector3)"/> and <see cref="OutwardPull(Vector3)"/> together at <paramref name="p"/>, in double: what pulls something there flying free.</summary>
+    public Vector3Double Pull(Vector3Double p)
+    {
+        var toCentre = (Vector3Double)Centre - p;
+        var r2 = toCentre.LengthSquared();
+        Vector3Double spin = Spin;
+        return toCentre / Math.Sqrt(r2) * (Mu / r2) + Vector3Double.Cross(spin, Vector3Double.Cross(spin, toCentre));
+    }
+
+    /// <summary>
     /// Where a point fixed to the ground now will be after <paramref name="seconds"/>, among the
     /// stars, in the frame that matches the ground now: turned about the axis through the centre.
     /// Negative seconds turn back. The angle is worked out in double (<see cref="TurnAngle"/>) and

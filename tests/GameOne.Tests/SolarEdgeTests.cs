@@ -200,27 +200,6 @@ public sealed class SolarEdgeTests(ITestOutputHelper output)
     private static readonly Pilot Nobody = (_, _) => default;
 
     /// <summary>
-    /// Reach Orbit's upper stage numbered <paramref name="id"/>, still over the ground about
-    /// <paramref name="inside"/> metres inside the edge at world time <paramref name="now"/>, on the
-    /// side the sun's circle round the planet (in the ground's turning frame, a lap a day) is going
-    /// away from: so the edge passes it within a second or so. (Jolt, in floats, can't move a craft
-    /// this far out by a step's travel, so the flown vessel leaves by the edge going past it.)
-    /// </summary>
-    private static VesselState SweptPast(int id, double inside, double now = Now)
-    {
-        var away = -Vector3Double.Normalize(SolarSystem.SunCentreAt(now + 0.5) - SolarSystem.SunCentreAt(now - 0.5)).ToSingle();
-        var (best, bestMiss) = (Vector3.Zero, double.MaxValue);
-        for (var d = Scene.SolarSystemEdge - inside - 4000; d < Scene.SolarSystemEdge - inside + 4000; d += 100)
-        {
-            var at = Planet.Centre + away * (float)d;
-            var miss = Math.Abs(Scene.SolarSystemEdge - SolarSystem.FromSun(Planet, at, now) - inside);
-            if (miss < bestMiss)
-                (best, bestMiss) = (at, miss);
-        }
-        return InOrbit.At(InOrbit.UpperStage(id, 20000f, 1f), best, Planet.AmongStars(best, Vector3.Zero));
-    }
-
-    /// <summary>
     /// Reach Orbit's upper stage numbered <paramref name="id"/> out along the planet's north pole
     /// from its centre (where the ground's turn moves nothing), about <paramref name="inside"/>
     /// metres inside the edge at world time <paramref name="now"/> (past it, if negative), as near
@@ -299,8 +278,9 @@ public sealed class SolarEdgeTests(ITestOutputHelper output)
     [Fact]
     public void The_flown_vessel_leaving_is_treated_as_a_crash()
     {
-        // The run's upper stage, flown, just inside the edge as it sweeps past, its booster
-        // dropped: the booster is the one to fly after it.
+        // The run's upper stage, flown, flying out across the edge along the north pole (in the
+        // physics, its place the physics' double copy: Jolt's floats step a kilometre out there),
+        // its booster dropped: the booster is the one to fly after it.
         var steps = Mission.ReachOrbit.Steps.Length;
         var run = new RunState
         {
@@ -311,7 +291,7 @@ public sealed class SolarEdgeTests(ITestOutputHelper output)
         var other = InOrbit.UpperStage(1, 20000f, 1f) with { First = 0, Last = 0, CentreOfMassOffset = RocketGeometry.CentreOfMassOffset(Vehicle.TwoStage, 0, 0) };
         using var sim = new Simulation(Mission.ReachOrbit);
         var flight = sim.Flight;
-        flight.Restore(EdgeWorld(SweptPast(0, 1000), other) with { Runs = [run], Flown = 0 });
+        flight.Restore(EdgeWorld(AtTheEdge(0, 1000, 2000f), other) with { Runs = [run], Flown = 0 });
         Assert.True(flight.CarryOn(flight.Controlled));
         var flown = flight.Controlled;
         Assert.Equal(0, flown.Id);
