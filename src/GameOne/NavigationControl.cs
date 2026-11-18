@@ -329,8 +329,8 @@ internal sealed class NavigationControl
     public void Draw(ImDrawListPtr draw)
     {
         // The burn's mark, out at the rings' radius along the burn still needed: shown with the rings or without.
-        if (_centreShown && Burn is { } mark && mark.Way.Length() > 0.01f)
-            Diamond(draw, _centre + Vector3.Normalize(mark.Way) * _radius, mark.Matched ? Scene.NodeMatchedColor : Paths.PlanColor);
+        if (_centreShown && BurnMark(_centre, _radius, Burn) is { } mark)
+            Diamond(draw, mark.At, mark.Color);
         if (!_onScreen || _visibility < 0.01f)
             return;
 
@@ -407,6 +407,17 @@ internal sealed class NavigationControl
             Outlined(draw, F2(_cursor + new Vector2(16f, 10f)), Color((255, 255, 255), 1f), text);
         }
     }
+
+    /// <summary>
+    /// Where the view's mark of the next node's burn (<paramref name="burn"/>) is drawn, round a
+    /// rocket's middle at <paramref name="centre"/>: out at the rings' <paramref name="radius"/>
+    /// along the burn still needed, green once matched, else the plan's colour; none without a node,
+    /// or with hardly any burn left to point along.
+    /// </summary>
+    internal static (Vector3 At, (byte R, byte G, byte B) Color)? BurnMark(Vector3 centre, float radius, (Vector3 Way, bool Overshot, bool Matched)? burn) =>
+        burn is { } b && b.Way.Length() > 0.01f
+            ? (centre + Vector3.Normalize(b.Way) * radius, b.Matched ? Scene.NodeMatchedColor : Paths.PlanColor)
+            : null;
 
     /// <summary>One ring: its near half bright, its far half (behind the rocket's middle) faint.</summary>
     private void DrawRing(ImDrawListPtr draw, Vector2[] points, bool[] front, (byte R, byte G, byte B) color, bool hot)

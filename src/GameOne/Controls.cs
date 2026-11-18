@@ -55,24 +55,26 @@ internal sealed class Controls
         // Typing into the HUD (renaming a world) isn't flying.
         if (action != GlfwKeyAction.Press || Brutal.ImGuiApi.ImGui.GetIO().WantTextInput)
             return;
-        ControlAction? pressed = key switch
-        {
-            GlfwKey.Space => ControlAction.LaunchOrStage,
-            GlfwKey.G => ControlAction.ToggleLegs,
-            GlfwKey.Z => ControlAction.FullThrottle,
-            GlfwKey.X => ControlAction.CutThrottle,
-            GlfwKey.Escape => ControlAction.GameMenu,
-            GlfwKey.Tab => ControlAction.SwitchVessel,
-            GlfwKey.Comma => ControlAction.Slower,
-            GlfwKey.Period => ControlAction.Faster,
-            GlfwKey.H => ControlAction.ToggleControlsList,
-            GlfwKey.M => ControlAction.ToggleZoomOut,
-            GlfwKey.F2 => ControlAction.ToggleHud,
-            _ => null,
-        };
-        if (pressed is { } a)
+        if (ActionOf(key) is { } a)
             _pressed.Add(a);
     }
+
+    /// <summary>The action a key press asks for, if it asks for one (the steering and throttle keys are read as held instead).</summary>
+    internal static ControlAction? ActionOf(GlfwKey key) => key switch
+    {
+        GlfwKey.Space => ControlAction.LaunchOrStage,
+        GlfwKey.G => ControlAction.ToggleLegs,
+        GlfwKey.Z => ControlAction.FullThrottle,
+        GlfwKey.X => ControlAction.CutThrottle,
+        GlfwKey.Escape => ControlAction.GameMenu,
+        GlfwKey.Tab => ControlAction.SwitchVessel,
+        GlfwKey.Comma => ControlAction.Slower,
+        GlfwKey.Period => ControlAction.Faster,
+        GlfwKey.H => ControlAction.ToggleControlsList,
+        GlfwKey.M => ControlAction.ToggleZoomOut,
+        GlfwKey.F2 => ControlAction.ToggleHud,
+        _ => null,
+    };
 
     /// <summary>Whether a steering key (W A S D or the arrows) is held, for the steering rings to show.</summary>
     public bool Steering => Held(GlfwKey.W) || Held(GlfwKey.A) || Held(GlfwKey.S) || Held(GlfwKey.D)

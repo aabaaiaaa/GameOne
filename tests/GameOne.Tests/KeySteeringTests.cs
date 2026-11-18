@@ -30,7 +30,7 @@ public sealed class KeySteeringTests(ITestOutputHelper output)
         var flight = sim.Flight;
         sim.Step(new FlightInput(SwitchTo: flight.WorldVessels.First(v => v.Flight == 0)));
         sim.Step(new FlightInput(ChooseHold: HoldMode.Retrograde));
-        Assert.True(flight.Holding == HoldMode.Retrograde);
+        Assert.Equal(HoldMode.Retrograde, flight.Holding);
         sim.Run((_, _) => default, _ => false, maxSeconds: 60);
 
         var off = float.RadiansToDegrees(MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(flight.Controlled.Up), -Vector3.Normalize(flight.Velocity)), -1f, 1f)));
@@ -39,8 +39,7 @@ public sealed class KeySteeringTests(ITestOutputHelper output)
 
         // One or the other: prograde hold turns it off.
         sim.Step(new FlightInput(ChooseHold: HoldMode.Prograde));
-        Assert.True(flight.Holding == HoldMode.Prograde);
-        Assert.False(flight.Holding == HoldMode.Retrograde);
+        Assert.Equal(HoldMode.Prograde, flight.Holding);
     }
 
     [Fact]
@@ -65,8 +64,11 @@ public sealed class KeySteeringTests(ITestOutputHelper output)
     [Fact]
     public void P_and_R_do_nothing_now()
     {
-        // The keys are not in the actions Controls reads, so no key can choose a hold.
+        // The holds are the buttons': no key asks for anything with P or R, nor can any key choose a hold.
+        Assert.Null(Controls.ActionOf(Brutal.GlfwApi.GlfwKey.P));
+        Assert.Null(Controls.ActionOf(Brutal.GlfwApi.GlfwKey.R));
         Assert.DoesNotContain(Enum.GetNames<ControlAction>(), name => name.Contains("Hold", StringComparison.Ordinal));
+        Assert.Equal(ControlAction.ToggleLegs, Controls.ActionOf(Brutal.GlfwApi.GlfwKey.G)); // (as a key that does ask for one)
     }
 
     [Fact]

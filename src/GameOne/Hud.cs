@@ -2421,7 +2421,7 @@ internal sealed class Hud : IDisposable
         ImGui.EndDisabled();
     }
 
-    private static readonly (string Label, string Name, HoldMode Mode)[] HoldButtons =
+    internal static readonly (string Label, string Name, HoldMode Mode)[] HoldButtons =
     [
         ("Prograde###holdPrograde", "Hold Prograde", HoldMode.Prograde),
         ("Retrograde###holdRetrograde", "Hold Retrograde", HoldMode.Retrograde),
@@ -2431,7 +2431,7 @@ internal sealed class Hud : IDisposable
     private float2 _holdButtonsAt;
     private float2 _holdButtonsSize = new(220f, 16f);
 
-    private static readonly (string Label, string Name, FrameChoice Choice)[] FrameButtons =
+    internal static readonly (string Label, string Name, FrameChoice Choice)[] FrameButtons =
     [
         ("Auto###frameAuto", "Frame Auto", FrameChoice.Auto), ("Surface###frameSurface", "Frame Surface", FrameChoice.Surface),
         ("Orbit###frameOrbit", "Frame Orbit", FrameChoice.Orbit), ("Target###frameTarget", "Frame Target", FrameChoice.Target),

@@ -122,6 +122,54 @@ public sealed class NodeTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void A_ring_s_drag_lets_the_manoeuvre_hold_go_and_the_readout_says_which_hold_is_on()
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(Plan: Chain(satellite, flight.WorldTime, flight.WorldTime + 60, new ManoeuvreNode(0, Prograde: 20f)), ChooseHold: HoldMode.Manoeuvre));
+        Assert.Equal(HoldMode.Manoeuvre, flight.Holding);
+        Assert.Equal("Manoeuvre", Readout.FlightReadings(flight)["Hold"]);
+        sim.Step(new FlightInput(Hold: satellite.Right)); // a ring dragged
+        Assert.Equal(HoldMode.None, flight.Holding);
+        Assert.Equal("None", Readout.FlightReadings(flight)["Hold"]);
+
+        // Each hold button reads out by its name, as the GameDriver's docs give them.
+        Assert.Equal(["Hold Prograde", "Hold Retrograde", "Hold Manoeuvre"], Hud.HoldButtons.Select(b => b.Name));
+        Assert.Equal([HoldMode.Prograde, HoldMode.Retrograde, HoldMode.Manoeuvre], Hud.HoldButtons.Select(b => b.Mode));
+        Assert.Equal(["Frame Auto", "Frame Surface", "Frame Orbit", "Frame Target"], Hud.FrameButtons.Select(b => b.Name));
+    }
+
+    [Fact]
+    public void The_manoeuvre_hold_steers_in_warp_as_at_normal_speed()
+    {
+        using var sim = Satellite(out var satellite);
+        var flight = sim.Flight;
+        var chain = Chain(satellite, flight.WorldTime, flight.WorldTime + 200, new ManoeuvreNode(0, Prograde: 20f, Normal: 10f));
+        sim.Step(new FlightInput(Plan: chain, ChooseHold: HoldMode.Manoeuvre));
+        for (var i = 0; i < 3; i++)
+            sim.Step(new FlightInput(Faster: true)); // 2, 4, then 8x
+        Assert.True(flight.TimeScale >= 8f, $"at {flight.TimeScale}x");
+        sim.Run((_, _) => default, f => f.WorldTime >= chain.TimeOf(0) - 100, maxSeconds: 120);
+        var left = satellite.BurnLeft(flight.WorldTime)!.Value;
+        var off = float.RadiansToDegrees(MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(satellite.Up), Vector3.Normalize(left)), -1f, 1f)));
+        output.WriteLine($"in warp at {flight.TimeScale}x: nose {off:0.0}° off the burn left");
+        Assert.True(off < 2f, $"the nose is {off:0.0}° off the burn left");
+        Assert.Equal(HoldMode.Manoeuvre, flight.Holding);
+    }
+
+    [Fact]
+    public void The_view_s_burn_mark_points_along_the_burn_left_green_once_matched()
+    {
+        var centre = new Vector3(1f, 2f, 3f);
+        var (at, color) = NavigationControl.BurnMark(centre, 10f, (new Vector3(0f, 0f, -4f), false, false))!.Value;
+        Assert.True(Vector3.Distance(centre + new Vector3(0f, 0f, -10f), at) < 1e-4f);
+        Assert.Equal(Paths.PlanColor, color);
+        Assert.Equal(Scene.NodeMatchedColor, NavigationControl.BurnMark(centre, 10f, (new Vector3(3f, 0f, 0f), false, true))!.Value.Color);
+        Assert.Null(NavigationControl.BurnMark(centre, 10f, (new Vector3(0.001f, 0f, 0f), false, false))); // hardly any left
+        Assert.Null(NavigationControl.BurnMark(centre, 10f, null)); // no node
+    }
+
+    [Fact]
     public void The_manoeuvre_hold_cannot_be_chosen_without_a_node()
     {
         using var sim = Satellite(out _);
