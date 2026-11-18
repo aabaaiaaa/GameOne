@@ -179,6 +179,40 @@ public sealed class SteeringTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void A_pitch_click_while_the_nose_is_still_turning_to_a_held_heading_keeps_that_heading()
+    {
+        var (sim, flown) = Pointed(GroundBody.Planet, 0f, 45f);
+        using (sim)
+        {
+            sim.Step(new FlightInput(RingHeading: float.DegreesToRadians(150f)));
+            sim.Run((_, _) => default, _ => false, maxSeconds: 1);
+            Assert.True(Between(HeadingOf(flown), 150f) > 20f, $"heading {HeadingOf(flown):0.0}°: it should still be turning");
+            sim.Step(new FlightInput(RingPitch: float.DegreesToRadians(10f)));
+            Assert.Equal(HoldMode.Rings, sim.Flight.Holding);
+            sim.Run((_, _) => default, _ => false, maxSeconds: 20);
+            output.WriteLine($"heading {HeadingOf(flown):0.0}°, pitch {PitchOf(flown):0.0}°");
+            Assert.True(Between(HeadingOf(flown), 150f) < 2f, $"heading {HeadingOf(flown):0.0}°: the held one, not where the nose was as the pitch was clicked");
+            Assert.True(MathF.Abs(PitchOf(flown) - 10f) < 2f, $"pitch {PitchOf(flown):0.0}°");
+        }
+    }
+
+    [Fact]
+    public void A_ring_press_let_go_without_moving_is_a_click_however_long_it_is_held()
+    {
+        var press = new NavigationControl.RingPress();
+        press.Begin(new Vector2(100f, 100f));
+        for (var frame = 0; frame < 6; frame++) // a click a person makes lasts several frames
+            press.Follow(new Vector2(100f, 100f + (frame == 3 ? 1f : 0f)));
+        Assert.False(press.Dragging);
+
+        // Moved further, all told, it is a drag: steering while held, no click when let go.
+        press.Begin(new Vector2(100f, 100f));
+        press.Follow(new Vector2(103f, 100f));
+        press.Follow(new Vector2(100f, 100f));
+        Assert.True(press.Dragging);
+    }
+
+    [Fact]
     public void Steering_by_the_keys_ends_the_ring_hold()
     {
         var (sim, _) = Pointed(GroundBody.Planet, 0f, 45f);

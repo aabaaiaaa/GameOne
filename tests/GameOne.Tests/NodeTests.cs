@@ -902,6 +902,20 @@ public sealed class NodeTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void The_readout_gives_each_nodes_world_time()
+    {
+        using var sim = Satellite(out var satellite);
+        var now = sim.Flight.WorldTime;
+        var chain = Three(satellite, now);
+        sim.Step(new FlightInput(Plan: chain));
+        var readings = Readout.FlightReadings(sim.Flight);
+        Assert.Equal("3", readings["Nodes"]);
+        Assert.Equal(string.Join(" ", Enumerable.Range(0, 3).Select(i => $"{chain.TimeOf(i):0.0}")), readings["Node times"]);
+        sim.Step(new FlightInput(Plan: ManoeuvreChain.Empty));
+        Assert.False(Readout.FlightReadings(sim.Flight).ContainsKey("Node times"));
+    }
+
+    [Fact]
     public void An_empty_chain_clears_the_plan()
     {
         using var sim = Satellite(out var satellite);

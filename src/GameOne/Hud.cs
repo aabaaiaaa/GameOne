@@ -381,6 +381,52 @@ internal sealed class Hud : IDisposable
     /// <summary>What the main camera is on, as of the last frame built (the readout's).</summary>
     public CameraCentre CameraOn { get; private set; } = CameraCentre.Own;
 
+    /// <summary>Whether the main view is the map (zoomed all the way out), as of the last frame built: the readout's.</summary>
+    public bool MapShown { get; private set; }
+
+    /// <summary>
+    /// What a script clicks or drags on the main view that is drawn rather than a marker, by name
+    /// and where it is (pixels from the middle of the screen), this frame: the flown vessel's path's
+    /// marks ("Path Ap", "Path Pe", "Path AN", "Path DN", "Path Air": the point on the path each
+    /// marks, so a click there places a node), the nodes ("Node 1" on), each body's path on the map
+    /// ("Moon line": a point on the line, away from the body) and the steering rings ("Heading
+    /// ring", "Pitch ring": a point on each, clear of the other). Gathered only for the readout.
+    /// </summary>
+    public IReadOnlyList<(string Name, Vector2 At)> PointsDrawn => _points;
+
+    /// <summary>The labels of the path's marks drawn this frame, in the order drawn (Ap's height, AN's angle...): the readout's, gathered with <see cref="PointsDrawn"/>.</summary>
+    public IReadOnlyList<string> PathMarksDrawn => _pathMarks;
+
+    private readonly List<(string Name, Vector2 At)> _points = [];
+    private readonly List<string> _pathMarks = [];
+
+    /// <summary>Gathers <see cref="PointsDrawn"/> and <see cref="PathMarksDrawn"/> once the path, the nodes, the map and the rings are drawn.</summary>
+    private void GatherPoints(NavigationControl navigation, Vector2 display)
+    {
+        if (_paths.Fade >= 0.5f)
+            foreach (var mark in _paths.Marks)
+                if (_paths.InView(mark.At, out var at) && Point($"Path {mark.Label.Split(' ')[0]}", new Vector2(at.X, at.Y)))
+                    _pathMarks.Add(mark.Label);
+        foreach (var (index, at) in _nodes.Drawn)
+            Point($"Node {index + 1}", new Vector2(at.X, at.Y));
+        foreach (var body in Bodies.All)
+            if (_paths.Map.LinePoint(body) is { } at)
+                Point($"{body.Name} line", new Vector2(at.X, at.Y));
+        if (navigation.RingPoint(heading: true) is { } heading)
+            Point("Heading ring", heading);
+        if (navigation.RingPoint(heading: false) is { } pitch)
+            Point("Pitch ring", pitch);
+
+        // Only what is on the screen, to be clicked (as from the middle of it); whether it was.
+        bool Point(string name, Vector2 at)
+        {
+            if (at.X < 0f || at.Y < 0f || at.X > display.X || at.Y > display.Y)
+                return false;
+            _points.Add((name, at - display / 2f));
+            return true;
+        }
+    }
+
     /// <summary>The popup's opening last shown (<see cref="ActionMenu.Opened"/>): a new one opens it again where it was clicked.</summary>
     private int _actionsShown;
 
@@ -682,9 +728,12 @@ internal sealed class Hud : IDisposable
         _wasInAir = inAir;
 
         CameraOn = camera.Centre;
+        MapShown = camera.ZoomedOut;
         _cameraOff = camera.Centre.Kind != CentreKind.Own;
         var display = ImGui.GetIO().DisplaySize;
         FlownVesselAt = null;
+        _points.Clear();
+        _pathMarks.Clear();
         if (display.X <= 0 || display.Y <= 0)
             return; // minimised: nothing to lay out
         if (Hidden && !MenuOpen)
@@ -712,6 +761,8 @@ internal sealed class Hud : IDisposable
         // spread, but not from under a panel or a menu.
         _paths.Labels.Draw(ImGui.GetBackgroundDrawList(), MenuOpen || ImGui.GetIO().WantCaptureMouse ? null : _markers.Pointer, new Vector2(display.X, display.Y));
         navigation.Draw(ImGui.GetBackgroundDrawList());
+        if (Readout.On)
+            GatherPoints(navigation, new Vector2(display.X, display.Y));
         if (!camera.ZoomedOut) // which way the camera faces over the ground means nothing from out there
             Compass(flight, camera, display);
         // The flight takes a frame picked on the selector only when it isn't paused, so one picked
@@ -2925,7 +2976,7 @@ internal sealed class Hud : IDisposable
     {
         0 => "Shift / Ctrl    throttle up / down"u8,
         1 => "Z / X           full throttle / cut engine"u8,
-        2 => "Left drag       on the rocket's rings: steer (held while held); click: hold that angle"u8,
+        2 => "Left drag       on the rocket's rings: steer (held while held); click: hold that angle (a drag or a key lets go)"u8,
         3 => "W / S           lean the nose forward / back (its own frame)"u8,
         4 => "A / D           lean it left / right (D: east, off the pad)"u8,
         5 => "Right drag      orbit the rocket;  wheel: zoom"u8,

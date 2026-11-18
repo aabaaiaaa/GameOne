@@ -616,6 +616,20 @@ internal sealed class SystemMap
         return best;
     }
 
+    /// <summary>
+    /// A point on <paramref name="body"/>'s path as <see cref="Lay"/> last laid it (window pixels):
+    /// the middle of its longest piece, away from the body itself, so a click there is on the line
+    /// rather than on its marker. Null if none of it is laid.
+    /// </summary>
+    internal float2? LinePoint(GroundBody body)
+    {
+        var longest = -1;
+        for (var i = 0; i < _runs.Count; i++)
+            if (_runs[i].Vessel < 0 && _runs[i].Body == body.Index && _runs[i].Count > 1 && (longest < 0 || _runs[i].Count > _runs[longest].Count))
+                longest = i;
+        return longest < 0 ? null : _screen[_runs[longest].First + _runs[longest].Count / 2];
+    }
+
     /// <summary>Draws what <see cref="Lay"/> left, as strongly as <paramref name="fade"/>: each run one polyline, the dots, the sun's ring, and its name into <paramref name="labels"/> (a body's: the others give way to it).</summary>
     public void Draw(ImDrawListPtr draw, float fade, MapLabels labels)
     {

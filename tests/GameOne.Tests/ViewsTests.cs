@@ -439,6 +439,42 @@ public sealed class ViewsTests
     }
 
     [Fact]
+    public void A_world_picked_and_carried_on_brings_back_the_saved_view_not_the_cameras()
+    {
+        // As the game does it: the world restored behind the world list, then carried on from its
+        // screen, every frame's input carrying the camera's view as it is (the default one, or the
+        // last world's) until the vessel carried on is taken after its link-up.
+        var (sim, _, _) = ThreeVessels();
+        WorldState world;
+        using (sim)
+        {
+            sim.Step(new FlightInput(View: Seen));
+            world = sim.Flight.Capture();
+        }
+        using var back = new Simulation(Mission.DeploySatellite);
+        var flight = back.Flight;
+        flight.Restore(world);
+        back.ShowLinkUp = true;
+        var camera = Taking(flight);
+        var views = new Views();
+        views.Follow(flight);
+        back.Step(new FlightInput(View: GameView.DefaultView, CarryOn: flight.Controlled.Id));
+        Assert.True(flight.LinkUp.On, "a carry-on shows the link-up");
+        for (var frames = 0; flight.LinkUp.On && frames++ < 600;)
+        {
+            back.Step(new FlightInput(View: camera.View));
+            views.Update(Dt, flight, camera);
+        }
+        Assert.Equal(Seen, camera.View);
+        Assert.Equal(Seen, flight.Controlled.View);
+
+        // Once it is taken, the camera's view is the flown vessel's again.
+        camera.Apply(GameView.DefaultView);
+        back.Step(new FlightInput(View: camera.View));
+        Assert.Equal(GameView.DefaultView, flight.Controlled.View);
+    }
+
+    [Fact]
     public void A_vessel_never_flown_gets_the_default_view()
     {
         var (sim, views, _) = ThreeVessels();

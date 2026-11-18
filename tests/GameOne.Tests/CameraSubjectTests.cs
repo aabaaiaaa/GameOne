@@ -55,6 +55,47 @@ public sealed class CameraSubjectTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void The_markers_distances_are_the_flown_vessels_wherever_the_camera_is()
+    {
+        using var sim = new Simulation(Mission.FreePlay);
+        var camera = new ChaseCamera(null);
+        sim.Step(default);
+        GameView.Aim(camera, sim.Flight, Dt, Dt);
+        Assert.Equal(camera.Focus, Markers.DistancesFrom(sim.Flight, camera));
+        // On the moon, the moon's marker is still its distance from the flown vessel, not 0 m.
+        camera.CentreOn(new CameraCentre(CentreKind.Body, Moon.Index));
+        GameView.Aim(camera, sim.Flight, Dt, Dt);
+        Assert.Equal(sim.Flight.CentreOfMass, Markers.DistancesFrom(sim.Flight, camera));
+    }
+
+    [Fact]
+    public void The_map_centred_on_the_body_the_flown_vessel_is_at_looks_at_it()
+    {
+        // The planet right-clicked in the map from the pad (as from orbit round it): the camera
+        // looks at its centre from over its pole, as on any body, with nothing in it not a number.
+        foreach (var body in new[] { Home, Moon })
+        {
+            using var sim = new Simulation(Mission.FreePlay);
+            var camera = new ChaseCamera(null);
+            sim.Step(default);
+            GameView.Aim(camera, sim.Flight, Dt, Dt);
+            camera.ToggleZoomOut(Scene.PlanetRadius);
+            camera.CentreOn(new CameraCentre(CentreKind.Body, body.Index));
+            for (var i = 0; i < 120; i++)
+            {
+                GameView.Aim(camera, sim.Flight, Dt, Dt);
+                sim.Step(default);
+            }
+            var view = camera.ViewProjection(new Vector2(1280f, 720f));
+            Assert.True(float.IsFinite(camera.Position.X) && float.IsFinite(camera.Position.Y) && float.IsFinite(camera.Position.Z), $"{body.Name}: the camera at {camera.Position}");
+            Assert.True(float.IsFinite(view.M11) && float.IsFinite(view.M22) && float.IsFinite(view.M43), $"{body.Name}: its view {view}");
+            var centre = sim.Flight.Body == body ? body.Centre : Bodies.Change(body, sim.Flight.Body, sim.Flight.WorldTime).Point((Vector3Double)body.Centre).ToSingle();
+            Assert.True(camera.ToScreen(centre, new Vector2(1280f, 720f), out var at, out _), $"{body.Name}: its centre on the screen");
+            output.WriteLine($"{body.Name}: its centre at {at}, the camera {Vector3.Distance(camera.Position, centre):0} m from it");
+        }
+    }
+
+    [Fact]
     public void A_camera_on_a_vessel_at_the_moon_follows_it_without_jitter()
     {
         // Flying at the planet (the rocket on the pad), the camera on a stage round the moon: the

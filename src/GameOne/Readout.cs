@@ -45,6 +45,7 @@ internal sealed class Readout
         Show("Menu", hud.Screen.ToString());
         Show("Controls", hud.ControlsOpen ? "open" : "folded"); // the controls list, bottom left
         Show("Camera", CameraSubject.Describe(flight, hud.CameraOn)); // what the main camera is on: Own, or another vessel, a body, a site or a point of interest
+        Show("View", hud.MapShown ? "map" : "chase"); // the main view: the map (zoomed all the way out) or the chase view
         if (hud.Hidden)
             Show("HUD", "hidden"); // F2: nothing over the main view but a menu
         if (hud.TimeScale != 1f)
@@ -69,6 +70,13 @@ internal sealed class Readout
         }
         foreach (var (name, at) in hud.MarkersDrawn)
             _shown.TryAdd($"Marker {name}", $"{at.X:0} {at.Y:0}");
+        // What is drawn over the view to click or drag that isn't a marker (the path's marks, the
+        // nodes, the bodies' lines on the map, the steering rings: Hud.PointsDrawn), read out as
+        // markers are, and the path's marks' labels as the HUD writes them (Ap's height, AN's angle).
+        foreach (var (name, at) in hud.PointsDrawn)
+            _shown.TryAdd($"Marker {name}", $"{at.X:0} {at.Y:0}");
+        if (hud.PathMarksDrawn.Count > 0)
+            Show("Path marks", string.Join(" / ", hud.PathMarksDrawn));
         // The strip's buttons, which move with the instruments' panel, the mission menu's ("Mission:
         // FREE PLAY", "Site: Home", "Change world"), which move with its height, the world list's
         // ("Play: Empty world", "Delete: Empty world", "Yes, delete it", "No", "New: Empty world"),
@@ -240,6 +248,10 @@ internal sealed class Readout
             Show("Node matched", guide.Matched ? "yes" : "no");
         }
         Show("Nodes", $"{flight.Controlled.Chain?.Nodes.Length ?? 0}");
+        // Each node's world time, in seconds, in the chain's order: these change only as the chain is
+        // edited, so a script sees a drag move the nodes after the one dragged.
+        if (flight.Controlled.Chain is { Nodes.Length: > 0 } chain)
+            Show("Node times", string.Join(" ", Enumerable.Range(0, chain.Nodes.Length).Select(i => $"{chain.TimeOf(i):0.0}")));
 
         Show("Site", flight.Site.Name);
         Show("Mission", flight.Mission.Name);

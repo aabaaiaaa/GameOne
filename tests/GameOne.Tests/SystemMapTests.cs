@@ -628,6 +628,9 @@ public sealed class SystemMapTests(ITestOutputHelper output)
         var middle = new Vector2((a.X + b.X) / 2f, (a.Y + b.Y) / 2f);
         Assert.Same(moon, map.BodyLineAt(middle, 8f));
         Assert.Same(moon, map.BodyLineAt(middle + new Vector2(3f, 3f), 8f));
+        // The point the readout gives a script to click on the line is the line's.
+        Assert.True(map.LinePoint(moon) is { } point && map.BodyLineAt(new Vector2(point.X, point.Y), 1f) == moon);
+        Assert.Null(new SystemMap().LinePoint(moon));
 
         foreach (var planetRun in map.Runs.Where(r => r.Body == GroundBody.Planet.Index))
             for (var i = planetRun.First; i < planetRun.First + planetRun.Count; i++)

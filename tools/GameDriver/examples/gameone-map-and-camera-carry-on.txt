@@ -1,0 +1,15 @@
+# GameOne: gameone-map-and-camera.txt's world carried on, in the same GAMEONE_WORLDS folder: after
+# the link-up the stage is looked at as it was left (Camera = Body Planet, View = map), its hold
+# (Rings) and its two nodes (Nodes, Node times) as they were.
+# GAMEONE_WORLDS=<the same folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-map-and-camera-carry-on.txt --out shots
+0    until Menu = Worlds
+0.6  click marker "Play: Empty world"
+0    until Menu = CarryOn
+1    readings carry-on-screen
+1.5  click marker "Carry on: LAND ON THE MOON"
+0    until Link = connected within 20
+3    readings after
+3.5  shot after
+6    shot after-settled
+6.5  readings after-settled
+7    quit

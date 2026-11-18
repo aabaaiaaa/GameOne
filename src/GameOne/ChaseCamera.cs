@@ -539,9 +539,13 @@ internal sealed class ChaseCamera
         var back = same ? FrameChange.Identity : across.Inverse;
         Vector3 Way(Vector3 d) => same ? d : Vector3.Normalize(c.Direction(d).ToSingle());
         var seenThere = same ? _seen : back.Point(_seen).ToSingle();
-        (_up, _east, _south) = (Way(around.Up(seenThere)), Way(around.East(seenThere)), Way(-around.North(seenThere)));
         var pole = PoleFrame(around);
         (_poleUp, _poleEast, _poleSouth) = (Way(pole.Up), Way(pole.East), Way(pole.South));
+        // On a body's centre (the camera put on the body itself) there is no ground's up to stand
+        // on: the pole's frame is its up, as the map's angles are.
+        (_up, _east, _south) = Vector3.DistanceSquared(seenThere, around.Centre) < 1f
+            ? (_poleUp, _poleEast, _poleSouth)
+            : (Way(around.Up(seenThere)), Way(around.East(seenThere)), Way(-around.North(seenThere)));
         _zoomCentre = same ? around.Centre : across.Point(around.Centre).ToSingle();
         Ease(realDt ?? dt);
 

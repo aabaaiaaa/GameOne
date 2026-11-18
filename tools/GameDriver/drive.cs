@@ -209,6 +209,14 @@ bool Play()
                 Thread.Sleep(60);
                 Key(step[2], down: false);
                 break;
+            case "click" or "rclick" or "move" or "drag" when step.Length > 2 && step[2] == "marker":
+                if (!AtMarker(step))
+                {
+                    failed = true;
+                    Screenshot(Path.Combine(outDir, "failed.png"));
+                    return true;
+                }
+                break;
             case "drag":
                 Drag(int.Parse(step[2]), int.Parse(step[3]), Button.Left,
                     step.Length > 5 ? int.Parse(step[4]) : 0, step.Length > 5 ? int.Parse(step[5]) : 0);
@@ -224,14 +232,6 @@ bool Play()
             case "move": Mouse(WM_MOUSEMOVE, 0, int.Parse(step[2]), int.Parse(step[3])); break;
             case "press": Mouse(WM_LBUTTONDOWN, MK_LBUTTON, int.Parse(step[2]), int.Parse(step[3])); break;
             case "release": Mouse(WM_LBUTTONUP, 0, int.Parse(step[2]), int.Parse(step[3])); break;
-            case "click" or "rclick" when step.Length > 2 && step[2] == "marker":
-                if (!ClickMarker(step, step[1] == "rclick" ? Button.Right : Button.Left))
-                {
-                    failed = true;
-                    Screenshot(Path.Combine(outDir, "failed.png"));
-                    return true;
-                }
-                break;
             case "click" or "rclick":
                 Click(int.Parse(step[2]), int.Parse(step[3]), step[1] == "rclick" ? Button.Right : Button.Left);
                 break;
@@ -309,16 +309,20 @@ void Click(int x, int y, Button button)
 // wherever it is at that moment, as the game reads it out: "Marker <label>" = "<x> <y>", in pixels
 // off the middle of the window, while it is on the screen. It waits up to 5 s for the marker to be
 // shown, and follows it if it moves between the pointer arriving and the button going down.
-// Returns whether it was there to click (false too for a step without one label, or once the game
-// has closed).
-bool ClickMarker(string[] step, Button button)
+// "move marker <label>" only moves the pointer onto it (to hover there), and "drag marker <label>
+// <dx> <dy>" drags it with the left button by (dx, dy) pixels from where it is once the pointer
+// has arrived. Returns whether it was there (false too for a step without one label, or once the
+// game has closed).
+bool AtMarker(string[] step)
 {
     var command = step[1];
-    if (step.Length != 4)
+    var drag = command == "drag";
+    if (step.Length != (drag ? 6 : 4) || drag && (!int.TryParse(step[4], out _) || !int.TryParse(step[5], out _)))
     {
+        var example = drag ? $"{command} marker \"Node 1\" 40 0" : $"{command} marker \"Drone ship\"";
         Console.WriteLine(step.Length < 4
-            ? $"{command} marker: which marker? Give its label, e.g. {command} marker \"Drone ship\""
-            : $"{command} marker: a label with spaces must be quoted: {command} marker \"{string.Join(' ', step[3..])}\"");
+            ? $"{command} marker: which marker? Give its label, e.g. {example}"
+            : $"{command} marker: a label with spaces must be quoted{(drag ? ", then the drag's dx and dy" : "")}: {example}");
         return false;
     }
     var label = step[3];
@@ -355,10 +359,18 @@ bool ClickMarker(string[] step, Button button)
     Thread.Sleep(80);
     at = At() ?? at;
     Mouse(WM_MOUSEMOVE, 0, at.X, at.Y); // where it is now, if it has moved
-    var (held, downMessage, upMessage) = button == Button.Right ? (MK_RBUTTON, WM_RBUTTONDOWN, WM_RBUTTONUP) : (MK_LBUTTON, WM_LBUTTONDOWN, WM_LBUTTONUP);
-    Mouse(downMessage, held, at.X, at.Y);
-    Thread.Sleep(80);
-    Mouse(upMessage, 0, at.X, at.Y);
+    if (drag)
+    {
+        Thread.Sleep(80);
+        Drag(int.Parse(step[4]), int.Parse(step[5]), Button.Left, at.X, at.Y);
+    }
+    else if (command != "move")
+    {
+        var (held, downMessage, upMessage) = command == "rclick" ? (MK_RBUTTON, WM_RBUTTONDOWN, WM_RBUTTONUP) : (MK_LBUTTON, WM_LBUTTONDOWN, WM_LBUTTONUP);
+        Mouse(downMessage, held, at.X, at.Y);
+        Thread.Sleep(80);
+        Mouse(upMessage, 0, at.X, at.Y);
+    }
     Console.WriteLine($"{started.Elapsed.TotalSeconds,8:0.0} s  {command} marker \"{label}\" at {at.X} {at.Y}");
     return true;
 }

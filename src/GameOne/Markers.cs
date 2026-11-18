@@ -229,7 +229,7 @@ internal sealed class Markers
         var view = camera.ViewProjection(display);
         var io = ImGui.GetIO();
         var (pointer, pressAt) = (_cursor, _pressAt);
-        var from = camera.Focus;
+        var from = DistancesFrom(flight, camera);
         _taken.Clear();
         foreach (var marker in _candidates)
         {
@@ -519,6 +519,14 @@ internal sealed class Markers
     /// its place, or for a body's marker (on its centre) to its surface, over its datum (as the
     /// readout's height over a body is), never under 0.
     /// </summary>
+    /// <summary>
+    /// Where the markers' distances are measured from, in the main view's frame: the flown vessel,
+    /// as the camera follows it (its focus) while it is on it, and the vessel itself while the
+    /// camera is on something else, so a body watched isn't labelled 0 m away.
+    /// </summary>
+    internal static Vector3 DistancesFrom(Flight flight, ChaseCamera camera) =>
+        camera.Centre.Kind == CentreKind.Own ? camera.Focus : flight.CentreOfMass;
+
     internal static float LabelDistance(in Candidate marker, Vector3 from)
     {
         var distance = Vector3.Distance(from, marker.Position);

@@ -1,0 +1,108 @@
+# GameOne: the map, the camera, targets and nodes, from a low orbit flown by readings. LAND ON THE
+# MOON's stack leaned east and put on the Prograde hold, the booster dropped, the engine cut at the
+# apoapsis wanted and lit again from it until the periapsis clears the air; in the map the moon
+# targeted by its orbit line and the AN and DN read; the camera put on the moon (zoomed in and
+# turned until the landing spot shows), then on the landing spot, M for its chase view, and Reset
+# camera; two nodes placed at the AN and the DN, the first dragged along its path (Node times
+# before and after: the second moves with it); the Manoeuvre hold; a click on the heading ring
+# (the rings' hold); then the camera put on the planet in the map, and quit (the world is saved).
+# gameone-map-and-camera-carry-on.txt carries it on in the same folder and reads them back.
+# The marks move round the screen as the stage goes round (the map follows it): each is clicked
+# once it is clear of the panels and the booster's small view on the left.
+# GAMEONE_WORLDS=<empty folder> dotnet run tools/GameDriver/drive.cs -- src/GameOne/bin/Debug/net10.0/GameOne.exe tools/GameDriver/examples/gameone-map-and-camera.txt --out shots
+0    until Menu = Worlds
+0.6  click marker "New: Empty world"
+0    until Menu = Missions
+0.6  click marker "Mission: LAND ON THE MOON"
+0    until Menu = None
+1.5  shot ready
+3    tap space
+3.2  tap z
+5    down d
+5.25 up d
+9    readings r09
+10   click marker "Hold Prograde"
+12   readings r12
+16   readings r16
+20   readings r20
+20.5 shot climb
+24   tap space
+25   readings staged
+0    until Apoapsis >= 4500 within 120
+0    tap x
+0.5  readings coast
+0    until Vertical <= 3 within 200
+0    tap z
+0    until Periapsis >= 3400 within 60
+0    tap x
+1    readings orbit
+1.5  shot orbit
+2    tap m
+8    move 350 200
+8.5  readings map
+9    shot map
+9.5  scroll -8
+14   readings map-out
+14.5 shot map-out
+15   click marker "Moon line"
+0    until Target = Moon within 10
+4    shot targeted
+0    until "Path marks" has AN within 60
+1    readings marks
+1.5  shot marks
+2    rclick marker "Moon"
+0    until Camera = "Body Moon" within 10
+1    move 350 200
+1.5  scroll 10
+6    shot on-moon
+6.5  readings on-moon
+7    rdrag 300 0 350 200
+11   readings turned
+11.5 shot turned
+0    until "Marker Landing spot" != none within 30
+1    rclick marker "Landing spot"
+0    until Camera = "Point Landing spot" within 10
+3    shot on-spot
+3.5  tap m
+0    until View = chase within 10
+5    shot spot-chase
+5.5  readings spot-chase
+6    click marker "Reset camera"
+0    until Camera = Own within 10
+1    readings reset
+1.5  tap m
+0    until View = map within 10
+6    move 350 200
+6.5  scroll -4
+10   readings map-again
+10.5 shot map-again
+0    until "Marker Path AN" > -220 within 240   # clear of the panels and the small view on the left
+0    click marker "Path AN"
+0    until Nodes = 1 within 10
+0    until "Marker Path DN" > -220 within 240
+0    click marker "Path DN"
+0    until Nodes = 2 within 10
+2    readings two-nodes
+2.5  shot two-nodes
+3    drag marker "Node 1" 0 60
+5    readings dragged
+5.5  shot dragged
+6    click marker "Hold Manoeuvre"
+0    until Hold = Manoeuvre within 10
+1    readings manoeuvre
+1.5  tap m
+0    until View = chase within 10
+5    move marker "Flown vessel"
+7    readings rings
+7.5  shot rings
+8    click marker "Heading ring"
+0    until Hold = Rings within 10
+1    readings ring-held
+4    shot ring-held
+5    tap m
+0    until View = map within 10
+6    rclick marker "Planet"
+0    until Camera = "Body Planet" within 10
+3    readings before-quit
+3.5  shot before-quit
+4    quit

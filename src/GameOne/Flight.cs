@@ -641,6 +641,13 @@ internal sealed class Flight : IDisposable
     /// </summary>
     public event Action<Vessel>? ViewTaken;
 
+    /// <summary>
+    /// Whether the camera shows the flown vessel as it is to be kept (<see cref="FlightInput.View"/>
+    /// taken as its view): not from a world restored (a world picked, a rewind) until the vessel
+    /// carried on is taken after its link-up, as the camera meanwhile still shows what it did.
+    /// </summary>
+    private bool _viewShown = true;
+
     /// <summary>Raised when a vessel is carried on (<see cref="CarryOn"/>, a rewind to one too), with that vessel: it may be flown only after its link-up.</summary>
     public event Action<Vessel>? CarriedOn;
 
@@ -755,6 +762,7 @@ internal sealed class Flight : IDisposable
             link.Cancel(); // and so is a view's
         WatchLink.Cancel(); // and the main camera's, the camera taken afresh from the next input
         _watching = null;
+        _viewShown = false; // the camera still shows what it did: the flown vessel's view is its saved one until it is taken
         var before = Controlled;
         var flown = Revive(world, flightStarts);
         Chosen = false;
@@ -1680,7 +1688,7 @@ internal sealed class Flight : IDisposable
         _bodiesAt = WorldTime; // until the physics steps them on to the step's end
         WorldTime += dt;
 
-        if (input.View is { } view)
+        if (input.View is { } view && _viewShown)
             Controlled.View = view; // the vessel it was seen as, before a switch or a carry-on below changes which is flown
 
         if (input.Choose is { } chosen)
@@ -1933,6 +1941,7 @@ internal sealed class Flight : IDisposable
         if (RunOf(vessel) is { } run)
             run.LastFlownId = vessel.Id;
         Switched?.Invoke();
+        _viewShown = true;
         ViewTaken?.Invoke(vessel);
         if (vessel.Body != from)
             Rebase(Bodies.Change(from, vessel.Body, WorldTime));
@@ -2410,6 +2419,7 @@ internal sealed class Flight : IDisposable
             link.Cancel(); // and so is a view's
         WatchLink.Cancel(); // and the main camera's, the camera taken afresh from the next input
         _watching = null;
+        _viewShown = true; // a new rocket, looked at by the camera from the start
         // Wrecks are gone, bodies and all: one still playing out its hit (see RocketPhysics.Wreck)
         // goes now, as the menu that chose this mission paused the game, and one wrecked on the
         // pad would be left lying unseen inside the new rocket.

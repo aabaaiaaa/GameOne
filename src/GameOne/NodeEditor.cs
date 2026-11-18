@@ -106,6 +106,11 @@ internal sealed class NodeEditor
         return along >= 0f ? outward : -Scene.NodeHandleInwardShare * outward;
     }
 
+    private readonly List<(int Index, float2 At)> _drawn = [];
+
+    /// <summary>The nodes drawn this frame, each by its place in the chain and where it is on the screen (window pixels): for the readout.</summary>
+    public IReadOnlyList<(int Index, float2 At)> Drawn => _drawn;
+
     /// <summary>Whether the pointer is on a node, a handle or the path, or dragging: a click then is for planning, not the steering rings or the markers.</summary>
     public bool PointerOver { get; private set; }
 
@@ -134,6 +139,7 @@ internal sealed class NodeEditor
     {
         (_pressed, _rightPressed) = (false, false);
         PointerOver = false;
+        _drawn.Clear();
         Selected = false;
         _grab = Grab.None;
     }
@@ -150,6 +156,7 @@ internal sealed class NodeEditor
         var (pressed, rightPressed) = (_pressed, _rightPressed);
         (_pressed, _rightPressed) = (false, false);
         PointerOver = false;
+        _drawn.Clear();
         Selected = false;
         var now = flight.WorldTime;
         var frame = flight.LineFrame;
@@ -323,7 +330,8 @@ internal sealed class NodeEditor
             if (!shown[i])
                 continue;
             var at = onScreen[i];
-            var hot = i == _selected || (hovered == Hover.Node && hoveredIndex == i);
+            _drawn.Add((i, at));
+            var hot =i == _selected || (hovered == Hover.Node && hoveredIndex == i);
             var nodeColor = Paths.NodeColorOf(matched, i);
             draw.AddCircleFilled(at, hot ? NodePixels + 1.5f : NodePixels, Color(nodeColor, alpha));
             draw.AddCircle(at, (hot ? NodePixels + 1.5f : NodePixels) + 1f, Color((0, 0, 0), alpha * 0.6f), 0, 1.5f);

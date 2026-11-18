@@ -46,6 +46,31 @@ internal sealed class NavigationControl
     private int _pressWait;           // the Updates the press has waited
     private Vector2 _pressAt;         // where it was pressed
     private Ring _hover, _dragging;
+    private RingPress _press;         // the press on the ring grabbed: a click or a drag
+
+    /// <summary>
+    /// A press on a ring, from the press until it is let go: a drag once the pointer has moved
+    /// <see cref="Scene.RightClickSlopPixels"/> or more all told (as a right press is, <see
+    /// cref="ChaseCamera.IsClick"/>), else a click, however many frames it is held.
+    /// </summary>
+    internal struct RingPress
+    {
+        private Vector2 _last;
+        private float _path;
+
+        /// <summary>Begins it at <paramref name="at"/>.</summary>
+        public void Begin(Vector2 at) => (_last, _path) = (at, 0f);
+
+        /// <summary>The pointer seen at <paramref name="at"/> while it is held.</summary>
+        public void Follow(Vector2 at)
+        {
+            _path += Vector2.Distance(_last, at);
+            _last = at;
+        }
+
+        /// <summary>Whether it has moved far enough to be a drag.</summary>
+        public readonly bool Dragging => !ChaseCamera.IsClick(_path);
+    }
     private float _heading = MathF.PI / 2; // compass bearing of the nose, radians clockwise from north: east to start with
     private float _pitch = MathF.PI / 2;   // its angle up from the horizon along that heading; past 90° it tips back the other way
     private float _visibility;
@@ -168,16 +193,23 @@ internal sealed class NavigationControl
         // frame or two later, and a quick flick may be well off the ring by then).
         _hover = _dragging == Ring.None ? RingAt(_cursor) : Ring.None;
         if (pressed && _dragging == Ring.None && RingAt(_pressAt) is var grabbed and not Ring.None)
+        {
             _dragging = grabbed;
-        // A tap on a ring (its press and release judged together) steers once, to where it was
-        // pressed, as a hold that ends at once.
-        var tap = pressed && released && _dragging != Ring.None;
+            _press.Begin(_pressAt);
+        }
+        if (_dragging != Ring.None)
+            _press.Follow(_cursor);
+        // A click on a ring (let go before the pointer has moved off it, however long it was held,
+        // as a person's click lasts several frames) sets that ring's angle, where it was pressed, for
+        // the rings' hold. Until the pointer moves it is no drag, so it steers nothing meanwhile and
+        // lets no other hold go.
+        var tap = released && _dragging != Ring.None && !_press.Dragging;
         if (released && !tap)
             _dragging = Ring.None;
 
-        if (_dragging != Ring.None && _onScreen)
+        if (_dragging != Ring.None && _onScreen && (tap || _press.Dragging))
             Drag(tap ? _pressAt : _cursor);
-        Hold = _dragging != Ring.None && !tap ? Direction(_heading, _pitch) : null;
+        Hold = _dragging != Ring.None && !tap && _press.Dragging ? Direction(_heading, _pitch) : null;
         if (tap && _onScreen)
         {
             if (_dragging == Ring.Heading)
@@ -274,6 +306,29 @@ internal sealed class NavigationControl
         if (MathF.Min(toHeading, toPitch) >= Scene.NavigationGrabPixels)
             return Ring.None;
         return toHeading <= toPitch ? Ring.Heading : Ring.Pitch;
+    }
+
+    /// <summary>
+    /// While the rings show, a point on one (the heading ring, or the pitch ring) on its near side
+    /// that is farthest from the other ring on the screen, so a click there is that ring's (window
+    /// pixels); else null. For the readout, so a script can click a ring wherever it is drawn.
+    /// </summary>
+    public Vector2? RingPoint(bool heading)
+    {
+        if (!_onScreen || _visibility < 0.5f)
+            return null;
+        var (points, front, other) = heading ? (_headingPoints, _headingFront, _pitchPoints) : (_pitchPoints, _pitchFront, _headingPoints);
+        Vector2? best = null;
+        var farthest = 0f;
+        for (var i = 0; i < Segments; i++)
+        {
+            if (!front[i] || Vector2.Distance(points[i], _centreOnScreen) >= Scene.NavigationRingPixels * 1.6f)
+                continue;
+            var (distance, _) = Nearest(other, points[i]);
+            if (distance > farthest)
+                (farthest, best) = (distance, points[i]);
+        }
+        return farthest >= Scene.NavigationGrabPixels ? best : null;
     }
 
     /// <summary>Draws the rings, their handles and the direction-of-travel markers, while they are showing.</summary>
