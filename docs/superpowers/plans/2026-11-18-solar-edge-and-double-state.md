@@ -132,3 +132,24 @@
 - [ ] **Step 4: the final review's minors.** M3: the zoom-out key's reach for an escape (`GameView.cs:163`, `MathF.Min(vessel.Apoapsis, Orbit.MaxRange)`) capped by its own `Scene` figure (the old 300 km reach, or the body's sphere), so an escape doesn't jump to the whole-system view. M4: `PrecisionTests.A_landing_is_unchanged`'s comment says the copy plays no part once it touches, and the touchdown is held within 0.01 m/s. M6: a comment in `Within` that slow free crafts resync each step (the copy matters only at speed).
 - [ ] **Step 5: docs.** CLAUDE.md "Fast collisions" (the speed range is now the ground cap's; open space uncapped), README's numbers, TODO.md's "Raising the top speed" entry and the local physics entry (the bubble idea, as the spec's Part 4 words it). Nothing points to the spec or plan.
 - [ ] **Step 6:** full suite (`dotnet run --project tools/TestRun`) → 0 failed; commit `"No speed cap in open space: Jolt's lifted, the game's held low over the ground; the zoom-out's reach for an escape; comments"`.
+
+### Task 7: A target picked by a double click
+
+**Spec:** Part 5, item 1. **Files (expected):** `Markers.cs` (`Click`, `TakeClick`), `Hud.cs`/`SystemMap.cs`/`MapLabels.cs` where clicks are read, tests of `Markers.Click`, `README.md` controls, `tools/GameDriver` scripts and CLAUDE.md that pick targets.
+- [ ] Failing tests on the rule (`Markers.Click` or its successor): a single click on a marker or empty space changes nothing; a double click on a marker picks it; a double click on the target's marker lets it go; a double click on empty space does nothing.
+- [ ] Implement; GameDriver's way of picking a target updated (a double click) and its CLAUDE.md.
+- [ ] Docs; full suite 0 failed; commit "A target picked by a double click, never lost to a stray one".
+
+### Task 8: Paths drawn round their body in every frame
+
+**Spec:** Part 5, item 2. **Files (expected):** `Paths.cs`, `Frames.cs` (`OnLine`, `LegPlace` users), `SystemMap.cs`, the map's other vessels' paths, tests of the drawn line's points, `CLAUDE.md` (Frames of reference), README.
+- [ ] Failing test: a sub-orbital path (periapsis under the air, Auto in Surface) drawn for the planet is the orbit's own ellipse among the stars (its points all on the conic, in the view's frame at now), not the track over the ground; likewise one round the moon closes on itself.
+- [ ] Implement; a landing's and ground marks still where the ground will be; anything that existed only to draw the ground track goes (no compatibility kept).
+- [ ] Docs; full suite 0 failed; commit "Paths drawn round their body among the stars, in every frame".
+
+### Task 9: Warp to a point on the path
+
+**Spec:** Part 5, item 3. **Files (expected):** `Flight.cs` (the warp-to and its end), `FlightInput`, the path's hit test (`Paths.cs`), the right-click routing in `Hud.cs` (`RightClickCentre` and kin), `Readout.cs`, `Scene.cs` (the hit's pixels), tests (`TimeRateTests` or a new `WarpToTests`), README controls.
+- [ ] Failing tests through `FlightInput`: warp to a time ahead runs at ×32 and is at ×1 within one step of that time, the vessel where the path said; each early end (a rate key, a switch, a collision warning) leaves it at ×1; a time past the path's end (the ground, the edge) is clamped to it; the hit test picks the nearest point on the drawn line within the figure and nothing beyond it, with an object under the pointer winning.
+- [ ] Implement, the mark drawn on the path while it runs; readout line.
+- [ ] Docs; full suite 0 failed; commit "Right click on the path warps to that point".

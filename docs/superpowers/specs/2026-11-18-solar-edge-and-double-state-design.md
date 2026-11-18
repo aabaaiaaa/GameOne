@@ -194,3 +194,35 @@ its drawn path.
   needs the formula to steer and burn as the physics does). The "Raising the top speed" entry is
   brought up to date (open space done; what's left is the ground cap's costs).
 - **Docs:** CLAUDE.md's "Fast collisions" (its first sentence is the cap), README's numbers.
+
+## Part 5: from the play test (the user's decisions, 2026-11-18)
+
+1. **A target is picked by a double left click** on its marker (or vessel), never a single click:
+   a single left click on a marker or on empty space no longer touches the target (today a single
+   click on a marker picks it, and one on empty space lets it go, which is how clicks meant for
+   manoeuvre nodes low over the planet lose it). A double click on the target's own marker lets it
+   go. Right click is unchanged (it anchors the camera, or opens the flown vessel's actions).
+   *My calls:* double clicking empty space does nothing (letting go is by the target's own marker,
+   so no stray click loses it); a double click whose first click lands on a node or the path is the
+   node editor's, not a pick; the threshold is ImGui's own double-click time and distance.
+2. **Paths are always drawn round their body, among the stars**, a plain ellipse (or hyperbola)
+   round the body they are at, in every frame (Auto, Surface, Orbit and Target), for the flown
+   vessel, its plan, a flying target and the map's other vessels. The frame in use still sets the
+   speeds, the holds and the travel markers. Today the Surface frame (which Auto stays in until the
+   periapsis is 100 m over the orbit floor: the planet's air top, 3,000 m) draws the track over the
+   turning ground, which smears a low orbit into loops and leaves one round the moon unclosed.
+   A landing's marks and a ground mark still show where the ground will be when the path gets
+   there (as `Orbit.Landing`/`GroundAt` work them out). *My call:* the closest approach and the
+   window are unchanged in what they find; they are drawn on the line as it now is.
+3. **Right click on the flown vessel's path warps to that point:** the fastest rate (`Flight.Rates`'
+   last, ×32) at once, dropping to ×1 as the game's clock reaches the time that point is flown,
+   with a mark on the path where it will stop while it runs. *My calls:* the point is the time
+   along the path as flown with the engine off (the orbit as it is, across its legs; on a plan's
+   path only up to its first node, as that much is flown without a burn); it ends early, at ×1, on
+   any rate key, a vessel switch, a collision or near-miss warning dropping the warp, or the flown
+   vessel wrecked or left the system; an object under the pointer (a marker, a vessel, a body) wins
+   over the path (right click there anchors the camera as now); the path is hit within a few pixels
+   (a `Scene` figure); it works in the chase view and the map alike, through `FlightInput` (so the
+   tests and GameDriver can ask for it), and the readout shows it.
+- **Docs:** README's controls table (left, double and right click), CLAUDE.md (frames: paths drawn
+  among the stars), the GameDriver CLAUDE.md where scripts click markers.
