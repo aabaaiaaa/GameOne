@@ -61,11 +61,15 @@ public sealed class CameraSubjectTests(ITestOutputHelper output)
         var camera = new ChaseCamera(null);
         sim.Step(default);
         GameView.Aim(camera, sim.Flight, Dt, Dt);
-        Assert.Equal(camera.Focus, Markers.DistancesFrom(sim.Flight, camera));
-        // On the moon, the moon's marker is still its distance from the flown vessel, not 0 m.
+        var onOwn = Markers.DistancesFrom(sim.Flight, camera);
+        Assert.True(Vector3.Distance(onOwn, Views.Focus(sim.Flight.Controlled)) <= Scene.CameraMaxLag + 0.01f, "from the flown vessel, as the camera follows it");
+        // On the moon, the moon's marker is still its distance from the flown vessel, not 0 m: measured
+        // from where it was with the camera on the vessel, nowhere near the moon the camera looks at.
         camera.CentreOn(new CameraCentre(CentreKind.Body, Moon.Index));
         GameView.Aim(camera, sim.Flight, Dt, Dt);
-        Assert.Equal(sim.Flight.CentreOfMass, Markers.DistancesFrom(sim.Flight, camera));
+        var onMoon = Markers.DistancesFrom(sim.Flight, camera);
+        Assert.True(Vector3.Distance(onOwn, onMoon) <= Scene.CameraMaxLag + 0.01f, "from the same place, wherever the camera is");
+        Assert.True(Vector3.Distance(onMoon, camera.Focus) > Moon.SeaRadius, "not from the moon the camera is on");
     }
 
     [Fact]

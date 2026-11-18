@@ -2354,7 +2354,7 @@ internal sealed class Hud : IDisposable
         ImGui.BeginDisabled(MenuOpen);
         for (var i = 0; i < FrameButtons.Length; i++)
         {
-            var (label, choice) = FrameButtons[i];
+            var (label, name, choice) = FrameButtons[i];
             if (i > 0)
                 ImGui.SameLine();
             var disabled = choice == FrameChoice.Target && flight.Target is null;
@@ -2369,6 +2369,7 @@ internal sealed class Hud : IDisposable
                 _frameChosen = choice;
             if (chosen)
                 ImGui.PopStyleColor(2);
+            _buttons.Add((name, ItemMiddle()));
             ImGui.EndDisabled();
         }
         ImGui.EndDisabled();
@@ -2430,10 +2431,10 @@ internal sealed class Hud : IDisposable
     private float2 _holdButtonsAt;
     private float2 _holdButtonsSize = new(220f, 16f);
 
-    private static readonly (string Label, FrameChoice Choice)[] FrameButtons =
+    private static readonly (string Label, string Name, FrameChoice Choice)[] FrameButtons =
     [
-        ("Auto###frameAuto", FrameChoice.Auto), ("Surface###frameSurface", FrameChoice.Surface),
-        ("Orbit###frameOrbit", FrameChoice.Orbit), ("Target###frameTarget", FrameChoice.Target),
+        ("Auto###frameAuto", "Frame Auto", FrameChoice.Auto), ("Surface###frameSurface", "Frame Surface", FrameChoice.Surface),
+        ("Orbit###frameOrbit", "Frame Orbit", FrameChoice.Orbit), ("Target###frameTarget", "Frame Target", FrameChoice.Target),
     ];
 
     // The frame in use last frame: none at the start, and again as another vessel is flown (a new

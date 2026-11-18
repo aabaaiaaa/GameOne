@@ -529,18 +529,19 @@ internal sealed class Markers
     }
 
     /// <summary>
-    /// How far a marker's label says it is from <paramref name="from"/> (what the camera follows): to
-    /// its place, or for a body's marker (on its centre) to its surface, over its datum (as the
-    /// readout's height over a body is), never under 0.
-    /// </summary>
-    /// <summary>
     /// Where the markers' distances are measured from, in the main view's frame: the flown vessel,
-    /// as the camera follows it (its focus) while it is on it, and the vessel itself while the
-    /// camera is on something else, so a body watched isn't labelled 0 m away.
+    /// as the camera follows it (its focus) while it is on it, and where it would follow it (<see
+    /// cref="Views.Focus"/>) while the camera is on something else, so a body watched isn't
+    /// labelled 0 m away.
     /// </summary>
     internal static Vector3 DistancesFrom(Flight flight, ChaseCamera camera) =>
-        camera.Centre.Kind == CentreKind.Own ? camera.Focus : flight.CentreOfMass;
+        camera.Centre.Kind == CentreKind.Own ? camera.Focus : Views.Focus(flight.Controlled);
 
+    /// <summary>
+    /// How far a marker's label says it is from <paramref name="from"/> (the flown vessel: see
+    /// <see cref="DistancesFrom"/>): to its place, or for a body's marker (on its centre) to its
+    /// surface, over its datum (as the readout's height over a body is), never under 0.
+    /// </summary>
     internal static float LabelDistance(in Candidate marker, Vector3 from)
     {
         var distance = Vector3.Distance(from, marker.Position);

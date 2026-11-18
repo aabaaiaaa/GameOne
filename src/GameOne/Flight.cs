@@ -2356,6 +2356,8 @@ internal sealed class Flight : IDisposable
             return Across(vessel.Body, vessel.CentreOfMass, vessel.Velocity, vessel.State == FlightState.Flying);
         if (target.Kind == TargetKind.Body)
             return Across(Bodies.All[index], Bodies.All[index].Centre, Vector3.Zero, true);
+        // A point's index is into the mission's points, not the sites: asked before the sites' rafts,
+        // which would take a point's index 2 or more for a drone ship's site (or past the sites, none).
         if (target.Kind == TargetKind.Point)
         {
             var point = Mission.PointsOfInterest[index];

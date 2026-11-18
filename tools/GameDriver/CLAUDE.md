@@ -99,7 +99,8 @@ zoomed out, places a node); the nodes, `Marker Node 1`, `Node 2`... (dragged wit
 the body: a click there targets it); and, while the steering rings show, `Marker Heading ring`
 and `Marker Pitch ring` (a point on each, clear of the other: `move marker "Flown vessel"` shows
 them, then `click marker "Heading ring"` sets the rings' hold). The hold buttons are `Marker Hold
-Prograde`, `Marker Hold Retrograde` and `Marker Hold Manoeuvre`.
+Prograde`, `Marker Hold Retrograde` and `Marker Hold Manoeuvre`, and the frame buttons `Marker
+Frame Auto`, `Frame Surface`, `Frame Orbit` and `Frame Target`.
 The strip's buttons read out the same way, as they move with the instruments' panel: `Marker Add
 view` and `Marker Controls` (the folded list's "Controls (H)" too, though neither it nor the open
 list is drawn while a menu is up), and while the "Add view" list

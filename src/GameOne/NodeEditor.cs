@@ -352,7 +352,7 @@ internal sealed class NodeEditor
                 continue;
             var at = onScreen[i];
             _drawn.Add((i, at));
-            var hot =i == _selected || (hovered == Hover.Node && hoveredIndex == i);
+            var hot = i == _selected || (hovered == Hover.Node && hoveredIndex == i);
             var nodeColor = Paths.NodeColorOf(matched, i);
             draw.AddCircleFilled(at, hot ? NodePixels + 1.5f : NodePixels, Color(nodeColor, alpha));
             draw.AddCircle(at, (hot ? NodePixels + 1.5f : NodePixels) + 1f, Color((0, 0, 0), alpha * 0.6f), 0, 1.5f);

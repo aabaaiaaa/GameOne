@@ -275,14 +275,14 @@ dotnet run --project src/GameOne
   never in the step), stepped while a craft is in it, each in turn in `Bodies.All` order, and
   released after `Scene.PhysicsIdleSeconds` with none: a body with nothing in its physics has
   none, so it costs nothing, and the witnessed (the flown vessel, the small views' and the one the
-  main camera is on) are at six
-  bodies at most (one emptied is kept a while, and one that must stay in its physics, settling
-  in the water or parting, keeps one running where nobody watches). Nothing is written for two bodies: a vessel is asked which body it is at, never "the
-  other one". At each body, only the witnessed and what could soon hit them are in its
-  physics; every other vessel is out of it, moved by formula (`Vessel.OnFormula`: its body taken
-  out by `LeavePhysics`, its removed `Craft` kept as a stand-in so `Craft` reads stay safe, every
-  live Jolt read in `Vessel` guarded by `OnFormula`; made again where the formula has it by
-  `ReturnToPhysics`), at a fraction of the cost (the user: "the cost of simulating them is kept as
+  main camera is on) are at seven bodies at most, one each (one emptied is kept a while, and one
+  that must stay in its physics, settling in the water or parting, keeps one running where nobody
+  watches). Nothing is written for two bodies: a vessel is asked which body it is at, never "the
+  other one". At each body, only the witnessed and what could soon hit them are in its physics;
+  every other vessel is out of it, moved by formula (`Vessel.OnFormula`: its body taken out by
+  `LeavePhysics`, its removed `Craft` kept as a stand-in so `Craft` reads stay safe, every live Jolt
+  read in `Vessel` guarded by `OnFormula`; made again where the formula has it by `ReturnToPhysics`),
+  at a fraction of the cost (the user: "the cost of simulating them is kept as
   low as possible"). `Unwatched` chooses each step, per body (only what is at one body is near
   anything there; the main view's camera is at what it is on): the witnessed (the flown vessel, the small
   views', the vessel the main camera is on, `FlightInput.Watching`, and the main view's near its
@@ -351,20 +351,20 @@ dotnet run --project src/GameOne
   camera `Vessel.View`, or `GameView.DefaultView` for one never flown, as each new rocket is; a
   flight started or a world restored puts the camera back on the flown vessel, `GameView.Restart`;
   each frame's `FlightInput.View` is kept as the flown vessel's, but not from a world restored
-  until the vessel carried on is taken, as the camera shows what it did meanwhile; `LinkUp`, drawn by `Hud`:
-  the picture breaking into static, clearing as it connects, `Scene.LinkUpSeconds` (1 s) of real
-  time in all, the same however soon the physics is made; the vessel is flown, its body's
-  physics made if it isn't, the frame after the link-up is first drawn, never the switch's own,
-  and the link-up is longer only if that takes longer; that frame's input, gathered for the vessel
-  left, gives the new one nothing of its view, plan, holds, rings or target), flavour only, telling the player nothing
-  to do; the readout's `Link`. A small view given to a vessel at a body whose physics isn't made has
-  its own link-up over it (`Flight.OpenView`, `ViewLink`): the HUD opens a view after drawing the
-  others, so it is first drawn, with its static, the frame after the click, and the physics is
-  made and the vessel brought in the frame after that, behind the static; until then the vessel
-  is left under formula and witnessed by nothing, and a view closed meanwhile lets its link-up go
-  (`CloseView`), nothing made; the readout's `Link <vessel>`. The main camera put on a vessel at
-  a body whose physics isn't made has one over the main view likewise (`Flight.WatchLink`; the
-  readout's `Camera link`).
+  until the vessel carried on is taken, as the camera shows what it did meanwhile; `LinkUp`,
+  drawn by `Hud`: the picture breaking into static, clearing as it connects, `Scene.LinkUpSeconds`
+  (1 s) of real time in all, the same however soon the physics is made; the vessel is flown, its
+  body's physics made if it isn't, the frame after the link-up is first drawn, never the switch's
+  own, and the link-up is longer only if that takes longer; that frame's input, gathered for the
+  vessel left, gives the new one nothing of its view, plan, holds, rings or target), flavour only,
+  telling the player nothing to do; the readout's `Link`. A small view given to a vessel at a body
+  whose physics isn't made has its own link-up over it (`Flight.OpenView`, `ViewLink`): the HUD
+  opens a view after drawing the others, so it is first drawn, with its static, the frame after
+  the click, and the physics is made and the vessel brought in the frame after that, behind the
+  static; until then the vessel is left under formula and witnessed by nothing, and a view closed
+  meanwhile lets its link-up go (`CloseView`), nothing made; the readout's `Link <vessel>`.
+  The main camera put on a vessel at a body whose physics isn't made has one over the main view
+  likewise (`Flight.WatchLink`; the readout's `Camera link`).
 - **The main camera's subject:** the main camera is on the flown vessel, or, by a right click,
   on another vessel, a body, a site or a point of interest (`CameraCentre`, `CameraSubject`:
   `Resolve`, `Seen`, its focus changed into the main view's frame in double). A place is looked at
