@@ -78,6 +78,7 @@ internal sealed class NavigationControl
     // This frame's rings: where they are in the world, and on the screen.
     private bool _onScreen;
     private bool _centreShown; // the rocket's middle is on the screen, so the burn's mark can be placed (the rings may not fit)
+    private GroundBody _body = GroundBody.Planet; // the flown vessel's: the rings are drawn and read by its compass (RingAngles), as the hold steers
     private Vector3 _centre, _up, _travel;
     private Vector3? _towards;
     private (float Heading, float Pitch)? _ringHeld; // the angles the rings' hold is set to, while it is on
@@ -168,7 +169,8 @@ internal sealed class NavigationControl
         _camera = camera;
         _display = display;
         _centre = flight.CentreOfMass;
-        _up = flight.Controlled.Body.Up(_centre);
+        _body = flight.Controlled.Body;
+        _up = _body.Up(_centre);
         _travel = flight.FrameVelocity; // the way the holds steer by, in the frame in use
         _towards = flight.TowardsTarget;
         _slowest = flight.MarkerFloor;
@@ -183,7 +185,7 @@ internal sealed class NavigationControl
             for (var i = 0; i <= Segments; i++)
             {
                 var angle = MathF.Tau * i / Segments;
-                _onScreen &= Place(_centre + Planet.Towards(_centre, angle) * _radius, out _headingPoints[i], out _headingFront[i]);
+                _onScreen &= Place(_centre + _body.Towards(_centre, angle) * _radius, out _headingPoints[i], out _headingFront[i]);
                 _onScreen &= Place(_centre + Direction(_heading, angle - MathF.PI) * _radius, out _pitchPoints[i], out _pitchFront[i]);
             }
         }
@@ -235,14 +237,7 @@ internal sealed class NavigationControl
     }
 
     /// <summary>Sets the handles to where the nose points. With the nose straight up, the heading stays as it was.</summary>
-    private void FollowNose(Vector3 aim)
-    {
-        var upward = Vector3.Dot(aim, _up);
-        var across = aim - _up * upward;
-        if (across.Length() > 0.02f)
-            _heading = Planet.Bearing(_centre, across);
-        _pitch = MathF.Atan2(upward, Vector3.Dot(aim, Planet.Towards(_centre, _heading)));
-    }
+    private void FollowNose(Vector3 aim) => (_heading, _pitch) = RingAngles.Of(_body, _centre, aim, _heading);
 
     /// <summary>Moves the dragged ring's handle to the point on it nearest <paramref name="at"/> (the pointer), snapping to straight up and the compass points.</summary>
     private void Drag(Vector2 at)
@@ -270,8 +265,7 @@ internal sealed class NavigationControl
     }
 
     /// <summary>The way the nose points for a heading and a pitch.</summary>
-    private Vector3 Direction(float heading, float pitch) =>
-        Planet.Towards(_centre, heading) * MathF.Cos(pitch) + _up * MathF.Sin(pitch);
+    private Vector3 Direction(float heading, float pitch) => RingAngles.Direction(_body, _centre, heading, pitch);
 
     /// <summary>
     /// How far <paramref name="at"/> (the pointer) is from a ring on the screen, and where along it the nearest point is,
@@ -348,16 +342,16 @@ internal sealed class NavigationControl
         // The compass points round the heading ring, and the top of the pitch ring.
         ReadOnlySpan<string> points = ["N", "E", "S", "W"];
         for (var i = 0; i < 4; i++)
-            Label(draw, _centre + Planet.Towards(_centre, i * MathF.PI / 2) * (_radius * 1.18f), points[i], HeadingColor, 0.9f);
+            Label(draw, _centre + _body.Towards(_centre, i * MathF.PI / 2) * (_radius * 1.18f), points[i], HeadingColor, 0.9f);
         Label(draw, _centre + _up * (_radius * 1.15f), "UP", PitchColor, 0.9f);
 
         // Where the rocket is going: a hollow marker on each ring.
         var acrossTravel = _travel - _up * Vector3.Dot(_travel, _up);
         if (acrossTravel.Length() > _slowest)
-            Marker(draw, _centre + Planet.Towards(_centre, Planet.Bearing(_centre, acrossTravel)) * _radius);
+            Marker(draw, _centre + _body.Towards(_centre, _body.Bearing(_centre, acrossTravel)) * _radius);
         if (_travel.Length() > 2f * _slowest)
         {
-            var heading = Planet.Towards(_centre, _heading);
+            var heading = _body.Towards(_centre, _heading);
             var inPlane = heading * Vector3.Dot(_travel, heading) + _up * Vector3.Dot(_travel, _up);
             if (inPlane.Length() > _slowest)
                 Marker(draw, _centre + Vector3.Normalize(inPlane) * _radius);
@@ -379,8 +373,8 @@ internal sealed class NavigationControl
             var color = burn.Overshot ? OvershotColor : Paths.PlanColor;
             var across = burn.Way - _up * Vector3.Dot(burn.Way, _up);
             if (across.Length() > 0.01f * burn.Way.Length())
-                Diamond(draw, _centre + Planet.Towards(_centre, Planet.Bearing(_centre, across)) * _radius, color);
-            var heading = Planet.Towards(_centre, _heading);
+                Diamond(draw, _centre + _body.Towards(_centre, _body.Bearing(_centre, across)) * _radius, color);
+            var heading = _body.Towards(_centre, _heading);
             var inPlane = heading * Vector3.Dot(burn.Way, heading) + _up * Vector3.Dot(burn.Way, _up);
             if (inPlane.Length() > 0.01f * burn.Way.Length())
                 Diamond(draw, _centre + Vector3.Normalize(inPlane) * _radius, color);
@@ -389,13 +383,13 @@ internal sealed class NavigationControl
         // The angles the rings' hold is set to, a mark on each ring.
         if (_ringHeld is { } held)
         {
-            Diamond(draw, _centre + Planet.Towards(_centre, held.Heading) * _radius, HeadingColor);
+            Diamond(draw, _centre + _body.Towards(_centre, held.Heading) * _radius, HeadingColor);
             Diamond(draw, _centre + Direction(_heading, held.Pitch) * _radius, PitchColor);
         }
 
         // The handles, where the nose points; a line from the centre out to the pitch handle is the nose.
         var nose = _centre + Direction(_heading, _pitch) * _radius;
-        if (Screen(nose, out var noseAt) && Screen(_centre + Planet.Towards(_centre, _heading) * _radius, out var headingAt))
+        if (Screen(nose, out var noseAt) && Screen(_centre + _body.Towards(_centre, _heading) * _radius, out var headingAt))
         {
             draw.AddLine(F2(_centreOnScreen), F2(noseAt), Color(PitchColor, 0.5f), 1.5f);
             draw.AddCircleFilled(F2(headingAt), headingHot ? 8f : 6f, Color(HeadingColor, 1f));
@@ -437,8 +431,8 @@ internal sealed class NavigationControl
     {
         var across = way - _up * Vector3.Dot(way, _up);
         if (across.Length() > 0.01f)
-            TargetMark(draw, _centre + Planet.Towards(_centre, Planet.Bearing(_centre, across)) * _radius, away);
-        var heading = Planet.Towards(_centre, _heading);
+            TargetMark(draw, _centre + _body.Towards(_centre, _body.Bearing(_centre, across)) * _radius, away);
+        var heading = _body.Towards(_centre, _heading);
         var inPlane = heading * Vector3.Dot(way, heading) + _up * Vector3.Dot(way, _up);
         if (inPlane.Length() > 0.01f)
             TargetMark(draw, _centre + Vector3.Normalize(inPlane) * _radius, away);

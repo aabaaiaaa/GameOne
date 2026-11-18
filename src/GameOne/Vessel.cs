@@ -884,18 +884,10 @@ internal sealed class Vessel
     public (float Heading, float Pitch) RingAim { get; private set; }
 
     /// <summary>The nose's heading and pitch now, round its own body (its heading as it was held when it points straight up or down).</summary>
-    private (float Heading, float Pitch) NoseAngles()
-    {
-        var up = Body.Up(_centreOfMass);
-        var upward = Vector3.Dot(_aim, up);
-        var across = _aim - up * upward;
-        var heading = across.Length() > 0.02f ? Body.Bearing(_centreOfMass, across) : RingAim.Heading;
-        return (heading, MathF.Atan2(upward, Vector3.Dot(_aim, Body.Towards(_centreOfMass, heading))));
-    }
+    private (float Heading, float Pitch) NoseAngles() => RingAngles.Of(Body, _centreOfMass, _aim, RingAim.Heading);
 
     /// <summary>The direction the rings' hold keeps the nose in.</summary>
-    private Vector3 RingDirection() =>
-        Body.Towards(_centreOfMass, RingAim.Heading) * MathF.Cos(RingAim.Pitch) + Body.Up(_centreOfMass) * MathF.Sin(RingAim.Pitch);
+    private Vector3 RingDirection() => RingAngles.Direction(Body, _centreOfMass, RingAim.Heading, RingAim.Pitch);
 
     /// <summary>What its pilot has picked to fly to, if anything (see <see cref="GameOne.Flight.TargetOf"/>, which checks it is still there).</summary>
     public NavTarget? Target { get; internal set; }

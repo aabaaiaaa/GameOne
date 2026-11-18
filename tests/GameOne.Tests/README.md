@@ -571,8 +571,10 @@ say) stalls frames and spoils the timing.
   one click on the heading ring turning to that heading and holding it, the pitch left as it
   was; both rings clicked turning on both together; a pitch clicked while the nose is still
   turning to a held heading keeping that heading; the keys and a ring's drag ending it; the same
-  round the moon; and a ring press let go without moving (under `Scene.RightClickSlopPixels` all
-  told, however many frames it is held) a click, moved further a drag (`NavigationControl.RingPress`).
+  round the moon, where the rings are drawn and read by the moon's compass as the hold steers
+  by it (`RingAngles`: the nose settles on the ring's point); and a ring press let go without
+  moving (under `Scene.RightClickSlopPixels` all told, however many frames it is held) a click,
+  moved further a drag (`NavigationControl.RingPress`).
 - **`VesselTests`:** several vessels in one flight: staging makes the dropped stage a vessel, one
   without guidance is debris that can't be flown, switching hands the controls over while the other
   keeps its last inputs, losing the flown vessel doesn't end the flight while another flies, and

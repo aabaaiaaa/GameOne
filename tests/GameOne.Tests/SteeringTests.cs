@@ -245,6 +245,30 @@ public sealed class SteeringTests(ITestOutputHelper output)
         }
     }
 
+    [Fact]
+    public void The_rings_are_drawn_and_read_by_the_moon_s_compass_at_the_moon()
+    {
+        // The rings (NavigationControl) lay out their points, read the nose and send a click's
+        // angle by RingAngles; the hold steers by the vessel's own body. At the moon both must be
+        // the moon's, so the nose settles on the ring's point and the held mark sits on it.
+        var (sim, flown) = Pointed(GroundBody.Moon, 0f, 45f);
+        using (sim)
+        {
+            var (heading, pitch) = (float.DegreesToRadians(250f), float.DegreesToRadians(30f));
+            sim.Step(new FlightInput(RingHeading: heading, RingPitch: pitch));
+            sim.Run((_, _) => default, _ => false, maxSeconds: 15);
+            var drawn = RingAngles.Direction(flown.Body, flown.CentreOfMass, heading, pitch);
+            var read = RingAngles.Of(flown.Body, flown.CentreOfMass, flown.Aim, 0f);
+            output.WriteLine($"nose {Angle(flown.Aim, drawn):0.00}° off the ring's point; read {float.RadiansToDegrees(read.Heading):0.0}°, {float.RadiansToDegrees(read.Pitch):0.0}°");
+            Assert.True(Angle(flown.Aim, drawn) < 2f, $"the nose is {Angle(flown.Aim, drawn):0.0}° off the ring's point");
+            Assert.True(Between(float.RadiansToDegrees(read.Heading), 250f) < 2f, $"heading read {float.RadiansToDegrees(read.Heading):0.0}°");
+            Assert.True(MathF.Abs(float.RadiansToDegrees(read.Pitch) - 30f) < 2f, $"pitch read {float.RadiansToDegrees(read.Pitch):0.0}°");
+            var ringPoint = RingAngles.Direction(flown.Body, flown.CentreOfMass, heading, 0f);
+            Assert.True(MathF.Abs(Vector3.Dot(ringPoint, flown.Body.Up(flown.CentreOfMass))) < 1e-3f, "the heading ring lies flat on the moon's horizon");
+            Assert.True(Between(float.RadiansToDegrees(flown.Body.Bearing(flown.CentreOfMass, ringPoint)), 250f) < 0.1f, "its point is at that bearing by the moon's north");
+        }
+    }
+
     private static float Angle(Vector3 a, Vector3 b) =>
         float.RadiansToDegrees(MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(a), Vector3.Normalize(b)), -1f, 1f)));
 
