@@ -1298,9 +1298,10 @@ internal sealed class Paths
     /// How far one line's glows have got as it is drawn, stretch by stretch: the length along the
     /// whole line (the hidden gaps and the breaks by their ends on the screen, so the glows keep
     /// their places past a gap), the last point of it on the screen, and how many glows it has
-    /// been given on the screen so far (no more than <see cref="MaxGlows"/>); and, drawing a line of
-    /// points, how many of its points the stretch being drawn covers and the first whose glows are drawn (none before it if 0) (before that, each stretch is
-    /// walked for its length only: <see cref="LineGlowsFrom"/>).
+    /// been given on the screen so far (no more than <see cref="MaxGlows"/>). Drawing a line of
+    /// points, it also keeps how many points the stretch being drawn covers, and the first point
+    /// whose glows are drawn (<see cref="LineGlowsFrom"/>; 0 for all): a stretch before that is
+    /// walked for its length only, with no glows.
     /// </summary>
     internal struct GlowWalk
     {
