@@ -162,3 +162,35 @@ Branch `edge-and-precision`, built on `map-and-camera` (at 0545925), in the work
 - How the copy is kept (on `Craft`, or beside it in `RocketPhysics`), and how the game knows a step
   touched something.
 - The icon's look, as long as it reads as a path's end like the collision mark.
+
+## Part 4: no speed cap in open space (the user's decision, after the final review)
+
+The user wants no speed cap at all; on this branch the cap goes everywhere but low over the
+ground. Today `Scene.TopSpeed` (4,000 m/s) is Jolt's `SetMaxLinearVelocity`, in the turning ground
+frame, so past ~760 km from a body's axis Jolt clamps the frame's own motion and an escape leaves
+its drawn path.
+
+- **Jolt's own cap is lifted** (set far past anything flown, so Jolt never clamps).
+- **Open space has no cap.** A vessel goes as fast as its engine and the pulls take it.
+- **Low over the ground, the game caps the speed over the ground** at the figure that is
+  `Scene.TopSpeed` today (renamed for what it now is, e.g. `Scene.GroundTopSpeed`), for vessels in
+  the physics and under formula alike, as the physics' outcome and the formula's must match.
+  *My call:* "low" is worked out from what the cap protects (the tiles laid ahead, the floes'
+  reach, the wake's sweep: each `speed × its seconds`), as a height over the body's highest
+  ground (`GroundBody` has it, as `OrbitFloor` uses), never a hand-picked number; the builder
+  derives it and states it in `Scene`'s comment. Applied by the game (a velocity set on the craft
+  and on its double copy together), never by Jolt.
+- **Every bound worked out from `TopSpeed` as a worst case** uses the vessel's own speed instead
+  (e.g. the Coriolis bound in `Collisions.Solids`); the floes' load-time check keeps the ground
+  cap (floes are low over the ground by definition). Anything else that assumed speeds never pass
+  4,000 m/s (the slow-down's least scale, prediction horizons, the trip tests' asserts) is checked
+  and made to hold at any speed.
+- **Tested off the pole:** an escape flown in the physics far from the axis (past 760 km) follows
+  the path drawn for it; and a vessel fast low over the ground is held at the ground cap, in the
+  physics and under formula.
+- **TODO.md:** the user's bubble idea goes into the local physics entry, to discuss before
+  building: physics bubbles that travel with vessels in open space, merged by closing speed as
+  vessels near each other, and even the flown vessel on formula when nothing is near it (which
+  needs the formula to steer and burn as the physics does). The "Raising the top speed" entry is
+  brought up to date (open space done; what's left is the ground cap's costs).
+- **Docs:** CLAUDE.md's "Fast collisions" (its first sentence is the cap), README's numbers.

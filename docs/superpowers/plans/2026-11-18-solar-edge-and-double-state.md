@@ -119,3 +119,16 @@
 - [ ] **Step 2:** check every doc mention of how a vessel's place is kept, where a path ends and the log's reasons (grep `float`, `creep`, `Path`, `RemovedForRoom`).
 - [ ] **Step 3:** full suite → 0 failed (docs only, but run it once).
 - [ ] **Step 4:** commit `"TODO: Jolt in double as a trial, precision further out, local physics; the creep entry brought up to date"`.
+
+### Task 6: No speed cap in open space; the final review's minors
+
+**Spec:** Part 4.
+
+**Files (expected):** `Scene.cs`, `Physics/RocketPhysics.cs` (Jolt's cap, `StepRead`'s check, the ground cap), `Formula.cs` (the ground cap), `Collisions.cs:885`, `Floes.cs:317-326`, `GameView.cs:163`, tests (`SolarEdgeTests`, `FastCollisionTests`, `LanderTripTests`, `MoonTripTests`, `NearMissTests`, `SlowdownTests`, `FieldPerfTests`, `PerfScenes`, `PrecisionTests`), `CLAUDE.md`, `README.md`, `TODO.md`.
+
+- [ ] **Step 1: failing tests.** (a) `An_escape_far_off_the_axis_follows_its_path`: a craft in the physics past 760 km from the planet's axis (off the pole, e.g. near the equator plane) on an escape faster than 4,000 m/s over the ground; after some seconds of flight its place matches the path predicted at the start (`Patched.Legs`) within a bound you measure and state. (b) `Fast_low_over_the_ground_is_held_at_the_ground_cap`: a vessel driven past the ground cap low over the ground keeps its speed over the ground ≤ the ground cap, in the physics and under formula. (c) `Fast_in_open_space_is_not_capped`: a vessel burning in open space passes 4,000 m/s (and 16,000 m/s if cheap to reach) over the ground.
+- [ ] **Step 2:** lift Jolt's cap; rename `TopSpeed` to the ground cap and apply it in the game below the derived height, physics and formula alike; replace every worst-case use of it by the vessel's own speed; fix `StepRead`'s re-read rule to match (Jolt no longer clamps).
+- [ ] **Step 3:** update the tests that assumed the cap (the capped helper in `FastCollisionTests`, the trip tests' `< TopSpeed` asserts, etc.) to what now holds.
+- [ ] **Step 4: the final review's minors.** M3: the zoom-out key's reach for an escape (`GameView.cs:163`, `MathF.Min(vessel.Apoapsis, Orbit.MaxRange)`) capped by its own `Scene` figure (the old 300 km reach, or the body's sphere), so an escape doesn't jump to the whole-system view. M4: `PrecisionTests.A_landing_is_unchanged`'s comment says the copy plays no part once it touches, and the touchdown is held within 0.01 m/s. M6: a comment in `Within` that slow free crafts resync each step (the copy matters only at speed).
+- [ ] **Step 5: docs.** CLAUDE.md "Fast collisions" (the speed range is now the ground cap's; open space uncapped), README's numbers, TODO.md's "Raising the top speed" entry and the local physics entry (the bubble idea, as the spec's Part 4 words it). Nothing points to the spec or plan.
+- [ ] **Step 6:** full suite (`dotnet run --project tools/TestRun`) → 0 failed; commit `"No speed cap in open space: Jolt's lifted, the game's held low over the ground; the zoom-out's reach for an escape; comments"`.
