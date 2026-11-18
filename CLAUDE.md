@@ -586,10 +586,12 @@ dotnet run --project src/GameOne
   5 m/s; 0.2 m/s in Target against a flying target or in orbit, `Flight.HoldFloor`), and the path, its marks and nodes are drawn in it
   (`Paths.Build`, `Frames.OnLine`), predicted from the centre of mass. Each leg of a patched path
   (the flown vessel's, a flying target's) is drawn round its own body as that body sees it
-  (`LegPlace`): the last leg placed by the change from its body's frame to the view's at its
-  start, so an orbit round the moon is a loop round it, or a line onto its ground, wherever the
-  view is; a leg with another after it (a pass) point by point, each by the change at its own
-  time, so it joins the legs either side.
+  (`LegPlace`): placed whole by the change from its body's frame to the view's now, round that
+  body as it is now (where it is drawn), so a pass by the moon is a hyperbola round it, an orbit
+  round it a loop, or a line onto its ground, wherever the view is; and the other way about, flown
+  at the moon, a leg round the planet is round the planet as it is now. The legs either side of a
+  crossing don't meet (the body moves on meanwhile), and the line breaks there: each leg is its
+  own stretch, nothing joining them (`Paths.LineStarts`, the map's runs).
   `Flight.RelativeSpeed` and `TowardsTarget` are to the picked target (a vessel, a place, or a
   body other than the one the flown vessel is at, `TargetKind.Body`: its centre), located in the
   flown vessel's body's frame across the bodies (`Flight.Locate`); `DistanceToTarget` is the

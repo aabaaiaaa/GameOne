@@ -74,35 +74,27 @@ public static class Frames
 /// Where the points of one leg of a patched path (<see cref="PathLeg"/>: an orbit round its body,
 /// among that body's stars in the frame that matches its ground at <c>now</c>) are drawn on a
 /// line in another body's frame (the view's: the flown vessel's body's), as its own body sees it.
-/// The last leg of a path round another body (an orbit it stays on there, or a way down onto its
-/// ground) is placed by the change from its body's frame to the view's at the leg's start
-/// (<see cref="Bodies.Change"/>), where the path comes to that body: so an orbit round the moon is
-/// a closed loop round it and a way down a line onto its ground, wherever the view is, and it
-/// meets the leg before it at the crossing. A leg with another after it (a pass by the moon, a
-/// hyperbola that never closes, or a stretch to a node there) is placed point by point, each by
-/// the change at its own time, so it meets the legs either side of it: it bends round the moon as
-/// the moon moves on meanwhile. Over the ground it is the track over its body's ground
-/// (<see cref="Frames.OnLine"/>), that ground placed where it is then; among the stars, its
-/// body's stars as they are then, placed among the view's (as they match the view's ground now).
-/// A leg round the view's own body is <see cref="Frames.OnLine"/>'s, unchanged.
+/// A leg round another body is placed whole, every point of it, by the change from its body's
+/// frame to the view's at <c>now</c> (<see cref="Bodies.Change"/>): round that body as it is now,
+/// where it is drawn, not where it will be when the path comes to it, so a pass by the moon is a
+/// hyperbola round the moon's drawn place, an orbit round it a closed loop round it, and a way
+/// down a line onto its ground, wherever the view is. Among the stars that is its orbit, rigid,
+/// round its body; over the ground the track over its body's ground (<see cref="Frames.OnLine"/>),
+/// that ground as it is now. The legs either side of a crossing then don't meet (the body moves
+/// on meanwhile): the line breaks there (<see cref="Paths.LineStarts"/>). A leg round the view's
+/// own body is <see cref="Frames.OnLine"/>'s, unchanged.
 /// </summary>
 internal readonly struct LegPlace
 {
-    private readonly GroundBody _body, _view;
-    private readonly FrameChange _change; // at the leg's start (unless it is placed point by point)
-    private readonly double _now, _startsIn; // the world time now, and the leg's start in seconds from then
-    private readonly bool _same, _byPoint;
+    private readonly GroundBody _body;
+    private readonly FrameChange _change; // its body's frame into the view's, now
+    private readonly bool _same;
 
-    /// <summary>
-    /// For <paramref name="leg"/>, drawn in <paramref name="view"/>'s frame at <paramref name="now"/>:
-    /// <paramref name="last"/> if no leg comes after it (placed whole at its start), otherwise
-    /// point by point.
-    /// </summary>
-    public LegPlace(in PathLeg leg, GroundBody view, double now, bool last)
+    /// <summary>For <paramref name="leg"/>, drawn in <paramref name="view"/>'s frame at <paramref name="now"/>.</summary>
+    public LegPlace(in PathLeg leg, GroundBody view, double now)
     {
-        (_body, _view, _now, _startsIn, _same) = (leg.Body, view, now, leg.Start - now, leg.Body == view);
-        _byPoint = !_same && !last;
-        _change = _same || _byPoint ? FrameChange.Identity : Bodies.Change(leg.Body, view, leg.Start);
+        (_body, _same) = (leg.Body, leg.Body == view);
+        _change = _same ? FrameChange.Identity : Bodies.Change(leg.Body, view, now);
     }
 
     /// <summary>Whether the leg is round the view's own body (nothing to change).</summary>
@@ -114,17 +106,10 @@ internal readonly struct LegPlace
     /// </summary>
     public Vector3 Point(Frame line, Vector3 starsPoint, double secondsFromNow)
     {
-        if (_same)
-            return Frames.OnLine(_body, line, starsPoint, secondsFromNow);
-        // On its body's ground then (the leg's start, or the point's own time), across to the
-        // view's ground then; among the stars, back among the view's as they match its ground now.
-        var then = _byPoint ? secondsFromNow : _startsIn; // when its body's frame is placed
-        var change = _byPoint ? Bodies.Change(_body, _view, _now + secondsFromNow) : _change;
-        var ground = change.Point(Frames.OnLine(_body, Frame.Surface, starsPoint, line == Frame.Surface ? secondsFromNow : then)).ToSingle();
-        return line == Frame.Surface ? ground : _view.Centre + _view.TurnedDirection(ground - _view.Centre, then);
+        var own = Frames.OnLine(_body, line, starsPoint, secondsFromNow);
+        return _same ? own : _change.Point(own).ToSingle();
     }
 
-    /// <summary>A place on the leg's body's ground (where a leg there comes down, <paramref name="secondsFromNow"/> ahead), over the view's ground, as the leg is placed.</summary>
-    public Vector3 Ground(Vector3 place, double secondsFromNow) =>
-        _same ? place : (_byPoint ? Bodies.Change(_body, _view, _now + secondsFromNow) : _change).Point(place).ToSingle();
+    /// <summary>A place on the leg's body's ground (where a leg there comes down), over the view's ground, as the leg is placed.</summary>
+    public Vector3 Ground(Vector3 place) => _same ? place : _change.Point(place).ToSingle();
 }

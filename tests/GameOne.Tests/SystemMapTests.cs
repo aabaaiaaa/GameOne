@@ -423,12 +423,17 @@ public sealed class SystemMapTests(ITestOutputHelper output)
         var legs = new List<PathLeg>();
         Patched.Legs(planet, beside.CentreOfMass, planet.AmongStars(beside.CentreOfMass, beside.Velocity), t, legs);
         Assert.True(legs.Count >= 2 && legs[^1].Body == moon, "the one beside the flown one goes into the moon's sphere");
-        var last = new LegPlace(legs[^1], planet, t, last: true);
+        var last = new LegPlace(legs[^1], planet, t);
         var samples = new List<(Vector3 At, double Seconds)>();
         legs[^1].Orbit.Samples(samples, 0, legs[^1].End - legs[^1].Start, SystemMap.LapSegments);
         var end = last.Point(flight.LineFrame, samples[^1].At, legs[^1].Start - t + samples[^1].Seconds);
         output.WriteLine($"the witnessed one: {points.Count} points over {legs.Count} legs, its end {Vector3.Distance(points[^1], end):0.00} m from its last leg's, round the moon");
         Assert.True(Vector3.Distance(points[^1], end) < 1f, "its path ends as its patched path round the moon does");
+        // One stretch a leg: the line breaks at each crossing, where the last leg starts as it is placed.
+        var starts = map.StartsOf(beside);
+        Assert.Equal(legs.Count - 1, starts.Count);
+        var start = last.Point(flight.LineFrame, samples[0].At, legs[^1].Start - t + samples[0].Seconds);
+        Assert.True(Vector3.Distance(points[starts[^1]], start) < 1f, "its last leg starts a stretch of its own");
 
         Assert.True(map.PathOf(far, points));
         Assert.False(map.IsPatched(far));

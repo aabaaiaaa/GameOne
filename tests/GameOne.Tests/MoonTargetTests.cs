@@ -11,7 +11,8 @@ namespace GameOne.Tests;
 /// readout's), the speed in the Target frame relative to its centre and the holds following that;
 /// a vessel at another body located and measured across the bodies; from a low orbit the moon's
 /// window a stretch of the orbit, whose best burn takes the path into its sphere; on course, the
-/// line bending round the moon where the path comes to it, with no gap at the crossing; the
+/// line's leg in the moon's sphere drawn round the moon as it is now, a stretch of its own broken
+/// from the legs either side (and flown at the moon, a leg round the planet round it as it is now); the
 /// closest approach the moon leg's periapsis (or, with no encounter, the closest the two orbits
 /// come); and an orbit round the moon a closed loop round it, flown there or seen from the planet.
 /// </summary>
@@ -22,22 +23,13 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
     private const double Start = 5000.0;
 
     /// <summary>
-    /// A point of a leg round another body, where the test reckons it is drawn among the planet's
-    /// stars (matching its ground at <paramref name="now"/>), placed as that body is at world time
-    /// <paramref name="then"/> (a last leg's start; a pass's own point's time): the leg's body's
-    /// stars then, turned back to its ground then, across to the planet's ground then, and up
-    /// among the planet's stars as they match its ground now.
+    /// A point of a leg round another body (among its stars as they match its ground at
+    /// <paramref name="now"/>), where the test reckons it is drawn among the planet's stars (as they
+    /// match the planet's ground now): round that body as it is now, its frame placed whole by the
+    /// change from it to the planet's at <paramref name="now"/>, whenever on the leg the point is.
     /// </summary>
-    private static Vector3Double AmongPlanetStars(in PathLeg leg, Vector3 starsPoint, double now, double then)
-    {
-        var body = leg.Body;
-        var since = then - now;
-        var back = QuaternionDouble.FromAxisAngle(body.NorthPole, body.TurnRadians(-since));
-        var ground = (Vector3Double)body.Centre + back.Rotate(starsPoint - (Vector3Double)body.Centre);
-        var there = Bodies.Change(body, Planet, then).Point(ground);
-        var up = QuaternionDouble.FromAxisAngle(Planet.NorthPole, Planet.TurnRadians(since));
-        return Planet.Centre + up.Rotate(there - Planet.Centre);
-    }
+    private static Vector3Double AmongPlanetStars(in PathLeg leg, Vector3 starsPoint, double now) =>
+        Bodies.Change(leg.Body, Planet, now).Point(starsPoint);
 
     /// <summary>The closest two line points in a row come to <paramref name="p"/>, each: so a line that reaches it from both sides has two within a hair of it.</summary>
     private static float PairAt(IReadOnlyList<Vector3> line, Vector3 p)
@@ -242,43 +234,97 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
             Assert.Same(Moon, legs[1].Body);
             Assert.Empty(paths.Legs); // no nodes: the path as it is is the line
 
-            // A pass by the moon (a leg after it, back round the planet): every point of the moon
-            // leg, as the test places it round the moon as it is when the path is there, is on the line.
+            // A pass by the moon (a leg after it, back round the planet). The line is one stretch a
+            // leg, each after the first starting where the line breaks (no segment across a crossing).
             Assert.True(legs.Count >= 3, "a pass, out of the moon's sphere again");
             Assert.Same(Planet, legs[2].Body);
+            var line = paths.Line;
+            var starts = paths.LineStarts;
+            Assert.Equal(legs.Count - 1, starts.Count);
             var moonLeg = legs[1];
             var samples = new List<(Vector3 At, double Seconds)>();
             moonLeg.Orbit.Samples(samples, 0, moonLeg.End - moonLeg.Start);
-            var placed = samples.Select(s => AmongPlanetStars(moonLeg, s.At, now, moonLeg.Start + s.Seconds).ToSingle()).ToList();
-            var line = paths.Line;
-            var worst = placed.Max(p => DistanceToLine(p, line));
-            var spacing = placed.Zip(placed.Skip(1), Vector3.Distance).Max();
-            output.WriteLine($"{placed.Count} moon-leg points, all within {worst:0.000} m of the line; spaced up to {spacing:0} m");
-            Assert.True(worst < 50f, $"the moon leg is {worst:0} m off the line");
+            Assert.Equal(samples.Count, starts[1] - starts[0]);
 
-            // It meets the planet's legs either side within a centimetre, and the line has no gap at either crossing:
-            // a point from each side within a centimetre of it, in a row.
-            var into = legs[0].Orbit.PositionAfter(legs[0].End - legs[0].Start);
-            var outOf = legs[2].Orbit.PositionAfter(0);
-            output.WriteLine($"the moon leg starts {Vector3.Distance(into, placed[0]) * 1000:0.0} mm from the planet leg's end and ends " +
-                $"{Vector3.Distance(outOf, placed[^1]) * 1000:0.0} mm from the next's start; on the line, {PairAt(line, into) * 1000:0.0} and {PairAt(line, outOf) * 1000:0.0} mm");
-            Assert.True(Vector3.Distance(into, placed[0]) < 0.01f, $"the legs meet {Vector3.Distance(into, placed[0]) * 1000:0.0} mm apart");
-            Assert.True(Vector3.Distance(outOf, placed[^1]) < 0.01f, $"the exit leg starts {Vector3.Distance(outOf, placed[^1]) * 1000:0.0} mm from the moon leg's end");
-            Assert.True(PairAt(line, into) < 0.01f, $"a gap at the crossing in: {PairAt(line, into) * 1000:0.0} mm");
-            Assert.True(PairAt(line, outOf) < 0.01f, $"a gap at the crossing out: {PairAt(line, outOf) * 1000:0.0} mm");
-
-            // It bends round the moon: in its sphere, round the moon's centre as it is then.
-            var (closest, inside) = (float.MaxValue, true);
-            for (var i = 0; i < placed.Count; i++)
+            // The moon leg is drawn round the moon as it is now, whole: each point its orbit's own
+            // round the moon's centre now (as far from it as on the orbit), within a float's step there.
+            var (centre, _) = MoonAmongStars(now, now);
+            var (worst, worstRadius, closest, inside) = (0f, 0.0, double.MaxValue, true);
+            for (var i = 0; i < samples.Count; i++)
             {
-                var (centre, _) = MoonAmongStars(now, moonLeg.Start + samples[i].Seconds);
-                var distance = (float)((Vector3Double)placed[i] - centre).Length();
-                closest = MathF.Min(closest, distance);
+                var drawn = line[starts[0] + i];
+                worst = MathF.Max(worst, Vector3.Distance(drawn, AmongPlanetStars(moonLeg, samples[i].At, now).ToSingle()));
+                var distance = ((Vector3Double)drawn - centre).Length();
+                worstRadius = Math.Max(worstRadius, Math.Abs(distance - Vector3.Distance(samples[i].At, Moon.Centre)));
+                closest = Math.Min(closest, distance);
                 inside &= distance < Scene.SphereLeaveFactor * Moon.SphereRadius + 1;
             }
-            output.WriteLine($"the moon leg comes within {closest - Moon.SeaRadius:0} m of the moon's datum");
+            output.WriteLine($"{samples.Count} moon-leg points, all within {worst * 1000:0.0} mm of the moon's frame placed now, " +
+                $"{worstRadius * 1000:0.0} mm of the orbit's own distance from its centre; within {closest - Moon.SeaRadius:0} m of its datum");
+            Assert.True(worst < 0.05f, $"the moon leg is {worst:0.000} m off its orbit round the moon now");
+            Assert.True(worstRadius < 0.05, $"the moon leg is {worstRadius:0.000} m off its orbit's distance from the moon's centre now");
             Assert.InRange(closest, Moon.SeaRadius, Moon.SeaRadius + 3000f);
             Assert.True(inside);
+
+            // The moon goes on meanwhile, so the moon leg's ends are far from the planet legs' either
+            // side (where the moon will be at each crossing), and nothing joins them.
+            var into = legs[0].Orbit.PositionAfter(legs[0].End - legs[0].Start);
+            var outOf = legs[2].Orbit.PositionAfter(0);
+            output.WriteLine($"the moon leg starts {Vector3.Distance(into, line[starts[0]]):0} m from the planet leg's end and ends " +
+                $"{Vector3.Distance(outOf, line[starts[1] - 1]):0} m from the next's start");
+            Assert.True(Vector3.Distance(into, line[starts[0] - 1]) < 0.01f, "the planet leg ends at its crossing");
+            Assert.True(Vector3.Distance(into, line[starts[0]]) > 100f);
+            Assert.True(Vector3.Distance(outOf, line[starts[1] - 1]) > 100f);
+
+            // The planet leg after it is drawn as it is, round the planet, unchanged.
+            var exit = new List<(Vector3 At, double Seconds)>();
+            legs[2].Orbit.Samples(exit, 0, legs[2].End - legs[2].Start);
+            var exitEnd = starts.Count > 2 ? starts[2] : line.Count;
+            Assert.Equal(exit.Count, exitEnd - starts[1]);
+            for (var i = 0; i < exit.Count; i++)
+                Assert.Equal(exit[i].At, line[starts[1] + i]);
+        }
+    }
+
+    [Fact]
+    public void Flown_at_the_moon_a_leg_round_the_planet_is_drawn_round_the_planet_as_it_is_now()
+    {
+        // Out of the moon's pull (half as fast again as round), so the path leaves its sphere.
+        var round = InOrbit.Round(Moon, 0, 400f);
+        var at = Moon.Centre + Vector3.UnitX * (Moon.SeaRadius + Moon.OrbitFloor + 400f);
+        var leaving = round with { Velocity = Moon.OverGround(at, Moon.East(at) * Moon.CircularSpeed(Moon.OrbitFloor + 400f) * 1.6f) };
+        var (sim, _) = Flying(Start, leaving, OnPlanet(1, InTheMoonsPlane(Start, 1.0, 1.0)));
+        using (sim)
+        {
+            var flight = sim.Flight;
+            Assert.Same(Moon, flight.Body);
+            var now = flight.WorldTime;
+            var (paths, plan) = Built(flight);
+            var legs = plan.Legs;
+            Assert.True(legs.Count >= 2, "out of the moon's sphere");
+            Assert.Same(Planet, legs[1].Body);
+            var line = paths.Line;
+            var starts = paths.LineStarts;
+            Assert.Equal(legs.Count - 1, starts.Count);
+
+            // Each point of the planet leg is its orbit's own, round the planet as it is now: its
+            // frame placed whole by the change from it to the moon's now.
+            var samples = new List<(Vector3 At, double Seconds)>();
+            legs[1].Orbit.Samples(samples, 0, legs[1].End - legs[1].Start);
+            var end = starts.Count > 1 ? starts[1] : line.Count;
+            Assert.Equal(samples.Count, end - starts[0]);
+            var change = Bodies.Change(Planet, Moon, now);
+            var centre = Bodies.CentreIn(Planet, Moon, now);
+            var (worst, worstRadius) = (0.0, 0.0);
+            for (var i = 0; i < samples.Count; i++)
+            {
+                var drawn = (Vector3Double)line[starts[0] + i];
+                worst = Math.Max(worst, (drawn - change.Point(samples[i].At)).Length());
+                worstRadius = Math.Max(worstRadius, Math.Abs((drawn - centre).Length() - Vector3.Distance(samples[i].At, Planet.Centre)));
+            }
+            output.WriteLine($"{samples.Count} planet-leg points, all within {worst * 1000:0.0} mm of the planet's frame placed now, {worstRadius:0.00} m of the orbit's own distance from its centre");
+            Assert.True(worst < 0.5, $"{worst:0.00} m off");
+            Assert.True(worstRadius < 0.5, $"{worstRadius:0.00} m off its distance from the planet's centre");
         }
     }
 
@@ -304,11 +350,10 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
             var closest = paths.Closest!.Value;
             Assert.Equal(approach.Distance - Moon.SeaRadius, closest.Distance, 1.0);
             var pe = moonLeg.Orbit.NextPeriapsis!.Value;
-            var peAt = moonLeg.Start + moonLeg.Orbit.TimeTo(pe); // a pass: placed as the moon is then
-            var mark = AmongPlanetStars(moonLeg, moonLeg.Orbit.At(pe), now, peAt).ToSingle();
+            var mark = AmongPlanetStars(moonLeg, moonLeg.Orbit.At(pe), now).ToSingle(); // round the moon as it is now
             Assert.True(Vector3.Distance(closest.Mine, mark) < 1f, $"the closest mark {Vector3.Distance(closest.Mine, mark):0.00} m off the periapsis");
             Assert.Contains(paths.Marks, m => m.Label.StartsWith("Pe ") && Vector3.Distance(m.At, mark) < 1f);
-            Assert.True(Vector3.Distance(closest.Theirs, AmongPlanetStars(moonLeg, Moon.Centre, now, peAt).ToSingle()) < 1f);
+            Assert.True(Vector3.Distance(closest.Theirs, AmongPlanetStars(moonLeg, Moon.Centre, now).ToSingle()) < 1f);
         }
 
         // With no encounter (a low circle, far from it), the closest the two orbits come.

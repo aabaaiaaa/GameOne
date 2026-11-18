@@ -445,10 +445,7 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   map's patched path, the looking ahead at warp, `Vessel.Planned`, the manoeuvre plan, and a
   targeted vessel once more): about 1 ms a frame in Release and 3.5 ms in Debug. Ideas: keep a
   leg's crossing while its orbit is unchanged (with its engine off: the same orbit, the same
-  crossing time), or patch each vessel's path once a frame and share it between those. Beside
-  it, a line: the per-point `Bodies.Change` and `LegPlace.Point` (about 0.26 ms a frame at 260
-  points in Release, 1.6 ms in Debug), where the moon's place could be worked out once per point
-  time and reused across views. Gain: about 1 ms a frame in Release on a transfer, more with
+  crossing time), or patch each vessel's path once a frame and share it between those. Gain: about 1 ms a frame in Release on a transfer, more with
   vessels on transfers (10 of them 1.9 ms). Cost: small for the kept crossing (when the orbit
   changes is what to get right); a shared path is a wider change. Risk: a kept crossing going
   stale if anything changes the orbit that the key misses (the crossing tests check it). Helps:

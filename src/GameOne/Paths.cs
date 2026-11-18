@@ -59,6 +59,7 @@ internal sealed class Paths
     private const int LeadSegments = 24;
 
     private readonly List<Vector3> _line = [], _toFirst = [], _theirLine = [], _nodes = [];
+    private readonly List<int> _lineStarts = [], _toFirstStarts = [], _theirStarts = [];
     private readonly List<List<Vector3>> _legs = [], _legPool = [];
     private readonly List<Mark> _marks = [];
     // The map's collisions as drawn (see BuildCollisions): each one's cross, and the lead-ins into it
@@ -154,6 +155,9 @@ internal sealed class Paths
     /// </summary>
     internal IReadOnlyList<Vector3> Line => _line;
 
+    /// <summary>Where in <see cref="Line"/> each leg after the first starts: the line breaks there, at the crossing, with no segment across it.</summary>
+    internal IReadOnlyList<int> LineStarts => _lineStarts;
+
     /// <summary>The legs of the path the vessel is on now (each patched leg round its own body), from the last <see cref="Build"/>: what <see cref="Line"/> is drawn from.</summary>
     internal IReadOnlyList<PathLeg> Present => _present;
 
@@ -230,22 +234,22 @@ internal sealed class Paths
         Build(flight, plan);
 
         if (_theirsFlying)
-            DrawLine(draw, _theirLine, TargetColor, 0.55f, Scene.PathWidth);
+            DrawLine(draw, _theirLine, _theirStarts, TargetColor, 0.55f, Scene.PathWidth);
         var pathColor = ((byte)(Scene.PathColor.X * 255), (byte)(Scene.PathColor.Y * 255), (byte)(Scene.PathColor.Z * 255));
         // With a plan: the orbit as it is, faintly; over it, the path to the first node, then the plan.
-        DrawLine(draw, _line, pathColor, _planned ? 0.3f : 0.9f, Scene.PathWidth);
-        DrawLine(draw, _toFirst, pathColor, 0.9f, Scene.PathWidth);
+        DrawLine(draw, _line, _lineStarts, pathColor, _planned ? 0.3f : 0.9f, Scene.PathWidth);
+        DrawLine(draw, _toFirst, _toFirstStarts, pathColor, 0.9f, Scene.PathWidth);
         // The next node matched: the legs it plans, up to the second node's burn, are green.
         var matched = flight.Guide is { Matched: true };
         var secondNodeLeg = plan.NodeLeg(1) ?? int.MaxValue;
         for (var i = 0; i < _legs.Count; i++)
-            DrawLine(draw, _legs[i], i <= _firstNodeLeg ? pathColor : LegColorOf(matched, i, _firstNodeLeg, secondNodeLeg), 0.9f, Scene.PathWidth);
+            DrawLine(draw, _legs[i], null, i <= _firstNodeLeg ? pathColor : LegColorOf(matched, i, _firstNodeLeg, secondNodeLeg), 0.9f, Scene.PathWidth);
         Window(draw);
         // The collisions: each one's lead-ins (faint for a vessel neither flown nor the target, whose
         // path is otherwise not drawn at all), then its cross over them, soonest first; one within
         // a few pixels of a cross already drawn is in its stack, which the soonest's label stands for.
         foreach (var lead in _leadIns)
-            DrawLine(draw, lead.Points, Scene.CollisionColor, lead.Alpha, Scene.PathWidth);
+            DrawLine(draw, lead.Points, null, Scene.CollisionColor, lead.Alpha, Scene.PathWidth);
         foreach (var collision in _collisionMarks)
         {
             if (!InView(collision.At, out var at))
@@ -316,7 +320,8 @@ internal sealed class Paths
     /// ground, at its height, ending where it comes down; among the stars, the orbit's ellipse.
     /// Every point goes through its leg's <see cref="LegPlace"/> with its time from now, so the
     /// marks and the nodes stay on the line in either, and a leg round another body (the moon's,
-    /// on a path from the planet) is drawn as that body sees it, where the path comes to it.
+    /// on a path from the planet) is drawn as that body sees it, round it as it is now; the line
+    /// breaks at each crossing (<see cref="LineStarts"/>).
     /// </summary>
     internal void Build(Flight flight, ManoeuvrePlan plan)
     {
@@ -341,16 +346,18 @@ internal sealed class Paths
         _present = current;
         var mine = current[0].Orbit; // the orbit it is on now, round the body it is at
         _line.Clear();
+        _lineStarts.Clear();
         for (var i = 0; i < current.Count; i++)
-            Fill(_line, current[i], view, now, frame, last: i == current.Count - 1);
+            Fill(_line, _lineStarts, current[i], view, now, frame);
         // And its own path to the first node, drawn over the line as it is (the chain's own legs up to
         // the node are from its anchor, which is the node itself for one set where it is).
         _toFirst.Clear();
+        _toFirstStarts.Clear();
         if (_planned)
         {
             var firstAt = plan.Legs[_firstNodeLeg].End;
             for (var i = 0; i < current.Count && current[i].Start < firstAt; i++)
-                Fill(_toFirst, current[i] with { End = Math.Min(current[i].End, firstAt) }, view, now, frame, last: i == current.Count - 1);
+                Fill(_toFirst, _toFirstStarts, current[i] with { End = Math.Min(current[i].End, firstAt) }, view, now, frame);
         }
 
         // The target: on a path of its own (a body round its parent, a vessel flying round the
@@ -368,6 +375,7 @@ internal sealed class Paths
         Vector3? planeNormal = null; // the plane of a flying target's orbit (its normal, among the stars), round planeBody
         GroundBody? planeBody = null;
         _theirLine.Clear();
+        _theirStarts.Clear();
         _theirLegs.Clear();
         _targetIsBody = flight.Target is { Kind: TargetKind.Body };
         if (flight.TargetAt is { } found)
@@ -383,14 +391,14 @@ internal sealed class Paths
                     (planeNormal, planeBody) = (round.Normal, parent);
                     if (parent == view)
                         (theirs, within) = (round, found.Body.SphereRadius);
-                    Fill(_theirLine, new PathLeg(parent, round, now, double.PositiveInfinity), view, now, frame, last: true);
+                    Fill(_theirLine, _theirStarts, new PathLeg(parent, round, now, double.PositiveInfinity), view, now, frame);
                 }
             }
             else if (found.Flying)
             {
                 Patched.Legs(found.Body, own, found.Body.AmongStars(own, ownVelocity), now, _theirLegs);
                 for (var i = 0; i < _theirLegs.Count; i++)
-                    Fill(_theirLine, _theirLegs[i], view, now, frame, last: i == _theirLegs.Count - 1);
+                    Fill(_theirLine, _theirStarts, _theirLegs[i], view, now, frame);
                 (planeNormal, planeBody) = (_theirLegs[0].Orbit.Normal, found.Body);
                 if (found.Body == view)
                     theirs = _theirLegs[0].Orbit;
@@ -410,13 +418,13 @@ internal sealed class Paths
                 if (_legPool.Count > 0)
                     _legPool.RemoveAt(_legPool.Count - 1);
                 points.Clear();
-                Fill(points, plan.Legs[i], view, now, frame, last: i == plan.Legs.Count - 1);
+                Fill(points, null, plan.Legs[i], view, now, frame);
                 _legs.Add(points);
             }
         // Each node, by its own index, at the end of the leg its burn is made at, placed as that leg
-        // is (never the last: the leg after the burn follows it).
+        // is.
         for (var i = 0; _planned && plan.NodeLeg(i) is { } leg; i++)
-            _nodes.Add(new LegPlace(plan.Legs[leg], view, now, last: false).Point(frame, plan.NodeAt(i)!.Value.Position, plan.Legs[leg].End - now));
+            _nodes.Add(new LegPlace(plan.Legs[leg], view, now).Point(frame, plan.NodeAt(i)!.Value.Position, plan.Legs[leg].End - now));
 
         // The window (one burn there would take it to the target, or down by it), worked out on
         // the orbit as it is, a little each frame, and only when it needs to be: a plan is a
@@ -520,7 +528,7 @@ internal sealed class Paths
             var orbit = leg.Orbit;
             if (orbit.Radial)
                 continue;
-            var place = new LegPlace(leg, view, now, last: i == plan.Legs.Count - 1);
+            var place = new LegPlace(leg, view, now);
             var (startsIn, span, slot) = (leg.Start - now, leg.End - leg.Start, Math.Min(i - firstFinal, _apLabels.Length - 1));
             if (orbit.NextApoapsis is { } apoapsis && orbit.TimeTo(apoapsis) <= span)
                 _marks.Add(new Mark(place.Point(frame, orbit.At(apoapsis), startsIn + orbit.TimeTo(apoapsis)), markColor,
@@ -552,7 +560,7 @@ internal sealed class Paths
         LandingMark = null;
         if (final.EndsOnGround)
         {
-            var place = new LegPlace(last, view, now, last: true);
+            var place = new LegPlace(last, view, now);
             var down = final.From + final.SecondsToEnd;
             LandingMark = place.Same ? final.Landing : place.Point(frame, final.Body.Turned(final.Landing, down), down);
             // From a target staying put on the ground it comes down on (a place, or a landed vessel), how far.
@@ -580,7 +588,7 @@ internal sealed class Paths
     /// <summary>A closest approach on one of <paramref name="plan"/>'s legs (its places in that leg's frame) as drawn: each place as its leg is placed, and the distance shown.</summary>
     private static (Vector3 Mine, Vector3 Theirs, float Distance) Placed(ManoeuvrePlan plan, in Encounters.Approach approach, GroundBody view, double now, Frame frame, float shown)
     {
-        var place = new LegPlace(plan.Legs[approach.Leg], view, now, last: approach.Leg == plan.Legs.Count - 1);
+        var place = new LegPlace(plan.Legs[approach.Leg], view, now);
         return (place.Point(frame, approach.Mine, approach.Seconds), place.Point(frame, approach.Theirs, approach.Seconds), shown);
     }
 
@@ -730,14 +738,17 @@ internal sealed class Paths
     /// <summary>
     /// Adds to <paramref name="points"/> <paramref name="leg"/>'s path, from its start to its end
     /// (the last leg's a lap, or to where it comes down or out), as drawn in <paramref name="frame"/>
-    /// in <paramref name="view"/>'s frame at <paramref name="now"/>: round its own body, placed as
-    /// that body is where the path comes to it, or point by point if it is not the
-    /// <paramref name="last"/> (<see cref="LegPlace"/>).
+    /// in <paramref name="view"/>'s frame at <paramref name="now"/>: round its own body, as that
+    /// body is now (<see cref="LegPlace"/>). With <paramref name="starts"/>, where it starts in
+    /// <paramref name="points"/> if a leg is there before it, so the line breaks at the crossing
+    /// between them (each leg of a patched path ends at one).
     /// </summary>
-    private void Fill(List<Vector3> points, in PathLeg leg, GroundBody view, double now, Frame frame, bool last)
+    private void Fill(List<Vector3> points, List<int>? starts, in PathLeg leg, GroundBody view, double now, Frame frame)
     {
         var orbit = leg.Orbit;
-        var place = new LegPlace(leg, view, now, last);
+        var place = new LegPlace(leg, view, now);
+        if (starts is not null && points.Count > 0)
+            starts.Add(points.Count);
         var startsIn = leg.Start - now;
         if (orbit.Radial)
         {
@@ -751,7 +762,7 @@ internal sealed class Paths
             {
                 var seconds = startsIn + (i == 1 && top is { } t ? t : 0);
                 points.Add(frame == Frame.Surface && orbit.EndsOnGround && i == _radial.Count - 1
-                    ? place.Ground(orbit.Landing, startsIn + orbit.SecondsToEnd)
+                    ? place.Ground(orbit.Landing)
                     : place.Point(frame, _radial[i], seconds));
             }
             return;
@@ -1193,11 +1204,12 @@ internal sealed class Paths
     /// <summary>Whether a point of the window, <paramref name="secondsFromPlan"/> on from world time <paramref name="plannedAt"/>, is behind the vessel by <paramref name="now"/>.</summary>
     internal static bool Passed(double secondsFromPlan, double plannedAt, double now) => secondsFromPlan < now - plannedAt;
 
-    private void DrawLine(ImDrawListPtr draw, List<Vector3> points, (byte R, byte G, byte B) color, float alpha, float width) =>
-        DrawLine(draw, points, 0, points.Count, color, alpha, width);
-
-    /// <summary>The <paramref name="count"/> points of <paramref name="points"/> from <paramref name="first"/> as a line, but where a body hides them, with its chevrons.</summary>
-    private void DrawLine(ImDrawListPtr draw, List<Vector3> points, int first, int count, (byte R, byte G, byte B) color, float alpha, float width)
+    /// <summary>
+    /// <paramref name="points"/> as a line, but where a body hides them and at each of
+    /// <paramref name="starts"/> (a leg's first point, after a crossing: nothing joins it to the
+    /// leg before), with its chevrons.
+    /// </summary>
+    private void DrawLine(ImDrawListPtr draw, List<Vector3> points, List<int>? starts, (byte R, byte G, byte B) color, float alpha, float width)
     {
         var line = Color(color, alpha);
         var chevrons = Color(color, alpha * Scene.ChevronAlpha);
@@ -1206,8 +1218,17 @@ internal sealed class Paths
         Vector2? lastShown = null;
         var along = 0f; // the length along the whole line, the hidden gaps by their ends on the screen, so the chevrons keep their places past a gap
         _stretch.Clear();
-        for (var i = first; i < first + count; i++)
+        var nextStart = 0; // the next of starts
+        for (var i = 0; i < points.Count; i++)
         {
+            if (starts is not null && nextStart < starts.Count && starts[nextStart] == i)
+            {
+                // A break at a crossing, as a hidden gap is: the chevrons go on past it by its ends.
+                nextStart++;
+                hasLast = false;
+                if (_stretch.Count > 0)
+                    DrawChevrons(draw, _stretch, _chevrons, chevrons, ref along, _display);
+            }
             var shown = InView(points[i], out var at);
             if (shown && hasLast)
                 draw.AddLine(last, at, line, width);

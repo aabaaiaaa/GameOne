@@ -61,8 +61,10 @@ internal sealed class SystemMap
         // the vessel is now: from the world time it was made at, its points passed since left out.
         public bool Open;
         public double MadeAt;
-        // In the physics: its path patched, placed in the view's frame this frame.
+        // In the physics: its path patched, placed in the view's frame this frame, and where in it
+        // each leg after the first starts (the line breaks there, at the crossing).
         public readonly List<Vector3> Placed = [];
+        public readonly List<int> Starts = [];
     }
 
     private Lap?[] _laps = new Lap?[Flight.Capacity];
@@ -313,19 +315,23 @@ internal sealed class SystemMap
     /// <summary>
     /// <paramref name="v"/>'s path (in the physics) patched at the spheres of influence from where it
     /// is now, each leg placed in the view's frame in the line's frame as the flown path's are
-    /// (<see cref="LegPlace"/>: round its own body, the last placed where the path comes to it).
+    /// (<see cref="LegPlace"/>: round its own body as it is now), each after the first where the
+    /// line breaks.
     /// </summary>
     private void PlacePatched(Lap lap, Vessel v, GroundBody view, double now)
     {
         lap.Placed.Clear();
+        lap.Starts.Clear();
         lap.Reach = 0f;
         var body = v.Body;
         Patched.Legs(body, v.CentreOfMass, body.AmongStars(v.CentreOfMass, v.Velocity), now, _legs);
         for (var i = 0; i < _legs.Count; i++)
         {
             var leg = _legs[i];
-            var place = new LegPlace(leg, view, now, last: i == _legs.Count - 1);
+            var place = new LegPlace(leg, view, now);
             var startsIn = leg.Start - now;
+            if (i > 0)
+                lap.Starts.Add(lap.Placed.Count);
             if (leg.Orbit.Radial)
             {
                 leg.Orbit.Path(_radial);
@@ -364,7 +370,8 @@ internal sealed class SystemMap
             if (!lap.Shown)
                 continue;
             if (lap.Patched)
-                LayLine(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(lap.Placed), viewProjection, camera, display, pathColor, Scene.MapOtherPathAlpha, lap.Vessel!.Id, -1);
+                LayLine(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(lap.Placed), viewProjection, camera, display, pathColor, Scene.MapOtherPathAlpha, lap.Vessel!.Id, -1,
+                    System.Runtime.InteropServices.CollectionsMarshal.AsSpan(lap.Starts));
             else if (lap.Count > 1)
                 LayLap(lap, viewProjection, camera, display, pathColor);
         }
@@ -383,13 +390,24 @@ internal sealed class SystemMap
         }
     }
 
-    /// <summary>A line of points in the view's frame (a body's path, a patched one), each hidden by any body or the sun, as runs.</summary>
+    /// <summary>
+    /// A line of points in the view's frame (a body's path, a patched one), each hidden by any body
+    /// or the sun, as runs; a patched one's run also ends at each of <paramref name="starts"/> (a
+    /// leg's first point, after a crossing), so nothing joins the legs either side.
+    /// </summary>
     private void LayLine(ReadOnlySpan<Vector3> points, in Matrix4x4 viewProjection, Vector3 camera, Vector2 display,
-        (byte R, byte G, byte B) color, float alpha, int vessel, int body)
+        (byte R, byte G, byte B) color, float alpha, int vessel, int body, ReadOnlySpan<int> starts = default)
     {
         var first = _screen.Count;
-        foreach (var p in points)
+        var nextStart = 0;
+        for (var i = 0; i < points.Length; i++)
         {
+            var p = points[i];
+            if (nextStart < starts.Length && starts[nextStart] == i)
+            {
+                nextStart++;
+                first = EndRun(first, color, alpha, vessel, body);
+            }
             if (!_frames.Behind(camera, p) && Project(p, viewProjection, display, out var at))
                 _screen.Add(at);
             else
@@ -704,6 +722,15 @@ internal sealed class SystemMap
             return points.Count > 0;
         }
         return false;
+    }
+
+    /// <summary>Where in its <see cref="PathOf"/> each leg after the first of <paramref name="v"/>'s patched path starts (the line breaks there), as last built; empty for a kept lap. For the tests.</summary>
+    internal IReadOnlyList<int> StartsOf(Vessel v)
+    {
+        for (var i = 0; i < _laps.Length && _laps[i] is { } lap; i++)
+            if (lap.Vessel == v && lap.Shown && lap.Patched)
+                return lap.Starts;
+        return [];
     }
 
     /// <summary>Whether <paramref name="v"/>'s path is patched (it is in the physics) rather than its kept lap, as last built. For the tests.</summary>

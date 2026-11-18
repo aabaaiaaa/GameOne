@@ -209,7 +209,7 @@ internal sealed class NodeEditor
                 for (var i = 0; i < paths.Present.Count; i++)
                 {
                     var leg = paths.Present[i];
-                    SampleLeg(leg, leg.End - leg.Start, frame, flight.Body, now, last: i == paths.Present.Count - 1);
+                    SampleLeg(leg, leg.End - leg.Start, frame, flight.Body, now);
                     if (Nearest(paths, pointer, best, out var distance) is { } nearest)
                         (time, best) = (leg.Start + nearest.Seconds, distance);
                 }
@@ -217,7 +217,7 @@ internal sealed class NodeEditor
             {
                 // On along that path past the node too, as far as its orbit goes: the later nodes move with it.
                 var leg = plan.Legs[nodeLeg];
-                SampleLeg(leg, double.PositiveInfinity, frame, flight.Body, now, last: false);
+                SampleLeg(leg, double.PositiveInfinity, frame, flight.Body, now);
                 if (Nearest(paths, pointer, best, out _) is { } nearest)
                     time = leg.Start + nearest.Seconds;
             }
@@ -249,7 +249,7 @@ internal sealed class NodeEditor
             ReadOnlySpan<Vector3> ways = [prograde, -prograde, radial, -radial, normal, -normal];
             // Pointing the burn's ways (among the stars) from the node as drawn, turned and placed as its leg is.
             var seconds = plan.Legs[selectedLeg].End - now;
-            var place = new LegPlace(plan.Legs[selectedLeg], flight.Body, now, last: false); // (a node's leg has the burn's after it)
+            var place = new LegPlace(plan.Legs[selectedLeg], flight.Body, now);
             var scale = Vector3.Distance(camera.Position, paths.Nodes[_selected]) * 0.05f;
             for (var k = 0; k < 6; k++)
             {
@@ -295,14 +295,14 @@ internal sealed class NodeEditor
             for (var i = 0; i < present.Count && ghost is null && present[i].Start < firstAt; i++)
             {
                 var leg = present[i];
-                SampleLeg(leg, Math.Min(leg.End, firstAt) - leg.Start, frame, flight.Body, now, last: i == present.Count - 1);
+                SampleLeg(leg, Math.Min(leg.End, firstAt) - leg.Start, frame, flight.Body, now);
                 if (Nearest(paths, pointer, PathPixels) is { } point && leg.Start + point.Seconds > now + ManoeuvreChain.MinimumGap)
                     ghost = (point.At, leg.Start + point.Seconds);
             }
             for (var i = plan.NodeLeg(0) is { } firstLeg ? firstLeg + 1 : plan.Legs.Count; i < plan.Legs.Count && ghost is null; i++)
             {
                 var leg = plan.Legs[i];
-                SampleLeg(leg, leg.End - leg.Start, frame, flight.Body, now, last: i == plan.Legs.Count - 1);
+                SampleLeg(leg, leg.End - leg.Start, frame, flight.Body, now);
                 if (Nearest(paths, pointer, PathPixels) is { } point && leg.Start + point.Seconds > now + ManoeuvreChain.MinimumGap)
                     ghost = (point.At, leg.Start + point.Seconds);
             }
@@ -413,9 +413,9 @@ internal sealed class NodeEditor
     /// back to the moment on the orbit it was drawn for. A leg round another body than
     /// <paramref name="view"/>'s (the flown vessel's) is placed as the path draws it (<see cref="LegPlace"/>).
     /// </summary>
-    private void SampleLeg(in PathLeg leg, double to, Frame frame, GroundBody view, double now, bool last)
+    private void SampleLeg(in PathLeg leg, double to, Frame frame, GroundBody view, double now)
     {
-        var place = new LegPlace(leg, view, now, last);
+        var place = new LegPlace(leg, view, now);
         leg.Orbit.Samples(_samples, 0, to);
         for (var i = 0; i < _samples.Count; i++)
             _samples[i] = (place.Point(frame, _samples[i].At, leg.Start - now + _samples[i].Seconds), _samples[i].Seconds);

@@ -758,10 +758,12 @@ say) stalls frames and spoils the timing.
   from the planet located and measured across the bodies; from a low orbit in the moon's plane its
   window a stretch of 3° or more, the game's path working out the same points as bright as a miss
   within the sphere makes them, and its best burn's path patched into the moon's sphere; on
-  course (the 1.1 km pass), every point of the moon leg, placed by the test round the moon as it
-  is at that point's time, within 50 m of the line, the pass meeting the planet's legs either
-  side within 1 m and the line reaching each crossing from both sides, and the leg in the moon's
-  sphere round it; the closest approach the moon leg's periapsis (within 1 m, drawn on its Pe
+  course (the 1.1 km pass), the line one stretch a leg (`Paths.LineStarts`), every point of the
+  moon leg its orbit's own round the moon as it is now (within 5 cm, as far from its centre as on
+  the orbit), its ends far from the planet legs' either side (the moon moves on meanwhile), the
+  planet leg after it unchanged, and the leg in the moon's sphere round it; flown at the moon on
+  a way out of its sphere, the leg round the planet round the planet as it is now (within 50 cm);
+  the closest approach the moon leg's periapsis (within 1 m, drawn on its Pe
   mark, over its datum) and, with no encounter, `Encounters.Closest`'s against the moon's orbit;
   an orbit round the moon a closed loop, flown there and seen from the planet as a target's path;
   every body's marker gathered by its name where it is, the moon's targeting it from the planet
@@ -927,7 +929,7 @@ say) stalls frames and spoils the timing.
   to it); flying the pad's rocket, a stage on a round orbit of the moon drawn round the moon and one
   of the planet round the planet, closed laps from where each is; of three stages into the moon's
   sphere, the one beside the flown one (in the physics) patched, ending as its path round the moon
-  does, and one under formula only to where it would cross into the moon's sphere (within 2% of
+  does, its last leg a stretch of its own, and one under formula only to where it would cross into the moon's sphere (within 2% of
   the sphere's radius from where the moon will be then); a stage going straight up drawn as its
   line; a stage with its engine off keeping its lap for 120 frames and a burning one's made again
   as its orbit changes; a lap behind the planet cut there and drawn only where it is seen; an
