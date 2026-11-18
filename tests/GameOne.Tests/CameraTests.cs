@@ -15,6 +15,18 @@ public sealed class CameraTests
     private const float Dt = 1f / 60f;
 
     [Fact]
+    public void A_still_camera_hands_back_the_same_view_each_frame()
+    {
+        var camera = new ChaseCamera(null);
+        camera.Place(0.7f, 0.4f, 120f);
+        var first = camera.View;
+        Assert.Same(first, camera.View); // read each frame for the input: nothing allocated while it is still
+        camera.Place(0.8f, 0.4f, 120f);
+        Assert.NotSame(first, camera.View);
+        Assert.Equal(0.8f, camera.View.Yaw);
+    }
+
+    [Fact]
     public void Reset_camera_after_a_place_brings_back_the_chase_view_as_it_was_left()
     {
         var camera = new ChaseCamera(null);

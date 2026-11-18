@@ -400,7 +400,19 @@ internal sealed class ChaseCamera
     }
 
     /// <summary>How it is set up now: the chase and map angles and distances, and whether it is the map.</summary>
-    internal CameraView View => new(_zoomedOut, _yaw, _pitch, _distance, _outYaw, _outPitch, _outDistance, _mapSet, Centre);
+    /// <remarks>Read every frame for the flight's input: the same record is handed back while nothing in it has changed, so a still camera allocates nothing.</remarks>
+    internal CameraView View
+    {
+        get
+        {
+            if (_view is not { } kept || kept.Map != _zoomedOut || kept.Yaw != _yaw || kept.Pitch != _pitch || kept.Distance != _distance
+                || kept.MapYaw != _outYaw || kept.MapPitch != _outPitch || kept.MapDistance != _outDistance || kept.MapSet != _mapSet || kept.Centre != Centre)
+                _view = new(_zoomedOut, _yaw, _pitch, _distance, _outYaw, _outPitch, _outDistance, _mapSet, Centre);
+            return _view;
+        }
+    }
+
+    private CameraView? _view; // the last View handed out
 
     /// <summary>
     /// What it is on (see <see cref="CameraSubject"/>): its own vessel, or something else it has been
