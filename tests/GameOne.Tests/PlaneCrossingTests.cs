@@ -48,31 +48,31 @@ public sealed class PlaneCrossingTests
     [Fact]
     public void A_target_in_a_tilted_orbit_at_the_same_body_gets_AN_and_DN_marks_and_one_at_another_body_none()
     {
-        var state = MoonTargetTests.InTheMoonsPlane(5000.0, 1.0, 1.0);
+        var state = MoonFlights.InTheMoonsPlane(5000.0, 1.0, 1.0);
         // The flown vessel and a target round the same planet, in different planes.
         // The target is carried half a radian on round the orbit (clear of the flown vessel), then tilted about where the flown one is.
         var radial = Vector3.Normalize(state.Position - Planet.Centre);
         var normal = Vector3.Normalize(Vector3.Cross(radial, state.Velocity));
         var turn = Quaternion.CreateFromAxisAngle(normal, 0.5f) * Quaternion.CreateFromAxisAngle(radial, 0.4f);
         var tilted = (Position: Planet.Centre + Vector3.Transform(state.Position - Planet.Centre, turn), Velocity: Vector3.Transform(state.Velocity, turn));
-        var (same, _) = MoonTargetTests.Flying(5000.0, MoonTargetTests.OnPlanet(0, state), MoonTargetTests.OnPlanet(1, tilted));
+        var (same, _) = MoonFlights.Flying(5000.0, MoonFlights.OnPlanet(0, state), MoonFlights.OnPlanet(1, tilted));
         using (same)
         {
             var flight = same.Flight;
             same.Step(new FlightInput(SetTarget: NavTarget.OfVessel(flight.WorldVessels.Single(v => v.Id == 1))));
-            var (paths, _) = MoonTargetTests.Built(flight);
+            var (paths, _) = MoonFlights.Built(flight);
             Assert.Contains(paths.Marks, m => m.Label.StartsWith("AN "));
             Assert.Contains(paths.Marks, m => m.Label.StartsWith("DN "));
             Assert.All(paths.Marks.Where(m => m.Label.StartsWith("AN ") || m.Label.StartsWith("DN ")), m => Assert.Equal(Paths.TargetColor, m.Color));
         }
 
-        var (other, _) = MoonTargetTests.Flying(5000.0, MoonTargetTests.OnPlanet(0, state), InOrbit.Round(GroundBody.Moon, 1, 400f));
+        var (other, _) = MoonFlights.Flying(5000.0, MoonFlights.OnPlanet(0, state), InOrbit.Round(GroundBody.Moon, 1, 400f));
         using (other)
         {
             var flight = other.Flight;
             other.Step(new FlightInput(SetTarget: NavTarget.OfVessel(flight.WorldVessels.Single(v => v.Id == 1))));
             Assert.Same(GroundBody.Moon, flight.TargetAt!.Value.Body);
-            var (paths, _) = MoonTargetTests.Built(flight);
+            var (paths, _) = MoonFlights.Built(flight);
             Assert.False(HasNodeMark(paths));
         }
     }
@@ -98,7 +98,7 @@ public sealed class PlaneCrossingTests
         var normal = Vector3.Normalize(Vector3.Cross(radial, state.Velocity));
         var turn = Quaternion.CreateFromAxisAngle(normal, 0.5f) * Quaternion.CreateFromAxisAngle(radial, tilt);
         var other = (Position: Planet.Centre + Vector3.Transform(state.Position - Planet.Centre, turn), Velocity: Vector3.Transform(state.Velocity, turn));
-        var (sim, _) = MoonTargetTests.Flying(5000.0, MoonTargetTests.OnPlanet(0, state), MoonTargetTests.OnPlanet(1, other));
+        var (sim, _) = MoonFlights.Flying(5000.0, MoonFlights.OnPlanet(0, state), MoonFlights.OnPlanet(1, other));
         sim.Step(new FlightInput(SetTarget: NavTarget.OfVessel(sim.Flight.WorldVessels.Single(v => v.Id == 1))));
         return (sim, new Orbit(Planet, state.Position, state.Velocity));
     }
@@ -113,7 +113,7 @@ public sealed class PlaneCrossingTests
             using (sim)
             {
                 var flight = sim.Flight;
-                var (paths, plan) = MoonTargetTests.Built(flight);
+                var (paths, plan) = MoonFlights.Built(flight);
                 var leg = plan.Legs[0];
                 var normal = flight.WorldVessels.Single(v => v.Id == 1) is var target
                     ? new Orbit(Planet, target.CentreOfMass, Planet.AmongStars(target.CentreOfMass, target.Velocity)).Normal
@@ -152,12 +152,12 @@ public sealed class PlaneCrossingTests
     public void Nodes_on_a_leg_that_starts_later_are_on_the_line_drawn_for_it()
     {
         // A transfer to the moon, the target a vessel round the moon: the marks on the moon's leg, which begins later.
-        var (sim, _) = MoonTargetTests.Flying(5000.0, MoonTargetTests.OnPlanet(0, MoonTargetTests.Transfer(5000.0, 0.22)), InOrbit.Round(GroundBody.Moon, 1, 400f));
+        var (sim, _) = MoonFlights.Flying(5000.0, MoonFlights.OnPlanet(0, MoonFlights.Transfer(5000.0, 0.22)), InOrbit.Round(GroundBody.Moon, 1, 400f));
         using (sim)
         {
             var flight = sim.Flight;
             sim.Step(new FlightInput(SetTarget: NavTarget.OfVessel(flight.WorldVessels.Single(v => v.Id == 1))));
-            var (paths, plan) = MoonTargetTests.Built(flight);
+            var (paths, plan) = MoonFlights.Built(flight);
             Assert.Same(GroundBody.Moon, plan.Legs[1].Body);
             var nodes = paths.Marks.Where(m => m.Label.StartsWith("AN ") || m.Label.StartsWith("DN ")).ToList();
             Assert.NotEmpty(nodes);

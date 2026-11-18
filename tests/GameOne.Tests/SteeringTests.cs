@@ -128,7 +128,7 @@ public sealed class SteeringTests(ITestOutputHelper output)
     /// <summary>A satellite in a round orbit round <paramref name="body"/>, flown, its nose turned to <paramref name="heading"/> and <paramref name="pitch"/> (degrees) and settled there.</summary>
     private static (Simulation Sim, Vessel Flown) Pointed(GroundBody body, float heading, float pitch)
     {
-        var (sim, flown) = MoonTargetTests.Flying(5000.0, InOrbit.Round(body, 0, 2000f));
+        var (sim, flown) = MoonFlights.Flying(5000.0, InOrbit.Round(body, 0, 2000f));
         sim.Run((_, _) => new FlightInput(Hold: Direction(flown, heading, pitch)), f => Angle(f.Aim, Direction(flown, heading, pitch)) < 0.5f, maxSeconds: 30);
         return (sim, flown);
     }
