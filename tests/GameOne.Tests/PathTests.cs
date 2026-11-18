@@ -30,6 +30,19 @@ public sealed class PathTests(ITestOutputHelper output)
     private static bool OnTerrain(Vector3 p) => MathF.Abs(Distance(p) - Planet.SeaRadius - Terrain.SurfaceHeight(Planet.Up(p))) < 1f;
 
     [Fact]
+    public void A_label_on_the_half_way_point_between_two_steps_does_not_flip()
+    {
+        // An AN at 12.35° (in tenths, 123.5) built as 12.3°: the angle wavering either side of the
+        // half-way point keeps it; only once it is well into the next step is it built again.
+        Assert.True(Paths.StillShows(123, 123.49));
+        Assert.True(Paths.StillShows(123, 123.51));
+        Assert.True(Paths.StillShows(123, 122.45));
+        Assert.False(Paths.StillShows(123, 123.7));
+        Assert.False(Paths.StillShows(123, 122.3));
+        Assert.False(Paths.StillShows(double.NaN, 123), "nothing shown yet");
+    }
+
+    [Fact]
     public void Chevrons_are_spaced_along_a_line_and_point_its_way()
     {
         var line = new[] { new Vector2(10f, 20f), new Vector2(610f, 20f) };

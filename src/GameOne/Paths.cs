@@ -764,38 +764,52 @@ internal sealed class Paths
     /// <summary>
     /// A landing mark's label, "Ground", or with <paramref name="metres"/> from a target, how far:
     /// built again only when what it shows changes (<paramref name="shownFor"/>, see
-    /// <see cref="ShownAs"/>; infinity for none), not as a new string every frame.
+    /// <see cref="ShownAs"/> and <see cref="StillShows"/>; infinity for none), not as a new string
+    /// every frame.
     /// </summary>
     private static void GroundLabel(ref string label, ref double shownFor, float? metres)
     {
-        var key = metres is { } m ? ShownAs(m) : double.PositiveInfinity;
-        if (key == shownFor)
+        if (metres is { } m ? StillShows(shownFor, InSteps(m)) : double.IsPositiveInfinity(shownFor))
             return;
         label = metres is { } d ? $"Ground  {Markers.Distance(d)} from target" : "Ground";
-        shownFor = key;
+        shownFor = metres is { } k ? ShownAs(k) : double.PositiveInfinity;
     }
 
     /// <summary>
     /// <paramref name="prefix"/> and a distance, as <see cref="Markers.Distance"/> shows it (an
     /// Ap's or Pe's height, the closest approach): built again only when what it shows changes
-    /// (<paramref name="shownFor"/>, see <see cref="ShownAs"/>), not as a new string every frame.
+    /// (<paramref name="shownFor"/>, see <see cref="ShownAs"/> and <see cref="StillShows"/>), not as
+    /// a new string every frame.
     /// </summary>
     private static string DistanceLabel(ref string label, ref double shownFor, string prefix, float metres)
     {
-        var key = ShownAs(metres);
-        if (key != shownFor)
-            (label, shownFor) = (prefix + Markers.Distance(metres), key);
+        if (!StillShows(shownFor, InSteps(metres)))
+            (label, shownFor) = (prefix + Markers.Distance(metres), ShownAs(metres));
         return label;
     }
 
     /// <summary><paramref name="prefix"/> and an angle in degrees to a tenth (a node's plane angle): built again only when what it shows changes, as <see cref="DistanceLabel"/>'s is.</summary>
     private static string AngleLabel(ref string label, ref double shownFor, string prefix, float degrees)
     {
-        var key = Math.Round(degrees, 1);
-        if (key != shownFor)
-            (label, shownFor) = ($"{prefix}{key:0.0}°", key);
+        if (!StillShows(shownFor, degrees * 10.0))
+        {
+            var key = Math.Round(degrees * 10.0, MidpointRounding.AwayFromZero);
+            (label, shownFor) = ($"{prefix}{key / 10.0:0.0}°", key);
+        }
         return label;
     }
+
+    /// <summary>
+    /// Whether a label built for <paramref name="shown"/> (a value in the steps it is shown in, as
+    /// it was rounded then) still shows <paramref name="value"/> (in the same steps, unrounded):
+    /// while it is within six tenths of a step, so a value on the half-way point between two steps
+    /// (an angle at 12.35°, a height at 1234.5 m) doesn't flip the label to and fro frame to frame;
+    /// the label is a tenth of a step off at most meanwhile. None shown (NaN) shows nothing.
+    /// </summary>
+    internal static bool StillShows(double shown, double value) => Math.Abs(value - shown) <= 0.6;
+
+    /// <summary>A distance in the steps <see cref="Markers.Distance"/> shows it in, unrounded (see <see cref="ShownAs"/>).</summary>
+    private static double InSteps(float metres) => metres < 10000f ? metres : 1e12 + metres / 100.0;
 
     /// <summary>
     /// A distance as <see cref="Markers.Distance"/> shows it, as a number: whole metres under
