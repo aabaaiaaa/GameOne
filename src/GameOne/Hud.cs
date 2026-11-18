@@ -377,6 +377,7 @@ internal sealed class Hud : IDisposable
     private readonly ActionMenu _actions = new();
     private bool _resetCameraAsked; // "Reset camera" was clicked this frame: done with the right clicks, which have the camera
     private bool _cameraOff;        // the main camera is on something other than the flown vessel: the strip has "Reset camera"
+    private float _tapeFacing;      // the compass tape's facing as the camera last had it on the flown vessel (see TapeFacing)
 
     /// <summary>What the main camera is on, as of the last frame built (the readout's).</summary>
     public CameraCentre CameraOn { get; private set; } = CameraCentre.Own;
@@ -764,7 +765,8 @@ internal sealed class Hud : IDisposable
         if (Readout.On)
             GatherPoints(navigation, new Vector2(display.X, display.Y));
         if (!camera.ZoomedOut) // which way the camera faces over the ground means nothing from out there
-            Compass(flight, camera, display);
+            _tapeFacing = TapeFacing(camera.Centre, flight.Body.Bearing(camera.Focus, camera.GroundForward), _tapeFacing);
+            Compass(flight, _tapeFacing, display);
         // The flight takes a frame picked on the selector only when it isn't paused, so one picked
         // just as a menu came up would wait, and land after the pause, or in the next flight past
         // its start on Auto. While a menu is up the selector is off, and any such choice let go.
@@ -3410,14 +3412,14 @@ internal sealed class Hud : IDisposable
     /// landing, the landing zone (yellow); and the bearing a vessel coming at the flown one comes
     /// from (a red tick down from the top edge), so it can be found behind the camera.
     /// </summary>
-    private static void Compass(Flight flight, ChaseCamera camera, float2 display)
+    private static void Compass(Flight flight, float facingNow, float2 display)
     {
         const float width = CompassWidth, height = 30f, shown = CompassShown;
         var draw = ImGui.GetBackgroundDrawList();
         var middle = display.X / 2;
         var left = middle - width / 2;
         var perDegree = width / shown;
-        var bearings = CompassFor(flight, camera.Focus, camera.GroundForward);
+        var bearings = CompassFor(flight, facingNow);
         var facing = float.RadiansToDegrees(bearings.Facing);
 
         draw.AddRectFilled(new float2(left, Margin), new float2(left + width, Margin + height), new ImColor8(0, 0, 0, 115), 6f);
@@ -3493,13 +3495,26 @@ internal sealed class Hud : IDisposable
 
     /// <summary>
     /// The compass's bearings, in radians from north by the flown vessel's body's north and up
-    /// (<see cref="GroundBody.Bearing"/>): which way the camera faces (from <paramref name="focus"/>
-    /// along <paramref name="groundForward"/>), and each mark it has now (none where it isn't shown).
+    /// (<see cref="GroundBody.Bearing"/>): which way the tape faces, and each mark it has now (none
+    /// where it isn't shown).
     /// </summary>
     internal readonly record struct CompassBearings(float Facing, float? Nose, float? Travel, float? Target, float? Site, float? Coming);
 
-    /// <summary>The compass's bearings now (see <see cref="CompassBearings"/>), as the tape draws them.</summary>
-    internal static CompassBearings CompassFor(Flight flight, Vector3 focus, Vector3 groundForward)
+    /// <summary>
+    /// Which way the compass tape faces: the camera's facing (<paramref name="bearing"/>) while it is
+    /// on the flown vessel; while it is on something else, the facing it last had on the flown
+    /// vessel (<paramref name="kept"/>), as every mark on the tape is the flown vessel's and a facing
+    /// taken somewhere else (far round the planet, or at another body) would bear no relation to them.
+    /// </summary>
+    internal static float TapeFacing(CameraCentre centre, float bearing, float kept) =>
+        centre.Kind == CentreKind.Own ? bearing : kept;
+
+    /// <summary>The compass's bearings now (see <see cref="CompassBearings"/>), as the tape draws them: from <paramref name="focus"/> along <paramref name="groundForward"/>, the camera on the flown vessel.</summary>
+    internal static CompassBearings CompassFor(Flight flight, Vector3 focus, Vector3 groundForward) =>
+        CompassFor(flight, flight.Body.Bearing(focus, groundForward));
+
+    /// <summary>The compass's bearings now (see <see cref="CompassBearings"/>), the tape facing <paramref name="facing"/>.</summary>
+    internal static CompassBearings CompassFor(Flight flight, float facing)
     {
         var body = flight.Body;
         var position = flight.Position;
@@ -3521,7 +3536,7 @@ internal sealed class Hud : IDisposable
         float? coming = flight.ComingAt(flight.Controlled) is { Other: { } comingVessel }
             && comingVessel.CentreOfMass - position is var from && (from - up * Vector3.Dot(from, up)).Length() > 0.5f
             ? body.Bearing(position, from) : null;
-        return new CompassBearings(body.Bearing(focus, groundForward), nose, travel, target, site, coming);
+        return new CompassBearings(facing, nose, travel, target, site, coming);
     }
 
     /// <summary>The compass tape's span, in degrees across it.</summary>

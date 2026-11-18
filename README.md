@@ -329,7 +329,8 @@ down, and round its orbit among the stars above the air. Nothing about the steer
 A compass along the top shows which way the camera faces, with markers for the nose's heading
 (blue), the direction of travel (white ring), when landing, the landing zone (yellow) and, while a
 vessel is coming at the one you fly, the bearing it comes from (a red tick down from the top, held
-at the tape's end when it is behind you). The
+at the tape's end when it is behind you). While the camera is on something else, the
+tape keeps the way it faced when it was last on your vessel, as its marks are all your vessel's. The
 instruments start with the clocks, in every frame of reference: the world's time ("Day 3, 07:42",
 Home's day and time of day) and the local time where the vessel is ("Local 09:15", by its
 longitude). They show how thick the air is (as a share of the air at the ground), how far it is to

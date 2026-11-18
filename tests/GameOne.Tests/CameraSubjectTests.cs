@@ -96,6 +96,17 @@ public sealed class CameraSubjectTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void The_compass_tape_keeps_the_facing_it_had_on_the_flown_vessel_while_the_camera_is_elsewhere()
+    {
+        // Every mark on the tape is the flown vessel's, so its facing is too: the camera's while on
+        // it, kept from then while the camera is on something else (another vessel, a place, a body).
+        Assert.Equal(1.2f, Hud.TapeFacing(CameraCentre.Own, 1.2f, kept: 0.4f));
+        Assert.Equal(0.4f, Hud.TapeFacing(new CameraCentre(CentreKind.Vessel, 3), 1.2f, kept: 0.4f));
+        Assert.Equal(0.4f, Hud.TapeFacing(new CameraCentre(CentreKind.Site, 0), 1.2f, kept: 0.4f));
+        Assert.Equal(0.4f, Hud.TapeFacing(new CameraCentre(CentreKind.Body, Moon.Index), 1.2f, kept: 0.4f));
+    }
+
+    [Fact]
     public void A_right_click_finds_a_vessel_seen_at_another_body()
     {
         // Flying at the planet, the camera beside a stage round the moon: the main view is in the
