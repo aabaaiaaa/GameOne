@@ -99,7 +99,7 @@ internal sealed class Paths
     // down leg's few points among the stars.
     private readonly List<PathLeg> _current = new(Scene.PatchedLegs), _theirLegs = new(Scene.PatchedLegs);
     private IReadOnlyList<PathLeg> _present = [];
-    private readonly List<Vector3> _radial = [];
+    private readonly List<Vector3> _radial = new(3); // room for its three points at most, made at once: the first straight up and down leg allocates nothing
     private int _firstNodeLeg = -1; // the leg the first node's burn is made at the end of (-1 none): up to it, the path as it is
     private bool _targetIsBody;
     private bool _planned, _theirsFlying;

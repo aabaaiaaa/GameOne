@@ -502,13 +502,33 @@ public sealed class SystemMapTests(ITestOutputHelper output)
         Assert.InRange(end, 0.99 * Scene.SolarSystemEdge, 1.01 * Scene.SolarSystemEdge);
         Assert.True(points.Count <= SystemMap.LapSegments + 2);
 
-        // Built again, frame after frame, it allocates nothing.
+        // Burning (its orbit changing every step), its lap is made again, out to the edge, every
+        // frame: allocating nothing.
         var camera = planet.Centre + new Vector3(0f, 0f, -1f) * 100_000f;
-        map.Build(flight, frames, camera);
-        var before = GC.GetAllocatedBytesForCurrentThread();
+        using var burning = WorldWith(777.7, InOrbit.At(InOrbit.Round(planet, 0, 2000f), from, way * 1500f) with { Throttle = 1f });
+        var burner = burning.Flight.WorldVessels.Single(w => w.Id == 0);
+        Assert.True(burner.OnFormula);
+        var remade = new SystemMap();
+        for (var i = 0; i < 3; i++)
+        {
+            burning.Step(default);
+            frames.Begin(burning.Flight.WorldTime, planet);
+            remade.Build(burning.Flight, frames, camera);
+        }
+        var bytes = 0L;
         for (var i = 0; i < 10; i++)
-            map.Build(flight, frames, camera);
-        Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
+        {
+            burning.Step(default);
+            frames.Begin(burning.Flight.WorldTime, planet);
+            var remakes = remade.Remakes;
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            remade.Build(burning.Flight, frames, camera);
+            bytes += GC.GetAllocatedBytesForCurrentThread() - before;
+            Assert.Equal(remakes + 1, remade.Remakes);
+        }
+        Assert.True(remade.PathOf(burner, points));
+        Assert.InRange(SolarSystem.FromSun(planet, points[^1], burning.Flight.WorldTime), 0.99 * Scene.SolarSystemEdge, 1.01 * Scene.SolarSystemEdge);
+        Assert.Equal(0L, bytes);
     }
 
     [Fact]

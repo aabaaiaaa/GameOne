@@ -76,7 +76,7 @@ internal sealed class SystemMap
     private readonly Quaternion[] _toStarsAtZero; // each body's ground frame now back to its stars at world time 0 (its ground frame then)
     private readonly List<PathLeg> _legs = new(Scene.PatchedLegs);
     private readonly List<(Vector3 At, double Seconds)> _samples = [];
-    private readonly List<Vector3> _radial = [];
+    private readonly List<Vector3> _radial = new(3); // a straight up and down line's points (Orbit.Path), room for its three at most made at once: the first such lap allocates nothing
     private Frame _frame;
     private double _now;
     private GroundBody _flown = GroundBody.Planet;

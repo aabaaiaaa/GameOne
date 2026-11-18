@@ -944,7 +944,7 @@ say) stalls frames and spoils the timing.
   does, its last leg a stretch of its own, and laid on the screen in runs none of which goes across a leg's start; and one under formula only to where it would cross into the moon's sphere (within 2% of
   the sphere's radius from where the moon will be then); a stage going straight up drawn as its
   line; one under formula escaping, sideways and straight up, drawn only out to the solar
-  system's edge (within 1% of its radius from the sun), in no more than a lap's points, built again allocating nothing; a stage with its engine off keeping its lap for 120 frames and a burning one's made again
+  system's edge (within 1% of its radius from the sun), in no more than a lap's points, and burning, its lap made again to the edge every frame allocating nothing; a stage with its engine off keeping its lap for 120 frames and a burning one's made again
   as its orbit changes; a lap behind the planet cut there and drawn only where it is seen; an
   open lap drawn from where its vessel is now; a body's marker labelled with the distance to its
   surface (on the moon the lander's height over its datum, from the pad the pad's over the sea);

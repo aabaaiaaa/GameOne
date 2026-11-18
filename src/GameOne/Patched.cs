@@ -271,15 +271,15 @@ internal static class Patched
         if (!double.IsFinite(to))
             return null;
 
-        // The fastest it moves among the planet's stars on that stretch (never nearer its body's
-        // centre than low, where its own speed is greatest, its body going round on its circles),
-        // and with the sun's going round the planet too.
+        // The fastest it moves among the planet's stars on that stretch: its own speed never more
+        // than where it is nearest its body's centre (low), and each body on the way to the planet
+        // never faster round its parent than at its periapsis, whatever its orbit's shape; and with
+        // the sun's going round the planet too.
         var own = orbit.SpeedAt(Math.Max(low, 1));
-        for (var b = body; b.Parent is { } parent; b = parent)
+        for (var b = body; b.Parent is not null; b = b.Parent)
         {
-            var change = FrameChange.ToParent(b, leg.Start);
-            var centre = change.Point(b.Centre);
-            own += (change.Velocity(b.Centre, default) + Vector3Double.Cross(parent.Spin, centre - parent.Centre)).Length();
+            var round = Bodies.OrbitOf(b, leg.Start);
+            own += round.SpeedAt(round.PeriapsisDistance);
         }
         var closing = own + SolarSystem.SunSpeed;
         var t = from;
