@@ -982,9 +982,13 @@ say) stalls frames and spoils the timing.
   (M): the vessel looked at from far enough to fit the orbit, and back to just where it was, in
   the same real time in a warp; the map looking down from the pole's side; and the map opening on
   the view its vessel left (turned or zoomed by hand, or given with a view brought back). There
-  too, the path's chevrons (`Paths.Chevrons`): spaced along a line and pointing its way, round a
-  corner and round a circle, none on a short line, the cap spent only on the screen, a line in
-  stretches keeping the whole line's places, allocating nothing; and a label at the half-way point
+  too, the path's travelling glows (`Paths.Glows`): spaced along a line and on it round a corner,
+  none on a short line, the cap spent only on the screen (and half a glow's length past it), a
+  line in stretches (hidden, or broken at a crossing) keeping the whole line's places, the phase
+  moving each on the way a circle is flown, a line across the screen showing one or two whatever
+  the phase (spaced about its width, two at most however it winds), the phase going by real
+  seconds at the glows' pace, a line millions of pixels long placed at once on its part on the
+  screen, allocating nothing; and a label at the half-way point
   between two steps not flipping (`Paths.StillShows`).
 - **`CameraSubjectTests`:** the main camera on something other than the flown vessel
   (`CameraSubject`, `GameView.Aim`): each kind of subject found at its body (a vessel's middle, a

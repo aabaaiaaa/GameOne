@@ -478,8 +478,8 @@ dotnet run --project src/GameOne
   when: no "burn now" or "stop now" prompts. A transfer window is a shaded stretch of the orbit,
   not a moment; a manoeuvre node's guide shows the delta-v left and the burn time, and the player
   starts and stops the burn. So too the marks where a target's plane crosses the path (AN and DN,
-  with the angle between the planes: where, never when), the chevrons along each orbit line (which
-  way it is flown), the manoeuvre mark in the view (the way the burn still needed points) and the
+  with the angle between the planes: where, never when), the glows travelling along each orbit
+  line (which way it is flown), the manoeuvre mark in the view (the way the burn still needed points) and the
   next node turning green as the path flown matches its plan: information only, and nothing
   burns for the pilot (the manoeuvre hold only points the nose). New cues (the moon, docking, RCS, weather) follow the same rule. A
   mission's points of interest (`Mission.PointsOfInterest`, `PointOfInterest`) are markers and targets: a

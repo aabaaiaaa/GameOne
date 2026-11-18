@@ -212,6 +212,7 @@ internal sealed class Paths
         var vessel = flight.Controlled;
         CollisionsDrawn = 0;
         (_view, _camera, _display, _frames) = (camera.ViewProjection(display), camera.Position, display, frames);
+        (_glowEvery, _glowPhase) = (GlowEvery(display), GlowPhase(RealSeconds));
         // The map's system, zoomed out, whatever the flown vessel is doing: faded in as the camera
         // pulls back from what it follows, as the path is.
         _fade = MapFade(camera);
@@ -242,8 +243,9 @@ internal sealed class Paths
         // The next node matched: the legs it plans, up to the second node's burn, are green.
         var matched = flight.Guide is { Matched: true };
         var secondNodeLeg = plan.NodeLeg(1) ?? int.MaxValue;
+        var planned = new GlowWalk(); // the plan's legs one line, its glows running on from leg to leg
         for (var i = 0; i < _legs.Count; i++)
-            DrawLine(draw, _legs[i], null, i <= _firstNodeLeg ? pathColor : LegColorOf(matched, i, _firstNodeLeg, secondNodeLeg), 0.9f, Scene.PathWidth);
+            DrawLine(draw, _legs[i], null, i <= _firstNodeLeg ? pathColor : LegColorOf(matched, i, _firstNodeLeg, secondNodeLeg), 0.9f, Scene.PathWidth, ref planned);
         Window(draw);
         // The collisions: each one's lead-ins (faint for a vessel neither flown nor the target, whose
         // path is otherwise not drawn at all), then its cross over them, soonest first; one within
@@ -1207,27 +1209,35 @@ internal sealed class Paths
     /// <summary>
     /// <paramref name="points"/> as a line, but where a body hides them and at each of
     /// <paramref name="starts"/> (a leg's first point, after a crossing: nothing joins it to the
-    /// leg before), with its chevrons.
+    /// leg before), with its glows travelling along it (<see cref="DrawGlows(ImDrawListPtr, ReadOnlySpan{Vector2}, ValueTuple{Vector2, double}[], ValueTuple{byte, byte, byte}, float, ref GlowWalk, float, double, Vector2)"/>).
     /// </summary>
     private void DrawLine(ImDrawListPtr draw, List<Vector3> points, List<int>? starts, (byte R, byte G, byte B) color, float alpha, float width)
     {
+        var walk = new GlowWalk();
+        DrawLine(draw, points, starts, color, alpha, width, ref walk);
+    }
+
+    /// <summary>
+    /// <see cref="DrawLine(ImDrawListPtr, List{Vector3}, List{int}, ValueTuple{byte, byte, byte}, float, float)"/>
+    /// as a piece of a longer line (the plan's legs one after another), its glows going on from
+    /// where <paramref name="walk"/> has them, and left where this piece ends.
+    /// </summary>
+    private void DrawLine(ImDrawListPtr draw, List<Vector3> points, List<int>? starts, (byte R, byte G, byte B) color, float alpha, float width, ref GlowWalk walk)
+    {
         var line = Color(color, alpha);
-        var chevrons = Color(color, alpha * Scene.ChevronAlpha);
+        var glow = alpha * _fade;
         var hasLast = false;
         var last = default(float2);
-        Vector2? lastShown = null;
-        var along = 0f; // the length along the whole line, the hidden gaps by their ends on the screen, so the chevrons keep their places past a gap
         _stretch.Clear();
         var nextStart = 0; // the next of starts
         for (var i = 0; i < points.Count; i++)
         {
             if (starts is not null && nextStart < starts.Count && starts[nextStart] == i)
             {
-                // A break at a crossing, as a hidden gap is: the chevrons go on past it by its ends.
+                // A break at a crossing, as a hidden gap is: the glows go on past it by its ends.
                 nextStart++;
                 hasLast = false;
-                if (_stretch.Count > 0)
-                    DrawChevrons(draw, _stretch, _chevrons, chevrons, ref along, _display);
+                DrawGlows(draw, _stretch, _glows, color, glow, ref walk, _glowEvery, _glowPhase, _display);
             }
             var shown = InView(points[i], out var at);
             if (shown && hasLast)
@@ -1235,42 +1245,74 @@ internal sealed class Paths
             if (shown)
             {
                 var here = new Vector2(at.X, at.Y);
-                if (!hasLast && lastShown is { } gapFrom)
-                    along += Vector2.Distance(gapFrom, here);
+                if (!hasLast && walk.LastShown is { } gapFrom)
+                    walk.Along += Vector2.Distance(gapFrom, here);
                 _stretch.Add(here);
-                lastShown = here;
+                walk.LastShown = here;
             }
-            else if (_stretch.Count > 0)
-                DrawChevrons(draw, _stretch, _chevrons, chevrons, ref along, _display);
+            else
+                DrawGlows(draw, _stretch, _glows, color, glow, ref walk, _glowEvery, _glowPhase, _display);
             (hasLast, last) = (shown, at);
         }
-        DrawChevrons(draw, _stretch, _chevrons, chevrons, ref along, _display);
+        DrawGlows(draw, _stretch, _glows, color, glow, ref walk, _glowEvery, _glowPhase, _display);
     }
 
     private readonly List<Vector2> _stretch = [];
-    private readonly (Vector2 At, Vector2 Way)[] _chevrons = new (Vector2, Vector2)[MaxChevrons];
-
-    /// <summary>The most chevrons a stretch is given on the screen (<see cref="Chevrons"/>): a line many screens long gets no more.</summary>
-    internal const int MaxChevrons = 64;
+    private readonly (Vector2 At, double Along)[] _glows = new (Vector2, double)[MaxGlows];
+    private float _glowEvery; // this frame's spacing of the glows and how far on they are (Draw)
+    private double _glowPhase;
 
     /// <summary>
-    /// Places chevrons along <paramref name="line"/> (a polyline on the screen, in the order it is
-    /// flown), one every <paramref name="every"/> pixels along the whole line it is a stretch of
-    /// (the first half that in), each pointing along the line there, into <paramref name="into"/>:
-    /// how many were placed. <paramref name="along"/> is how far along the whole line the stretch
-    /// starts, moved on to where it ends, so a line in stretches (a body hiding a piece) keeps its
-    /// chevrons where they would be on the whole of it. Only those on the screen
-    /// (<paramref name="display"/>, none to place them anywhere) count against <paramref name="into"/>'s
-    /// length, so a long line's part on the screen still gets its share.
+    /// How far one line's glows have got as it is drawn, stretch by stretch: the length along the
+    /// whole line (the hidden gaps and the breaks by their ends on the screen, so the glows keep
+    /// their places past a gap), the last point of it on the screen, and how many glows it has
+    /// been given on the screen so far (no more than <see cref="MaxGlows"/>).
     /// </summary>
-    internal static int Chevrons(ReadOnlySpan<Vector2> line, float every, Span<(Vector2 At, Vector2 Way)> into, ref float along, Vector2 display = default)
+    internal struct GlowWalk
     {
-        // In double, and each piece's chevrons looked for only on its part on the screen: a point
+        public double Along;
+        public Vector2? LastShown;
+        public int Placed;
+    }
+
+    /// <summary>The most glows a line is given on its part on the screen (<see cref="Glows(ReadOnlySpan{Vector2}, float, double, Span{ValueTuple{Vector2, double}}, ref double, Vector2, float)"/>): one many screens long, or winding across it, gets no more.</summary>
+    internal const int MaxGlows = Scene.PathGlowsPerLine;
+
+    /// <summary>The pieces each glow is drawn in along the line, each as strong as the glow is at its middle.</summary>
+    private const int GlowPieces = 12;
+
+    private static readonly long GlowsSince = System.Diagnostics.Stopwatch.GetTimestamp();
+
+    /// <summary>The real seconds the glows go by (since the game started: the same in warp, slow motion and pause).</summary>
+    internal static double RealSeconds => System.Diagnostics.Stopwatch.GetElapsedTime(GlowsSince).TotalSeconds;
+
+    /// <summary>How far on along every line the glows are after <paramref name="realSeconds"/>, in pixels, at their pace (<see cref="Scene.PathGlowPixelsPerSecond"/>).</summary>
+    internal static double GlowPhase(double realSeconds) => realSeconds * Scene.PathGlowPixelsPerSecond;
+
+    /// <summary>The spacing of the glows along a line on a screen of <paramref name="display"/> (<see cref="Scene.PathGlowEveryScreens"/> of its width), never under two glows' length.</summary>
+    internal static float GlowEvery(Vector2 display) => MathF.Max(display.X * Scene.PathGlowEveryScreens, 2f * Scene.PathGlowPixels);
+
+    /// <summary>
+    /// Places glows' middles along <paramref name="line"/> (a polyline on the screen, in the order it
+    /// is flown), one every <paramref name="every"/> pixels along the whole line it is a stretch of
+    /// (the first half that in, moved on by <paramref name="phase"/> pixels: as the phase grows, each
+    /// travels on the way the line is flown), into <paramref name="into"/>: each one's place and its
+    /// length along the whole line; how many were placed. <paramref name="along"/> is how far along
+    /// the whole line the stretch starts, moved on to where it ends, so a line in stretches (a body
+    /// hiding a piece, a break at a crossing) keeps its glows where they would be on the whole of it.
+    /// Only those on the screen (<paramref name="display"/>, widened by <paramref name="margin"/> each
+    /// side, where a glow's tail still shows; none to place them anywhere) count against
+    /// <paramref name="into"/>'s length, so a long line's part on the screen still gets its share.
+    /// </summary>
+    internal static int Glows(ReadOnlySpan<Vector2> line, float every, double phase, Span<(Vector2 At, double Along)> into, ref double along, Vector2 display = default, float margin = 0f)
+    {
+        // In double, and each piece's glows looked for only on its part on the screen: a point
         // projected from just beside the camera or behind it lands millions of pixels out, and a
         // float walked that far no longer moves on by a spacing.
         var placed = 0;
-        double walked = along;
-        var next = Aligned(walked, every); // the length along the line the next one is at
+        var walked = along;
+        var first = every / 2.0 + (phase % every + every) % every; // where one is, along the whole line
+        var next = Aligned(walked, every, first); // the length along the line the next one is at
         for (var i = 1; i < line.Length; i++)
         {
             var (from, to) = (line[i - 1], line[i]);
@@ -1278,38 +1320,44 @@ internal sealed class Paths
             var length = Math.Sqrt(dx * dx + dy * dy);
             if (length < 1e-4)
                 continue;
-            var (inFrom, inTo) = display == default ? (0.0, 1.0) : OnScreen(from, dx, dy, display);
+            var (inFrom, inTo) = display == default ? (0.0, 1.0) : OnScreen(from, dx, dy, display, margin);
             if (inFrom <= inTo && placed < into.Length)
             {
-                var way = new Vector2((float)(dx / length), (float)(dy / length));
-                for (next = Math.Max(next, Aligned(walked + inFrom * length, every)); next <= walked + inTo * length && placed < into.Length; next += every)
+                for (next = Math.Max(next, Aligned(walked + inFrom * length, every, first)); next <= walked + inTo * length && placed < into.Length; next += every)
                 {
                     var t = (next - walked) / length;
-                    into[placed++] = (new Vector2((float)(from.X + dx * t), (float)(from.Y + dy * t)), way);
+                    into[placed++] = (new Vector2((float)(from.X + dx * t), (float)(from.Y + dy * t)), next);
                 }
             }
             walked += length;
         }
-        along = (float)walked;
+        along = walked;
         return placed;
     }
 
-    /// <summary>The first length along a line at or past <paramref name="at"/> that a chevron is at: half a spacing in, then every spacing.</summary>
-    private static double Aligned(double at, float every) =>
-        every / 2.0 + Math.Max(0.0, Math.Ceiling((at - every / 2.0) / every)) * every;
+    /// <summary><see cref="Glows(ReadOnlySpan{Vector2}, float, double, Span{ValueTuple{Vector2, double}}, ref double, Vector2, float)"/> for a line by itself, where they start.</summary>
+    internal static int Glows(ReadOnlySpan<Vector2> line, float every, Span<(Vector2 At, double Along)> into)
+    {
+        var along = 0.0;
+        return Glows(line, every, 0.0, into, ref along);
+    }
+
+    /// <summary>The first length along a line at or past <paramref name="at"/> that a glow is at: <paramref name="first"/> on by whole spacings, either way.</summary>
+    private static double Aligned(double at, float every, double first) =>
+        first + Math.Ceiling((at - first) / every) * every;
 
     /// <summary>
     /// The part of the piece from <paramref name="from"/> by (<paramref name="dx"/>, <paramref name="dy"/>)
-    /// that is on a screen of <paramref name="display"/>, as fractions of the way along it (from past
-    /// to when none is).
+    /// that is on a screen of <paramref name="display"/> widened by <paramref name="margin"/> each
+    /// side, as fractions of the way along it (from past to when none is).
     /// </summary>
-    private static (double From, double To) OnScreen(Vector2 from, double dx, double dy, Vector2 display)
+    private static (double From, double To) OnScreen(Vector2 from, double dx, double dy, Vector2 display, float margin)
     {
         var (t0, t1) = (0.0, 1.0);
-        Clip(-dx, from.X, ref t0, ref t1);
-        Clip(dx, display.X - (double)from.X, ref t0, ref t1);
-        Clip(-dy, from.Y, ref t0, ref t1);
-        Clip(dy, display.Y - (double)from.Y, ref t0, ref t1);
+        Clip(-dx, from.X + (double)margin, ref t0, ref t1);
+        Clip(dx, display.X + (double)margin - from.X, ref t0, ref t1);
+        Clip(-dy, from.Y + (double)margin, ref t0, ref t1);
+        Clip(dy, display.Y + (double)margin - from.Y, ref t0, ref t1);
         return (t0, t1);
 
         // One edge's limit on the fractions inside it (Liang–Barsky): p·t ≤ q.
@@ -1329,37 +1377,65 @@ internal sealed class Paths
         }
     }
 
-    /// <summary><see cref="Chevrons(ReadOnlySpan{Vector2}, float, Span{ValueTuple{Vector2, Vector2}}, ref float, Vector2)"/> for a line by itself.</summary>
-    internal static int Chevrons(ReadOnlySpan<Vector2> line, float every, Span<(Vector2 At, Vector2 Way)> into)
-    {
-        var along = 0f;
-        return Chevrons(line, every, into, ref along);
-    }
-
     /// <summary>
-    /// The chevrons of <paramref name="stretch"/> (<see cref="Chevrons(ReadOnlySpan{Vector2}, float, Span{ValueTuple{Vector2, Vector2}}, ref float, Vector2)"/>,
-    /// <paramref name="along"/> and <paramref name="display"/> as there), each two short lines back from its tip; the stretch is emptied.
+    /// The glows of <paramref name="stretch"/> (<see cref="Glows(ReadOnlySpan{Vector2}, float, double, Span{ValueTuple{Vector2, double}}, ref double, Vector2, float)"/>,
+    /// spaced <paramref name="every"/> and moved on by <paramref name="phase"/>, on the screen of
+    /// <paramref name="display"/>), going on from where <paramref name="walk"/> has the line; the
+    /// stretch is emptied.
     /// </summary>
-    internal static void DrawChevrons(ImDrawListPtr draw, List<Vector2> stretch, (Vector2 At, Vector2 Way)[] into, ImColor8 c, ref float along, Vector2 display)
+    internal static void DrawGlows(ImDrawListPtr draw, List<Vector2> stretch, (Vector2 At, double Along)[] into, (byte R, byte G, byte B) color, float alpha,
+        ref GlowWalk walk, float every, double phase, Vector2 display)
     {
-        DrawChevrons(draw, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(stretch), into, c, ref along, display);
+        DrawGlows(draw, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(stretch), into, color, alpha, ref walk, every, phase, display);
         stretch.Clear();
     }
 
-    /// <summary>The chevrons of <paramref name="stretch"/>, as <see cref="DrawChevrons(ImDrawListPtr, List{Vector2}, ValueTuple{Vector2, Vector2}[], ImColor8, ref float, Vector2)"/> draws them.</summary>
-    internal static void DrawChevrons(ImDrawListPtr draw, ReadOnlySpan<Vector2> stretch, (Vector2 At, Vector2 Way)[] into, ImColor8 c, ref float along, Vector2 display)
+    /// <summary>
+    /// The glows of <paramref name="stretch"/>, as the overload for a list draws them: each a short
+    /// soft brightening along the line itself (round a curve as the line goes), in its colour made
+    /// brighter (<see cref="Scene.PathGlowWhiten"/>), as strong as <paramref name="alpha"/> (the
+    /// line's) by <see cref="Scene.PathGlowAlpha"/> at its middle and fading to nothing at its ends.
+    /// </summary>
+    internal static void DrawGlows(ImDrawListPtr draw, ReadOnlySpan<Vector2> stretch, (Vector2 At, double Along)[] into, (byte R, byte G, byte B) color, float alpha,
+        ref GlowWalk walk, float every, double phase, Vector2 display)
     {
-        var n = stretch.Length >= 2 ? Chevrons(stretch, Scene.ChevronEveryPixels, into, ref along, display) : 0;
-        var s = Scene.ChevronPixels;
-        for (var k = 0; k < n; k++)
+        if (stretch.Length < 2)
+            return;
+        var start = walk.Along;
+        var n = Glows(stretch, every, phase, into.AsSpan(walk.Placed), ref walk.Along, display, Scene.PathGlowPixels / 2f);
+        var bright = ((byte)(color.R + (255 - color.R) * Scene.PathGlowWhiten), (byte)(color.G + (255 - color.G) * Scene.PathGlowWhiten),
+            (byte)(color.B + (255 - color.B) * Scene.PathGlowWhiten));
+        for (var k = walk.Placed; k < walk.Placed + n; k++)
+            DrawGlow(draw, stretch, start, into[k].Along, bright, alpha * Scene.PathGlowAlpha);
+        walk.Placed += n;
+    }
+
+    /// <summary>
+    /// One glow of <paramref name="stretch"/> (which starts <paramref name="start"/> along the whole
+    /// line), its middle <paramref name="middle"/> along it: the line's own pieces within half a
+    /// glow's length either side, drawn over in <see cref="GlowPieces"/> short pieces, each as strong
+    /// as the glow's soft rise and fall is there.
+    /// </summary>
+    private static void DrawGlow(ImDrawListPtr draw, ReadOnlySpan<Vector2> stretch, double start, double middle, (byte R, byte G, byte B) color, float alpha)
+    {
+        var (from, to) = (middle - Scene.PathGlowPixels / 2.0, middle + Scene.PathGlowPixels / 2.0);
+        var step = (to - from) / GlowPieces;
+        var walked = start;
+        for (var i = 1; i < stretch.Length && walked < to; i++)
         {
-            var (at, way) = into[k];
-            var side = new Vector2(-way.Y, way.X);
-            var tip = at + way * (s / 2f);
-            var a = tip - way * s + side * s;
-            var b = tip - way * s - side * s;
-            draw.AddLine(new float2(tip.X, tip.Y), new float2(a.X, a.Y), c, Scene.ChevronWidth);
-            draw.AddLine(new float2(tip.X, tip.Y), new float2(b.X, b.Y), c, Scene.ChevronWidth);
+            var (a, b) = (stretch[i - 1], stretch[i]);
+            var (dx, dy) = ((double)b.X - a.X, (double)b.Y - a.Y);
+            var length = Math.Sqrt(dx * dx + dy * dy);
+            var (lo, hi) = (Math.Max(walked, from), Math.Min(walked + length, to));
+            for (var s = lo; s < hi && length >= 1e-4; s += step)
+            {
+                var e = Math.Min(s + step, hi);
+                var rise = Math.Sin(Math.PI * ((s + e) / 2 - from) / (to - from));
+                var (t0, t1) = ((s - walked) / length, (e - walked) / length);
+                draw.AddLine(new float2((float)(a.X + dx * t0), (float)(a.Y + dy * t0)), new float2((float)(a.X + dx * t1), (float)(a.Y + dy * t1)),
+                    new ImColor8(color.R, color.G, color.B, (byte)(255 * Math.Clamp(alpha * rise * rise, 0.0, 1.0))), Scene.PathGlowWidth);
+            }
+            walked += length;
         }
     }
 

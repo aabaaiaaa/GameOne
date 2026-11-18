@@ -1176,10 +1176,17 @@ internal static class Scene
     public const float PathFadeFrom = 250f, PathFadeTo = 1200f;
     public static readonly Vector3 PathColor = new(0.45f, 0.85f, 1.0f);
     public const float PathWidth = 2f;                 // pixels
-    // Each orbit line shows which way it is flown by small faint chevrons along it (Paths.Chevrons):
-    // one every this many pixels, this big, at this share of the line's own strength.
-    public const float ChevronEveryPixels = 120f, ChevronPixels = 5f, ChevronAlpha = 0.5f;
-    public const float ChevronWidth = 1.5f;            // pixels
+    // Each orbit line shows which way it is flown by soft brighter glows travelling along it the
+    // way it is flown (Paths.Glows), the line itself solid: one every this share of the screen's
+    // width along it, so a line across the screen shows one or two, and no more than
+    // PathGlowsPerLine on a line's part on the screen; each moving on this many pixels a second of
+    // real time (the same in warp, slow motion and pause), this many pixels long along the line,
+    // fading in and out at its ends, its middle the line's colour this share of the way to white,
+    // at this share of the line's own strength, this wide.
+    public const float PathGlowEveryScreens = 1f;
+    public const int PathGlowsPerLine = 2;
+    public const float PathGlowPixelsPerSecond = 160f, PathGlowPixels = 110f;
+    public const float PathGlowWhiten = 0.55f, PathGlowAlpha = 1f, PathGlowWidth = 3f;
 
     // The map's predicted collisions between any two vessels in the world (CollisionSearch, drawn by
     // Paths): a cross where they hit, and the stretch of each one's path it covers in the lead

@@ -43,81 +43,115 @@ public sealed class PathTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Chevrons_are_spaced_along_a_line_and_point_its_way()
+    public void Glows_are_spaced_along_a_line_and_follow_it_round_a_corner()
     {
         var line = new[] { new Vector2(10f, 20f), new Vector2(610f, 20f) };
-        var into = new (Vector2 At, Vector2 Way)[16];
+        var into = new (Vector2 At, double Along)[16];
 
-        var n = Paths.Chevrons(line, 120f, into);
+        var n = Paths.Glows(line, 120f, into);
 
         Assert.Equal(5, n);
         for (var i = 0; i < n; i++)
         {
-            Assert.True(Vector2.Distance(into[i].Way, Vector2.UnitX) < 1e-3f);
             Assert.Equal(10f + 60f + 120f * i, into[i].At.X, 1e-2f);
+            Assert.Equal(60.0 + 120.0 * i, into[i].Along, 1e-6);
         }
 
-        // Round a corner each one points along the piece it is on.
+        // Round a corner each is on the line, at its length along it.
         var bent = new[] { new Vector2(0f, 0f), new Vector2(100f, 0f), new Vector2(100f, 300f) };
-        n = Paths.Chevrons(bent, 120f, into);
+        n = Paths.Glows(bent, 120f, into);
         Assert.Equal(3, n);
-        Assert.True(Vector2.Distance(into[0].Way, Vector2.UnitX) < 1e-3f);
-        Assert.True(Vector2.Distance(into[1].Way, Vector2.UnitY) < 1e-3f);
+        Assert.True(Vector2.Distance(into[0].At, new Vector2(60f, 0f)) < 1e-3f);
+        Assert.True(Vector2.Distance(into[1].At, new Vector2(100f, 80f)) < 1e-3f);
+        Assert.True(Vector2.Distance(into[2].At, new Vector2(100f, 200f)) < 1e-3f);
     }
 
     [Fact]
-    public void Chevrons_go_by_the_whole_line_count_only_on_the_screen_and_follow_its_order()
+    public void Glows_go_by_the_whole_line_count_only_on_the_screen_and_travel_its_way()
     {
-        var into = new (Vector2 At, Vector2 Way)[Paths.MaxChevrons];
+        var into = new (Vector2 At, double Along)[64];
 
         // A line shorter than half the spacing has none.
-        Assert.Equal(0, Paths.Chevrons([new Vector2(0f, 0f), new Vector2(50f, 0f)], 120f, into));
+        Assert.Equal(0, Paths.Glows([new Vector2(0f, 0f), new Vector2(50f, 0f)], 120f, into));
 
-        // The cap is spent only on the screen: a line far longer than the cap's worth, mostly off
-        // the screen to its left, still has its part on the screen filled.
+        // The cap is spent only on the screen (and half a glow's length past its edges, where its
+        // tail still shows): a line far longer than the cap's worth, mostly off the screen to its
+        // left, still has its part on the screen filled.
         var display = new Vector2(1280f, 720f);
-        var along = 0f;
-        var n = Paths.Chevrons([new Vector2(-200_000f, 300f), new Vector2(1200f, 300f)], 120f, into, ref along, display);
-        Assert.True(n >= 10, $"only {n} chevrons on the screen");
+        var margin = Scene.PathGlowPixels / 2f;
+        var along = 0.0;
+        var n = Paths.Glows([new Vector2(-200_000f, 300f), new Vector2(1200f, 300f)], 120f, 0.0, into, ref along, display, margin);
+        Assert.True(n >= 10, $"only {n} glows on the screen");
         for (var i = 0; i < n; i++)
-            Assert.InRange(into[i].At.X, 0f, display.X);
+            Assert.InRange(into[i].At.X, -margin, display.X + margin);
 
-        // In two stretches (a body hiding the middle), the second's are where the whole line's are.
-        var whole = new (Vector2 At, Vector2 Way)[16];
-        var all = Paths.Chevrons([new Vector2(0f, 0f), new Vector2(1000f, 0f)], 120f, whole);
-        along = 0f;
-        var first = Paths.Chevrons([new Vector2(0f, 0f), new Vector2(300f, 0f)], 120f, into, ref along);
-        along += 250f; // the gap, by its ends
-        var second = Paths.Chevrons([new Vector2(550f, 0f), new Vector2(1000f, 0f)], 120f, into.AsSpan(first), ref along);
+        // In two stretches (a body hiding the middle, or a break at a crossing), the second's are
+        // where the whole line's are.
+        var whole = new (Vector2 At, double Along)[16];
+        var all = Paths.Glows([new Vector2(0f, 0f), new Vector2(1000f, 0f)], 120f, whole);
+        along = 0.0;
+        var first = Paths.Glows([new Vector2(0f, 0f), new Vector2(300f, 0f)], 120f, 0.0, into, ref along);
+        along += 250.0; // the gap, by its ends
+        var second = Paths.Glows([new Vector2(550f, 0f), new Vector2(1000f, 0f)], 120f, 0.0, into.AsSpan(first), ref along);
         var expected = whole.Take(all).Where(c => c.At.X <= 300f || c.At.X >= 550f).Select(c => c.At.X).ToArray();
         Assert.Equal(expected, into.Take(first + second).Select(c => c.At.X).ToArray(), new FloatComparer(1e-2f));
 
-        // Round a circle flown anticlockwise on the screen, each points the way it is flown.
+        // Round a circle flown anticlockwise on the screen, the phase moving on moves each glow on
+        // the way it is flown.
         var circle = Enumerable.Range(0, 65).Select(k => new Vector2(640f + 300f * MathF.Cos(k * MathF.Tau / 64), 360f + 300f * MathF.Sin(k * MathF.Tau / 64))).ToArray();
-        n = Paths.Chevrons(circle, 120f, into);
+        var later = new (Vector2 At, double Along)[64];
+        var (fromStart, fromLater) = (0.0, 0.0);
+        n = Paths.Glows(circle, 120f, 0.0, into, ref fromStart);
+        var m = Paths.Glows(circle, 120f, 10.0, later, ref fromLater);
         Assert.True(n > 10);
+        Assert.Equal(n, m);
         for (var i = 0; i < n; i++)
         {
+            Assert.Equal(into[i].Along + 10.0, later[i].Along, 1e-6);
             var fromMiddle = into[i].At - new Vector2(640f, 360f);
-            Assert.True(Vector2.Dot(into[i].Way, new Vector2(-fromMiddle.Y, fromMiddle.X)) > 0f, $"chevron {i} points against the way");
+            Assert.True(Vector2.Dot(later[i].At - into[i].At, new Vector2(-fromMiddle.Y, fromMiddle.X)) > 0f, $"glow {i} travels against the way");
         }
     }
 
     [Fact]
-    public void Chevrons_on_a_line_millions_of_pixels_long_are_placed_at_once_on_its_part_on_the_screen()
+    public void A_line_across_the_screen_shows_one_or_two_glows_travelling_at_a_calm_pace_in_real_time()
+    {
+        // Spaced about the screen's width: a line straight across it shows one or two, wherever the
+        // glows have got to, and the cap holds a line that winds across it to two.
+        var display = new Vector2(1280f, 720f);
+        var every = Paths.GlowEvery(display);
+        Assert.InRange(every, 0.75f * display.X, 1.5f * display.X);
+        var into = new (Vector2 At, double Along)[Paths.MaxGlows];
+        Assert.Equal(2, Paths.MaxGlows);
+        for (var seconds = 0.0; seconds < 60.0; seconds += 0.25)
+        {
+            var along = 0.0;
+            var n = Paths.Glows([new Vector2(0f, 360f), new Vector2(1280f, 360f)], every, Paths.GlowPhase(seconds), into, ref along, display, Scene.PathGlowPixels / 2f);
+            Assert.InRange(n, 1, 2);
+        }
+        var winding = Enumerable.Range(0, 20).Select(k => new Vector2(k % 2 == 0 ? 0f : 1280f, 30f * k)).ToArray();
+        var wound = 0.0;
+        Assert.Equal(2, Paths.Glows(winding, every, 0.0, into, ref wound, display, Scene.PathGlowPixels / 2f));
+
+        // Their phase goes by the real seconds given, at the glows' own pace.
+        Assert.Equal(Scene.PathGlowPixelsPerSecond, Paths.GlowPhase(1.0) - Paths.GlowPhase(0.0), 1e-9);
+    }
+
+    [Fact]
+    public void Glows_on_a_line_millions_of_pixels_long_are_placed_at_once_on_its_part_on_the_screen()
     {
         // A point projected from just beside the camera or behind it lands millions of pixels out:
         // the walk along such a piece is the screen's part of it, never a step a spacing at a time.
-        var into = new (Vector2 At, Vector2 Way)[Paths.MaxChevrons];
+        var into = new (Vector2 At, double Along)[64];
         var display = new Vector2(1280f, 720f);
         var n = 0;
-        var along = 0f;
+        var along = 0.0;
         var done = Task.Run(() =>
         {
-            n = Paths.Chevrons([new Vector2(-2e9f, 300f), new Vector2(1200f, 300f)], 120f, into, ref along, display);
-            var further = 4e9f; // and on, off the screen's foot, and a stretch starting far along a line already
-            Paths.Chevrons([new Vector2(1200f, 300f), new Vector2(1200f, 3e9f)], 120f, into.AsSpan(n), ref along, display);
-            Paths.Chevrons([new Vector2(0f, 100f), new Vector2(1200f, 100f)], 120f, into.AsSpan(n), ref further, display);
+            n = Paths.Glows([new Vector2(-2e9f, 300f), new Vector2(1200f, 300f)], 120f, 0.0, into, ref along, display);
+            var further = 4e9; // and on, off the screen's foot, and a stretch starting far along a line already
+            Paths.Glows([new Vector2(1200f, 300f), new Vector2(1200f, 3e9f)], 120f, 0.0, into.AsSpan(n), ref along, display);
+            Paths.Glows([new Vector2(0f, 100f), new Vector2(1200f, 100f)], 120f, 0.0, into.AsSpan(n), ref further, display);
         }).Wait(TimeSpan.FromSeconds(5));
         Assert.True(done, "the walk along the line never ended");
         Assert.InRange(n, 9, 11); // 1,200 px of it on the screen, one every 120
@@ -136,16 +170,22 @@ public sealed class PathTests(ITestOutputHelper output)
         public int GetHashCode(float f) => 0;
     }
 
+
     [Fact]
-    public void Chevrons_allocate_nothing()
+    public void Glows_allocate_nothing()
     {
         var line = new[] { new Vector2(0f, 0f), new Vector2(600f, 0f), new Vector2(600f, 600f) };
-        var into = new (Vector2 At, Vector2 Way)[16];
-        Paths.Chevrons(line, 120f, into);
+        var into = new (Vector2 At, double Along)[16];
+        var display = new Vector2(1280f, 720f);
+        var along = 0.0;
+        Paths.Glows(line, 120f, 3.0, into, ref along, display, 10f);
 
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var i = 0; i < 100; i++)
-            Paths.Chevrons(line, 120f, into);
+        {
+            along = 0.0;
+            Paths.Glows(line, 120f, 3.0 * i, into, ref along, display, 10f);
+        }
         Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 

@@ -662,7 +662,8 @@ internal sealed class SystemMap
     public void Draw(ImDrawListPtr draw, float fade, MapLabels labels)
     {
         var screen = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_screen);
-        var along = 0f; // along the whole line a run is a stretch of (see Paths.Chevrons), its hidden gaps by their ends
+        var (every, phase) = (Paths.GlowEvery(_display), Paths.GlowPhase(Paths.RealSeconds));
+        var walk = new Paths.GlowWalk(); // along the whole line a run is a stretch of (see Paths.Glows), its hidden gaps and breaks by their ends
         for (var r = 0; r < _runs.Count; r++)
         {
             var run = _runs[r];
@@ -670,10 +671,10 @@ internal sealed class SystemMap
             draw.AddPolyline(points, Color(run.Color, run.Alpha * fade), ImDrawFlags.None, Scene.PathWidth);
             var stretch = System.Runtime.InteropServices.MemoryMarshal.Cast<float2, Vector2>(points); // the same two floats: no copy
             if (r > 0 && _runs[r - 1] is var before && before.Vessel == run.Vessel && before.Body == run.Body && screen[before.First + before.Count - 1] is var end)
-                along += Vector2.Distance(new Vector2(end.X, end.Y), stretch[0]); // the same line on past a gap
+                walk.Along += Vector2.Distance(new Vector2(end.X, end.Y), stretch[0]); // the same line on past a gap
             else
-                along = 0f;
-            Paths.DrawChevrons(draw, stretch, _chevrons, Color(run.Color, run.Alpha * fade * Scene.ChevronAlpha), ref along, _display);
+                walk = new Paths.GlowWalk();
+            Paths.DrawGlows(draw, stretch, _glows, run.Color, run.Alpha * fade, ref walk, every, phase, _display);
         }
         foreach (var (at, color, _) in _dots)
             draw.AddCircleFilled(at, Scene.MapBodyMinPixels / 2f, Color(color, fade));
@@ -684,8 +685,8 @@ internal sealed class SystemMap
         }
     }
 
-    private Vector2 _display; // the screen as last laid, so a chevron off it costs none of a line's share
-    private readonly (Vector2 At, Vector2 Way)[] _chevrons = new (Vector2, Vector2)[Paths.MaxChevrons];
+    private Vector2 _display; // the screen as last laid, so a glow off it costs none of a line's share
+    private readonly (Vector2 At, double Along)[] _glows = new (Vector2, double)[Paths.MaxGlows];
 
     private static ImColor8 Color((byte R, byte G, byte B) color, float alpha) =>
         new(color.R, color.G, color.B, (byte)(255 * Math.Clamp(alpha, 0f, 1f)));
