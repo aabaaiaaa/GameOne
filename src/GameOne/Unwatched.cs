@@ -135,7 +135,7 @@ internal sealed class Unwatched(Flight flight)
         var body = GameOne.Bodies.Named(state.Body);
         if (state.PartingFrom is not null || partedFrom.Contains(state.Id))
             return false;
-        var at = state.CentreOfMass;
+        var at = state.CentreOfMass.ToSingle();
         switch (state.State)
         {
             case FlightState.Landed when body.IsSea(body.Up(at)):
@@ -155,7 +155,7 @@ internal sealed class Unwatched(Flight flight)
         }
         if (body != padBody)
             return true; // nothing is near it in the first step: the new rocket is at another body
-        var closing = (body.AmongStars(at, state.Velocity) - body.AmongStars(pad, Vector3.Zero)).Length();
+        var closing = (body.AmongStars(at, state.Velocity.ToSingle()) - body.AmongStars(pad, Vector3.Zero)).Length();
         var reach = Scene.HandoverHysteresis * (Scene.NearByDistance + Scene.HandoverDistance + closing * Scene.HandoverSeconds);
         return Vector3.DistanceSquared(at, pad) > 4f * reach * reach; // twice it: room for a chain of a few near each other
     }
@@ -185,7 +185,7 @@ internal sealed class Unwatched(Flight flight)
         {
             var y = bottom + (top - bottom) * k / Along;
             foreach (var (x, z) in (ReadOnlySpan<(float, float)>)[(0f, 0f), (1f, 0f), (-1f, 0f), (0f, 1f), (0f, -1f)])
-                if (Rafts.Under(state.Position + Vector3.Transform(new Vector3(x * widest, y, z * widest), state.Rotation)) is not null)
+                if (Rafts.Under(state.Position.ToSingle() + Vector3.Transform(new Vector3(x * widest, y, z * widest), state.Rotation)) is not null)
                     return true;
         }
         return false;

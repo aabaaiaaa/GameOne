@@ -205,8 +205,8 @@ public sealed class CollisionSearchTests(ITestOutputHelper output)
         var world = WorldTests.ManySatellites(copies);
         return [.. world.Vessels.Select(s =>
         {
-            var centre = s.Position + Vector3.Transform(s.CentreOfMassOffset, s.Rotation);
-            return new SearchVessel(s.Id, GroundBody.Planet, centre, Planet.AmongStars(centre, s.Velocity), size);
+            var centre = s.Position.ToSingle() + Vector3.Transform(s.CentreOfMassOffset, s.Rotation);
+            return new SearchVessel(s.Id, GroundBody.Planet, centre, Planet.AmongStars(centre, s.Velocity.ToSingle()), size);
         })];
     }
 

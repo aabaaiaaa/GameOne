@@ -648,7 +648,7 @@ public sealed class NodeTests(ITestOutputHelper output)
     {
         // No node is flown under formula: its hold waits for its pilot, its nose where it was.
         var far = UnwatchedTests.Satellite(1, 10000f, 0f, 240f);
-        var chain = new ManoeuvreChain(new ChainAnchor(GroundBody.Planet.Name, 0.0, far.Position, GroundBody.Planet.AmongStars(far.Position, far.Velocity)),
+        var chain = new ManoeuvreChain(new ChainAnchor(GroundBody.Planet.Name, 0.0, far.Position.ToSingle(), GroundBody.Planet.AmongStars(far.Position.ToSingle(), far.Velocity.ToSingle())),
             [new ManoeuvreNode(200, Radial: 30f)]);
         using var sim = new Simulation(Mission.FreePlay, world: new WorldState
         {
@@ -963,7 +963,7 @@ public sealed class NodeTests(ITestOutputHelper output)
     public void A_chain_anchored_past_where_the_path_ends_is_anchored_where_it_ends_and_saves(float share)
     {
         var state = InOrbit.UpperStage(0, 9000f, share);
-        var (centre, stars) = (state.CentreOfMass, InOrbit.Stars(state));
+        var (centre, stars) = (state.CentreOfMass.ToSingle(), InOrbit.Stars(state));
         var chain = ManoeuvreChain.AnchoredOn(GroundBody.Planet, centre, stars, 1e13, [new ManoeuvreNode(0, Prograde: 5f)], 0);
         var anchor = chain.Anchor;
         output.WriteLine($"share {share}: anchored at {anchor.Time:0.0} s, {anchor.Position}, {anchor.StarsVelocity}");

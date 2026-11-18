@@ -86,7 +86,7 @@ public sealed class SlowdownTests(ITestOutputHelper output)
         var overlap = MathF.Sqrt(reach * reach - 10f * 10f) / 300f; // how long past its closest their sizes overlap
         var hitAt = 3f + overlap / 2f;
         var pair = FastCollisionTests.Pair(5600f, 5000f, hitAt, crossing: true).Vessels;
-        var up = Planet.Up(pair[0].Position);
+        var up = Planet.Up(pair[0].Position.ToSingle());
         var passed = FastCollisionTests.Overtaken(pair[0], 3f, 300f, up * 10f, id: 2);
         var (sim, flown, hitter) = FastCollisionTests.Fly(new WorldState { Vessels = [pair[0], pair[1], passed], NextVesselId = 3 });
         using var _ = sim;
@@ -360,8 +360,8 @@ public sealed class SlowdownTests(ITestOutputHelper output)
         // Round it, 11 m off (TerrainTileTests' field): all but the one at its middle, where the
         // target stands, and the one nearest the camera, so the target is among the four.
         var field = TerrainTileTests.FrozenField(within: 1, firstId: 2)
-            .OrderBy(s => Vector3.Distance(s.CentreOfMass, zone)).Skip(1)
-            .OrderBy(s => Vector3.Dot(s.CentreOfMass - zone, east)).SkipLast(1)
+            .OrderBy(s => Vector3.Distance(s.CentreOfMass.ToSingle(), zone)).Skip(1)
+            .OrderBy(s => Vector3.Dot(s.CentreOfMass.ToSingle() - zone, east)).SkipLast(1)
             .Select((s, i) => s with { Id = 2 + i }).ToArray();
         var far = PerfScenes.FarSatellite(zone, 2 + field.Length, altitude: 150000f);
         using var sim = new Simulation(world: world with { Vessels = [.. world.Vessels, .. field, far], NextVesselId = far.Id + 1 });

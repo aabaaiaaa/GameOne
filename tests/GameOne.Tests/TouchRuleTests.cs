@@ -58,7 +58,7 @@ public sealed class TouchRuleTests(ITestOutputHelper output)
         var up = Planet.Up(at);
         var state = Drops.Placed(at, Planet.East(at), StartSpeed(touching));
         if (raft is not null)
-            state = state with { Velocity = state.Velocity + raft.VelocityAt(state.Position) }; // falling at that against the raft
+            state = state with { Velocity = state.Velocity.ToSingle() + raft.VelocityAt(state.Position.ToSingle()) }; // falling at that against the raft
         var sim = new Simulation(world: new WorldState { Vessels = [state], NextVesselId = 1 }, site: site);
         var vessel = sim.Flight.WorldVessels.First(v => v.Id == 0);
         sim.Step(new FlightInput(SwitchTo: vessel));
@@ -317,7 +317,7 @@ public sealed class TouchRuleTests(ITestOutputHelper output)
         var up = Planet.Up(level);
         var length = RocketGeometry.StackHeight(Vehicle.Booster, 0, 0);
         var lying = LyingAt(level, east);
-        var middle = lying.Position + Vector3.Transform(Vector3.UnitY, lying.Rotation) * (length / 2f);
+        var middle = lying.Position.ToSingle() + Vector3.Transform(Vector3.UnitY, lying.Rotation) * (length / 2f);
         VesselState Half(int id, Vector3 over) => new()
         {
             Id = id, Flight = 0, Mission = Mission.DeploySatellite, Vehicle = Vehicle.FairingHalf, First = 0, Last = 0,
@@ -403,8 +403,8 @@ public sealed class TouchRuleTests(ITestOutputHelper output)
         // it wakes, but it hasn't come down on it again. The other is looked at only while it rises.
         var radius = Vehicle.Booster.Stages[0].Radius;
         var standing = Standing();
-        var up = Planet.Up(standing.Position);
-        var east = Planet.East(standing.Position);
+        var up = Planet.Up(standing.Position.ToSingle());
+        var east = Planet.East(standing.Position.ToSingle());
         var passer = Drops.Placed(Scene.LandingZoneCentre, east, 0f, legsOut: false, id: 1) with
         {
             Position = standing.Position + east * (2f * radius + Scene.WakeMargin - 1f) + up * 2f,

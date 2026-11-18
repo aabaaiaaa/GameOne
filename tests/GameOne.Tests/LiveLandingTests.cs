@@ -181,7 +181,7 @@ public sealed class LiveLandingTests(ITestOutputHelper output)
         }
         var down = world.Vessels.Single(v => v.Id == 0);
         Assert.Equal(0f, down.Throttle);
-        var north = Planet.North(down.Position);
+        var north = Planet.North(down.Position.ToSingle());
         var dry = down with { Id = 1, Position = down.Position + north * 60f, Throttle = 1f, Fuel = [.. down.Fuel.Select(_ => 0f)] };
         using var sim = new Simulation(world: world with { Vessels = [down, dry], NextVesselId = 2 });
         var vessels = sim.Flight.WorldVessels.Where(v => v.Id is 0 or 1).ToArray();

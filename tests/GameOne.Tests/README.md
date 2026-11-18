@@ -600,7 +600,12 @@ say) stalls frames and spoils the timing.
   staged in orbit, each part's copy Jolt's from the step after and going on with no jump; a craft
   crossing into the moon's sphere in the physics, its copy changed across in double onto the orbit round
   the moon worked out again in double (exact to a micrometre), and keeping to that path; and the
-  autopilot's landing on the landing zone, its touchdown within 0.01 m/s of Jolt's floats alone.
+  autopilot's landing on the landing zone, its touchdown within 0.01 m/s of Jolt's floats alone; a
+  craft handed to the formula and back (on its orbit by Kepler, and stepped low over the moon), the
+  formula going on from the copy and the copy coming back where the formula had it, to a micrometre;
+  and the lander stepped by the formula low over the moon, burning then coasting two laps, each lap's
+  mean size within a millimetre of the one before's (read where it is rather than where its drift
+  takes it, the pull made it gain some 34 m a lap).
 - **`MissionRunTests`:** runs (`MissionRun`): two in progress at once, each ticking its own steps
   whichever vessel is flown; the mission panel's run (`Flight.Run`) following the flown vessel;
   a new mission at Home leaving another site's waiting rocket, and its run, in place; the
@@ -666,7 +671,7 @@ say) stalls frames and spoils the timing.
   anchored round the moon loading back as it was, and one anchored at an unknown body or saved with
   no nodes refused (listed as unreadable); the world list
   (the latest first, what is in each, a file it can't read listed with why); a file from a newer
-  version refused; a world flown in free play saved and loaded; worlds made from presets with names of their own, renamed, reset and deleted; a vessel afloat saving and coming back floating (and one saved while still settling in the water, coming back and floating with nobody near); vessels saved while out of the physics, under formula, saved where the formula had them and loading back there.
+  version refused; a world flown in free play saved and loaded; worlds made from presets with names of their own, renamed, reset and deleted; a vessel afloat saving and coming back floating (and one saved while still settling in the water, coming back and floating with nobody near); vessels saved while out of the physics, under formula, saved where the formula had them and loading back there; a place and velocity with more digits than a float holds coming back from the file exactly, satellites saved in orbit (one flown in the physics, the rest under formula) loading back where they were in double and brought into the physics with that as their copy, and a vessel loaded flying into the physics with its saved place as its copy.
 - **`ControlsListTests`:** every line of the HUD's controls list (`Hud.ControlLine`) short enough to
   fit a small window.
 - **`CreditsTests`:** the BRUTAL credits panel (licence §2.1 and §2.2): shown before play and in

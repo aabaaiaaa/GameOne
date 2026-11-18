@@ -545,7 +545,7 @@ public sealed class TerrainTileTests(ITestOutputHelper output)
             var physics = new RocketPhysics(GroundBody.Planet);
             var laid = new List<uint>();
             var scenery = physics.BodyCount; // no tile yet: the scenery alone, whatever the placeholders
-            var craft = physics.Restore(Booster, 0, 0, s.Position, s.Rotation, Vector3.Zero, Vector3.Zero, 1f, fairingOn: false, frozen: true);
+            var craft = physics.Restore(Booster, 0, 0, s.Position.ToSingle(), s.Rotation, Vector3.Zero, Vector3.Zero, 1f, fairingOn: false, frozen: true);
             if (wake)
                 physics.SetLegs(craft, 0.98f);
             for (var t = 0f; t < 3f; t += 1f / 60)
@@ -556,8 +556,8 @@ public sealed class TerrainTileTests(ITestOutputHelper output)
             for (var t = 0f; t < Scene.TerrainTileLingerSeconds + 1f; t += 1f / 60)
                 physics.Update(1f / 60, []);
             Assert.Equal(scenery, physics.BodyCount);
-            var up = Planet.Up(s.Position);
-            var added = physics.AddLoose(Booster, s.Position + up * 100f, s.Rotation, Vector3.Zero, Vector3.Zero);
+            var up = Planet.Up(s.Position.ToSingle());
+            var added = physics.AddLoose(Booster, s.Position.ToSingle() + up * 100f, s.Rotation, Vector3.Zero, Vector3.Zero);
             Assert.Equal(scenery + 1, physics.BodyCount); // one more than before it: the placeholders are never counted
             return (physics, added, laid);
         }
@@ -634,7 +634,7 @@ public sealed class TerrainTileTests(ITestOutputHelper output)
     {
         using var physics = new RocketPhysics(GroundBody.Planet);
         var s = Standing(0, LandPoints(14, 8000f, slope => slope < 4f).First(), 0f, FlightState.Landed);
-        var craft = physics.Restore(Booster, 0, 0, s.Position, s.Rotation, Vector3.Zero, Vector3.Zero, 1f, fairingOn: false, frozen: true);
+        var craft = physics.Restore(Booster, 0, 0, s.Position.ToSingle(), s.Rotation, Vector3.Zero, Vector3.Zero, 1f, fairingOn: false, frozen: true);
         Assert.True(craft.Frozen);
         Assert.False(physics.IsActive(craft));
         Assert.Equal(0, physics.TileCount);
@@ -730,7 +730,7 @@ public sealed class TerrainTileTests(ITestOutputHelper output)
         var up = Planet.Up(zone);
         var states = FrozenField(within);
         // Its lowest point held over the ground so far over their tops, its body's and theirs' widths between.
-        var tops = states.Max(s => Planet.GroundAltitude(s.Position + Vector3.Transform(Vector3.UnitY, s.Rotation) * Booster.Stages[0].Height));
+        var tops = states.Max(s => Planet.GroundAltitude(s.Position.ToSingle() + Vector3.Transform(Vector3.UnitY, s.Rotation) * Booster.Stages[0].Height));
         var height = tops + 2f * Booster.Stages[0].Radius + FieldFlyGap;
 
         var fuel = Booster.Stages[0].FuelMass * 0.5f;

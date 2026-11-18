@@ -42,11 +42,12 @@ internal sealed class WorldStore(string directory)
 {
     /// <summary>
     /// The format files are written in. A file in any other can't be read: a newer one's may hold
-    /// what this game doesn't know, and an older one has no missions in progress, no vessel flown
-    /// and no vessel's launch site or view, and its nodes are each a time, not a chain (and older
-    /// still, no vessel's body), none of which is migrated.
+    /// what this game doesn't know, and an older one keeps its vessels' places and velocities in
+    /// floats (and older still has no missions in progress, no vessel flown and no vessel's launch
+    /// site or view, and its nodes are each a time, not a chain, and older yet, no vessel's body),
+    /// none of which is migrated.
     /// </summary>
-    public const int FormatVersion = 5;
+    public const int FormatVersion = 6;
 
     private const string Extension = ".json";
 
@@ -196,7 +197,7 @@ internal sealed class WorldStore(string directory)
                     FlightState.Floating => " floating",
                     FlightState.Ready => " on the pad",
                     // From the centre of mass, where the velocity is, as the vessel's own orbit is read.
-                    _ => Bodies.Named(v.Body) is var body && body.Orbit(v.CentreOfMass, body.AmongStars(v.CentreOfMass, v.Velocity)).Periapsis > body.OrbitFloor ? " in orbit" : " flying",
+                    _ => Bodies.Named(v.Body) is var body && v.CentreOfMass.ToSingle() is var centre && body.Orbit(centre, body.AmongStars(centre, v.Velocity.ToSingle())).Periapsis > body.OrbitFloor ? " in orbit" : " flying",
                 };
                 return (Noun: noun, Where: where);
             })

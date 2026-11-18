@@ -57,6 +57,9 @@ internal sealed class Vessel
     // is where its centre of mass is in its own space (what places its origin from that).
     private Quaternion _rotation = Quaternion.Identity;
     private Vector3 _angularVelocity, _centreOffset;
+    // And its centre of mass and velocity in double (what _centreOfMass and Velocity are rounded
+    // from), as the formula steps them and as the physics' copy was handed over: see TrueCentreOfMass.
+    private Vector3Double _trueCentre, _trueVelocity;
     private Vector3? _burnAim;                         // the next node's burn once it has begun, among the stars (as the ground was then)
     private Vector3 _burned;                           // and how much of it the engine has given since, the same way
     private double _burnStart;                         // the world time it began: how far the ground has turned from that since
@@ -102,7 +105,7 @@ internal sealed class Vessel
     internal Vessel(Worlds worlds, List<SoundEvent> sounds, VesselState state, double now, double? onFormulaFrom = null)
         : this(worlds, Bodies.Named(state.Body), PhysicsFor(worlds, state, onFormulaFrom), state.Mission, sounds,
             onFormulaFrom is null
-                ? PhysicsFor(worlds, state, onFormulaFrom)!.Restore(state.Vehicle, state.First, state.Last, state.Position, state.Rotation, state.Velocity,
+                ? PhysicsFor(worlds, state, onFormulaFrom)!.Restore(state.Vehicle, state.First, state.Last, state.Position.ToSingle(), state.Rotation, state.Velocity.ToSingle(),
                     state.AngularVelocity, state.LegDeploy, state.FairingOn, frozen: state.State is FlightState.Landed or FlightState.Floating, state.BayDoors, state.BayDoorStops)
                 : RocketPhysics.StandIn(state.Vehicle, state.First, state.Last, state.LegDeploy, state.FairingOn, state.BayDoors, state.BayDoorStops),
             (float[])state.Fuel.Clone(), state.Id, state.Flight)
@@ -110,6 +113,12 @@ internal sealed class Vessel
         State = state.State;
         Site = LaunchSites.Named(state.Site);
         _at = now;
+        if (onFormulaFrom is null)
+        {
+            // Its place and velocity as saved, in double: the physics' copy (see RocketPhysics.Keep).
+            _physics!.Keep(_craft, state.CentreOfMass, state.Velocity);
+            Refresh();
+        }
         // The rule by state (see AutoFrame): landed or afloat is the surface frame. No path reaches
         // this with an orbit-like periapsis today (a vessel restored so is frozen, reading no
         // velocity), but the rule is by its state, not by its orbit falling.
@@ -166,17 +175,28 @@ internal sealed class Vessel
     {
         var still = State is FlightState.Landed or FlightState.Floating;
         _model = Matrix4x4.CreateFromQuaternion(state.Rotation);
-        _model.Translation = state.Position;
-        // Its centre of mass where a body would have it (RocketGeometry's, as the physics gives
-        // its bodies), whatever was saved: a world written by hand may say otherwise.
+        // Its centre of mass from its origin where a body would have it (RocketGeometry's, as the
+        // physics gives its bodies), whatever was saved: a world written by hand may say otherwise.
         _centreOffset = RocketGeometry.CentreOfMassOffset(Vehicle, Stage, TopStage);
-        (_centreOfMass, _rotation) = (state.Position + Vector3.Transform(_centreOffset, state.Rotation), state.Rotation);
-        (Velocity, _angularVelocity) = still ? (Vector3.Zero, Vector3.Zero) : (state.Velocity, state.AngularVelocity);
+        _rotation = state.Rotation;
+        if (still)
+        {
+            // Standing where it was saved: its origin is where it stands.
+            _model.Translation = state.Position.ToSingle();
+            (_trueCentre, _trueVelocity, _angularVelocity) = (_model.Translation + Vector3.Transform(_centreOffset, _rotation), Vector3Double.Zero, Vector3.Zero);
+        }
+        else
+        {
+            // Flying, its centre of mass is where it was saved, in double (what its orbit is), and its origin placed from that.
+            (_trueCentre, _trueVelocity, _angularVelocity) = (state.CentreOfMass, state.Velocity, state.AngularVelocity);
+            _model.Translation = OriginFor(_trueCentre.ToSingle(), _rotation);
+        }
+        (_centreOfMass, Velocity) = (_trueCentre.ToSingle(), _trueVelocity.ToSingle());
         (_lastVelocity, _lastSpin) = (Velocity, _angularVelocity);
         _formulaLegs = still && _craft.LegsDeployed ? RocketPhysics.RestingLegs(Body, Legs, _model).Extension : Vector4.One;
         OnFormula = true;
         var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, _centreOfMass) && !EngineLit;
-        _motion = Formula.Begin(Body, _centreOfMass, Velocity, _rotation, _angularVelocity, now, onItsOrbit);
+        _motion = Formula.Begin(Body, _trueCentre, _trueVelocity, _rotation, _angularVelocity, now, onItsOrbit);
         (Apoapsis, Periapsis) = Body.Orbit(_centreOfMass, Body.AmongStars(_centreOfMass, Velocity));
         _autoFrame = Frames.Auto(Body, _autoFrame, Periapsis, still);
     }
@@ -186,7 +206,19 @@ internal sealed class Vessel
     /// <paramref name="world"/>: the vessels it is saved with, where the one it is still parting
     /// from is found (it is saved by its number).
     /// </summary>
-    internal VesselState Capture(IReadOnlyList<Vessel> world) => new()
+    internal VesselState Capture(IReadOnlyList<Vessel> world)
+    {
+        // Its centre of mass from its origin, in its own space: the formula's, or measured from the
+        // physics. Flying, its origin is placed from its centre of mass in double (see
+        // TrueCentreOfMass), so that comes back exactly (see VesselState.CentreOfMass); standing
+        // still (landed, afloat or on the pad), its origin is kept as it is, where it stands.
+        var rotation = Rotation;
+        var offset = OnFormula ? _centreOffset : Vector3.Transform(CentreOfMass - Position, Quaternion.Conjugate(rotation));
+        var origin = State == FlightState.Flying ? TrueCentreOfMass - QuaternionDouble.From(rotation).Rotate(offset) : Position;
+        return Captured(world, origin, offset, rotation, TrueVelocity);
+    }
+
+    private VesselState Captured(IReadOnlyList<Vessel> world, Vector3Double origin, Vector3 offset, Quaternion rotation, Vector3Double velocity) => new()
     {
         Body = Body.Name,
         Site = Site.Name,
@@ -200,11 +232,10 @@ internal sealed class Vessel
         Last = TopStage,
         Fuel = (float[])_fuel.Clone(),
         State = State,
-        Position = Position,
-        // Measured, in its own space: what its orbit is read from (the store's "in orbit"), wherever it is moved to.
-        CentreOfMassOffset = Vector3.Transform(CentreOfMass - Position, Quaternion.Conjugate(Rotation)),
-        Rotation = Rotation,
-        Velocity = Velocity,
+        Position = origin,
+        CentreOfMassOffset = offset, // what its orbit is read from (the store's "in orbit"), wherever it is moved to
+        Rotation = rotation,
+        Velocity = velocity,
         AngularVelocity = AngularVelocity,
         Throttle = Throttle,
         Aim = _aim,
@@ -332,13 +363,14 @@ internal sealed class Vessel
         (_rotation, _angularVelocity) = (_physics!.Rotation(_craft), _physics!.AngularVelocity(_craft));
         _centreOffset = Vector3.Transform(_centreOfMass - Position, Quaternion.Conjugate(_rotation));
         _formulaLegs = State is FlightState.Landed or FlightState.Floating ? _craft.LegExtension : Vector4.One;
+        (_trueCentre, _trueVelocity) = (_physics!.TrueCentreOfMass(_craft), _physics!.TrueVelocity(_craft)); // the physics' copy, which the formula goes on from
         _physics!.Remove(_craft);
         _physics = null; // its body's world may be released, and reused for another, while it is out of it
         OnFormula = true;
         (AboardByFormula, _handedBack, _playingOut) = (false, false, false);
         // On its orbit above the air and clear of the ground, its engine off; stepped otherwise (see Formula).
         var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, _centreOfMass) && !EngineLit;
-        _motion = Formula.Begin(Body, _centreOfMass, Velocity, _rotation, _angularVelocity, now, onItsOrbit);
+        _motion = Formula.Begin(Body, _trueCentre, _trueVelocity, _rotation, _angularVelocity, now, onItsOrbit);
         // The same all along its orbit, so worked out once here, not each step (see AfterPhysics).
         (Apoapsis, Periapsis) = Body.Orbit(_centreOfMass, Body.AmongStars(_centreOfMass, Velocity));
     }
@@ -360,6 +392,7 @@ internal sealed class Vessel
         _physics = _worlds.Need(Body);
         _craft = _physics.Restore(Vehicle, Stage, TopStage, Position, _rotation, Velocity, _angularVelocity, LegDeploy, FairingOn,
             frozen: State is FlightState.Landed or FlightState.Floating, BayDoors, _craft.DoorStops);
+        _physics.Keep(_craft, _trueCentre, _trueVelocity); // where the formula has it, in double
         OnFormula = false;
         (_playingOut, AboardByFormula, _handedBack) = (_handedBack, false, false);
         Refresh();
@@ -390,13 +423,13 @@ internal sealed class Vessel
         if (OnFormula)
         {
             Body = body;
-            var at = change.Point(centre).ToSingle();
-            var velocity = change.Velocity(centre, (Vector3Double)Velocity).ToSingle();
+            var at = change.Point(_trueCentre);
+            var velocity = change.Velocity(_trueCentre, _trueVelocity);
             var (rotation, spin) = (change.Rotation(_rotation), change.Spin((Vector3Double)_angularVelocity).ToSingle());
             MoveByFormula(at, velocity, rotation, spin, orbitChanged: true);
             // Begun again from here, at the new body: on its orbit there if it can be, else stepped.
             var held = _motion.Held;
-            var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, at) && !EngineLit;
+            var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, _centreOfMass) && !EngineLit;
             _motion = Formula.Begin(body, at, velocity, rotation, spin, now, onItsOrbit);
             _motion.Held = held;
         }
@@ -434,17 +467,18 @@ internal sealed class Vessel
     /// velocity over the ground, its attitude and turning; <paramref name="orbitChanged"/> if its
     /// orbit is no longer the one it was last measured on (it has been stepped).
     /// </summary>
-    internal void MoveByFormula(Vector3 centreOfMass, Vector3 velocity, Quaternion rotation, Vector3 angularVelocity, bool orbitChanged)
+    internal void MoveByFormula(Vector3Double centreOfMass, Vector3Double velocity, Quaternion rotation, Vector3 angularVelocity, bool orbitChanged)
     {
-        (_centreOfMass, Velocity, _rotation, _angularVelocity) = (centreOfMass, velocity, rotation, angularVelocity);
+        (_trueCentre, _trueVelocity, _rotation, _angularVelocity) = (centreOfMass, velocity, rotation, angularVelocity);
+        (_centreOfMass, Velocity) = (centreOfMass.ToSingle(), velocity.ToSingle());
         _model = Matrix4x4.CreateFromQuaternion(rotation);
-        _model.Translation = OriginFor(centreOfMass, rotation);
+        _model.Translation = OriginFor(_centreOfMass, rotation);
         if (orbitChanged)
             (Apoapsis, Periapsis) = Body.Orbit(_centreOfMass, Body.AmongStars(_centreOfMass, Velocity));
         // Its heights and tilt, for the HUD, the map and its best altitude. High up, nothing is
         // near it but the ground far below, so a few lookups do (see MeasureFar); nearer, the
         // heights its touchdown would be measured by (see Measure).
-        if (Body.Altitude(centreOfMass) - Reach > Body.MaxHeight + 4f * Reach + AirborneClearance)
+        if (Body.Altitude(_centreOfMass) - Reach > Body.MaxHeight + 4f * Reach + AirborneClearance)
             MeasureFar();
         else
             Measure();
@@ -598,6 +632,7 @@ internal sealed class Vessel
         _model.Translation = position;
         (_rotation, _angularVelocity, Velocity) = (rotation, Vector3.Zero, Vector3.Zero);
         _centreOfMass = position + Vector3.Transform(_centreOffset, rotation);
+        (_trueCentre, _trueVelocity) = (_centreOfMass, Vector3Double.Zero);
         var (lowest, lowestAt, _) = Measure();
         JudgeTouch(speed);
         _hasBeenAirborne = true;
@@ -624,7 +659,7 @@ internal sealed class Vessel
     /// </summary>
     internal void WreckByFormula(string reason, Vector3 at, bool explode = true, float? touchdown = null, Craft? hit = null)
     {
-        _centreOfMass = at;
+        (_centreOfMass, _trueCentre) = (at, at);
         _model.Translation = OriginFor(at, _rotation);
         if (touchdown is { } speed)
             TouchdownSpeed = speed;
@@ -1214,6 +1249,16 @@ internal sealed class Vessel
     public Vector3 CentreOfMass => _centreOfMass;
     /// <summary>How fast its centre of mass moves over the ground (Jolt's linear velocity).</summary>
     public Vector3 Velocity { get; private set; }
+
+    /// <summary>
+    /// Its centre of mass and velocity in double, of which <see cref="CentreOfMass"/> and
+    /// <see cref="Velocity"/> are the floats: in the physics, its copy (see
+    /// <see cref="RocketPhysics.TrueCentreOfMass"/>); under formula, the formula's, which goes on
+    /// from that copy and is handed back as it (see <see cref="RocketPhysics.Keep"/>). What a
+    /// crossing, the edge's check and saving take; every other read may read the floats.
+    /// </summary>
+    internal Vector3Double TrueCentreOfMass => OnFormula ? _trueCentre : _craft.Removed ? _centreOfMass : _physics!.TrueCentreOfMass(_craft);
+    internal Vector3Double TrueVelocity => OnFormula ? _trueVelocity : _craft.Removed ? Velocity : _physics!.TrueVelocity(_craft);
 
     /// <summary>
     /// How fast what it is on was moving at its centre of mass when it was last measured: a raft's

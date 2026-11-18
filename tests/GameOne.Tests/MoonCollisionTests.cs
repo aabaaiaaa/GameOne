@@ -243,13 +243,13 @@ public sealed class MoonCollisionTests(ITestOutputHelper output)
 
         // Landed on the moon, or on the pad: no other body's ground within its reach.
         var landed = OnTheMoon.Lander(0, OnTheMoon.LandingSpot);
-        Assert.False(May(Moon, landed.Position, Vector3.Zero));
+        Assert.False(May(Moon, landed.Position.ToSingle(), Vector3.Zero));
         Assert.False(May(Home, Vector3.Zero, Vector3.Zero));
 
         // 300 m outside the moon's sphere, at the planet: diving at 280 m/s, it could; drifting at
         // 10 m/s among the moon's stars, it couldn't be fast by the time it got there.
         var diving = Outside(fuel: 0.5f);
-        Assert.True(May(Home, diving.Position, diving.Velocity));
+        Assert.True(May(Home, diving.Position.ToSingle(), diving.Velocity.ToSingle()));
         var (toPlanet, _) = CrossingTests.Ways();
         var (at, drifting) = CrossingTests.FromMoon(-toPlanet * (Moon.SphereRadius + 300f), toPlanet * 10f, Home);
         Assert.False(May(Home, at, drifting));

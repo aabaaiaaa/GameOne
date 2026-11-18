@@ -120,9 +120,9 @@ public sealed class FrameFlightTests(ITestOutputHelper output)
         // enough that the pilot closes at its fastest (RendezvousPilot.ClosingSpeed) for a while
         // before it slows (from 2 km that stretch is only longer, by 150 s).
         var a = WorldPresets.Satellites().Vessels[0];
-        var normal = Vector3.Normalize(Vector3.Cross(a.CentreOfMass - Planet.Centre, InOrbit.Stars(a)));
-        var ahead = Quaternion.CreateFromAxisAngle(normal, 1000f / (a.CentreOfMass - Planet.Centre).Length());
-        var b = InOrbit.At(a, Planet.Centre + Vector3.Transform(a.CentreOfMass - Planet.Centre, ahead), Vector3.Transform(InOrbit.Stars(a), ahead)) with { Id = 1 };
+        var normal = Vector3.Normalize(Vector3.Cross(a.CentreOfMass.ToSingle() - Planet.Centre, InOrbit.Stars(a)));
+        var ahead = Quaternion.CreateFromAxisAngle(normal, 1000f / (a.CentreOfMass.ToSingle() - Planet.Centre).Length());
+        var b = InOrbit.At(a, Planet.Centre + Vector3.Transform(a.CentreOfMass.ToSingle() - Planet.Centre, ahead), Vector3.Transform(InOrbit.Stars(a), ahead)) with { Id = 1 };
         using var sim = new Simulation(Mission.ReachOrbit, world: new WorldState { Vessels = [a, b], NextVesselId = 2 });
         var flight = sim.Flight;
         var (mine, theirs) = (flight.WorldVessels.First(v => v.Id == 0), flight.WorldVessels.First(v => v.Id == 1));

@@ -83,6 +83,87 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
     }
 
     [Fact]
+    public void A_place_and_velocity_with_more_digits_than_a_float_round_trip_exactly()
+    {
+        var exact = InOrbit.Round(GroundBody.Moon, 0, 400f) with
+        {
+            Position = new Vector3Double(1234.5678901234567, -9876.543210987654, 0.12345678901234567),
+            Velocity = new Vector3Double(-12.345678901234567, 0.0000012345678901234567, 765.43210987654321),
+        };
+        Assert.NotEqual(exact.Position, (Vector3Double)exact.Position.ToSingle()); // more than a float holds
+        Assert.NotEqual(exact.Velocity, (Vector3Double)exact.Velocity.ToSingle());
+        Store.Save(new WorldState { Id = "exact", Name = "Exact", Vessels = [exact], NextVesselId = 1, Flights = 1 });
+        var back = Store.Load("exact").Vessels.Single();
+        Assert.Equal(exact.Position, back.Position);
+        Assert.Equal(exact.Velocity, back.Velocity);
+        Assert.Equal(exact.CentreOfMass, back.CentreOfMass);
+    }
+
+    [Fact]
+    public void A_world_saved_with_vessels_in_orbit_loads_back_with_their_places_in_double()
+    {
+        // The satellites preset a few seconds on, the 60° satellite flown (in the physics, its copy
+        // stepped in double) and the rest under formula: saved and loaded (far from the new
+        // rocket's pad, each under formula), each comes back where it was and moving as it was, in
+        // double, and brought into the physics, its copy is that.
+        WorldState world;
+        Dictionary<int, (Vector3Double At, Vector3Double Velocity)> was;
+        using (var sim = new Simulation(Mission.FreePlay, world: WorldPresets.Satellites()))
+        {
+            var flown = sim.Flight.WorldVessels.Single(v => v.Id == 2);
+            sim.Step(new FlightInput(SwitchTo: flown));
+            sim.Run((_, _) => default, _ => false, maxSeconds: 3);
+            Assert.False(flown.OnFormula);
+            Assert.True(flown.Craft.Kept);
+            Assert.Contains(sim.Flight.WorldVessels, v => v.OnFormula && v.State == FlightState.Flying);
+            was = sim.Flight.WorldVessels.Where(v => v.Flight == 0).ToDictionary(v => v.Id, v => (v.TrueCentreOfMass, v.TrueVelocity));
+            Assert.NotEqual(was[2].At, (Vector3Double)was[2].At.ToSingle()); // more than a float holds
+            world = sim.Flight.Capture() with { Id = "exact", Name = "In orbit, exactly" };
+        }
+        Store.Save(world);
+        var back = Store.Load("exact");
+        AssertSameVessels(world, back);
+        using var again = new Simulation(Mission.FreePlay, world: back);
+        foreach (var (id, (at, velocity)) in was)
+        {
+            var vessel = again.Flight.WorldVessels.Single(v => v.Id == id);
+            var (off, offSpeed) = ((vessel.TrueCentreOfMass - at).Length(), (vessel.TrueVelocity - velocity).Length());
+            output.WriteLine($"vessel {id} ({(vessel.OnFormula ? "under formula" : "in the physics")}): {off:0.0e0} m and {offSpeed:0.0e0} m/s from where it was saved");
+            Assert.InRange(off, 0, 1e-9);
+            Assert.InRange(offSpeed, 0, 1e-12);
+            again.Flight.BringIn(vessel);
+            Assert.False(vessel.OnFormula);
+            Assert.True(vessel.Craft.Kept);
+            Assert.InRange((vessel.Craft.KeptCentre - at).Length(), 0, 1e-9);
+            Assert.InRange((vessel.Craft.KeptVelocity - velocity).Length(), 0, 1e-12);
+        }
+    }
+
+    [Fact]
+    public void A_vessel_loaded_flying_into_the_physics_has_its_saved_place_as_its_copy()
+    {
+        // The upper stage coasting 3 km over Home, near enough the pad to load into the physics,
+        // its place and velocity with more digits than a float holds: its copy is them exactly.
+        var stage = InOrbit.UpperStage(0, 3000f, 1f);
+        stage = stage with
+        {
+            Position = stage.Position + new Vector3Double(1e-4 / 3, -1e-4 / 7, 1e-4 / 9),
+            Velocity = stage.Velocity + new Vector3Double(1e-6 / 3, 1e-6 / 7, -1e-6 / 9),
+        };
+        Assert.NotEqual(stage.CentreOfMass, (Vector3Double)stage.CentreOfMass.ToSingle());
+        Store.Save(new WorldState { Id = "near", Name = "Near", Vessels = [stage], NextVesselId = 1, Flights = 1 });
+        var back = Store.Load("near");
+        var saved = back.Vessels.Single();
+        using var sim = new Simulation(Mission.FreePlay, world: back);
+        var vessel = sim.Flight.WorldVessels.Single(v => v.Id == 0);
+        Assert.False(vessel.OnFormula);
+        Assert.True(vessel.Craft.Kept);
+        Assert.InRange((vessel.Craft.KeptCentre - saved.CentreOfMass).Length(), 0, 1e-9);
+        Assert.Equal(saved.Velocity, vessel.Craft.KeptVelocity);
+        Assert.Equal(saved.CentreOfMass.ToSingle(), vessel.Physics!.CentreOfMass(vessel.Craft)); // and Jolt handed it rounded
+    }
+
+    [Fact]
     public void A_point_target_round_trips()
     {
         var lander = OnTheMoon.Lander(0, OnTheMoon.LandingSpot) with { Target = NavTarget.OfPoint(1) };
@@ -440,7 +521,7 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
         AssertSameVessels(world, back);
 
         var saved = back.Vessels.Single(v => v.Id == 0);
-        var (ap, pe) = Planet.Orbit(saved.CentreOfMass, Planet.AmongStars(saved.CentreOfMass, saved.Velocity));
+        var (ap, pe) = Planet.Orbit(saved.CentreOfMass.ToSingle(), Planet.AmongStars(saved.CentreOfMass.ToSingle(), saved.Velocity.ToSingle()));
         using var again = new Simulation(Mission.LaunchAndLand, world: back);
         var vessel = again.Flight.WorldVessels.Single(v => v.Id == 0);
         output.WriteLine($"saved Ap {apoapsis:0.000} Pe {periapsis:0.000}; from the file Ap {ap:0.000} Pe {pe:0.000}; loaded Ap {vessel.Apoapsis:0.000} Pe {vessel.Periapsis:0.000}");
@@ -479,7 +560,7 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
         foreach (var (id, (at, rotation)) in formula)
         {
             var saved = world.Vessels.Single(v => v.Id == id);
-            Assert.InRange(Vector3.Distance(saved.CentreOfMass, at), 0f, 0.01f);
+            Assert.InRange(Vector3.Distance(saved.CentreOfMass.ToSingle(), at), 0f, 0.01f);
             Assert.InRange(MathF.Abs(Quaternion.Dot(saved.Rotation, rotation)), 0.99999f, 1.00001f);
         }
         Store.Save(world);
@@ -534,15 +615,15 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
         // busy worlds make them) has its centre of mass where its body is, never left behind.
         var satellite = WorldPresets.Satellites().Vessels[0];
         var height = RocketGeometry.CentreOfMassHeight(satellite.Vehicle, satellite.First, satellite.Last);
-        var from = satellite.CentreOfMass - satellite.Position;
+        var from = (satellite.CentreOfMass - satellite.Position).ToSingle();
         Assert.True(MathF.Abs(from.Length() - height) < 0.001f);
 
         var moved = satellite with { Position = satellite.Position + new Vector3(100f, -20f, 5f) };
-        Assert.True(Vector3.Distance(moved.CentreOfMass - moved.Position, from) < 0.001f, "moved, it should keep its centre of mass where it was on it");
+        Assert.True(Vector3.Distance((moved.CentreOfMass - moved.Position).ToSingle(), from) < 0.001f, "moved, it should keep its centre of mass where it was on it");
 
         var turn = Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI / 2f);
         var turned = moved with { Rotation = Quaternion.Concatenate(moved.Rotation, turn) };
-        Assert.True(Vector3.Distance(turned.CentreOfMass - turned.Position, Vector3.Transform(from, turn)) < 0.001f, "turned, its centre of mass should turn with it");
+        Assert.True(Vector3.Distance((turned.CentreOfMass - turned.Position).ToSingle(), Vector3.Transform(from, turn)) < 0.001f, "turned, its centre of mass should turn with it");
     }
 
     [Fact]
@@ -554,7 +635,7 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
         var (position, centre, velocity) = WorldPresets.CircularOrbit(Scene.AtmosphereHeight + 0.1f, 0f, 1f,
             RocketGeometry.CentreOfMassHeight(satellite.Vehicle, satellite.First, satellite.Last));
         var orbiting = satellite with { Position = position, Rotation = Planet.UprightAt(position), Velocity = velocity };
-        Assert.True(Vector3.Distance(centre, orbiting.CentreOfMass) < 0.01f, $"its centre of mass is {Vector3.Distance(centre, orbiting.CentreOfMass):0.000} m off the circle");
+        Assert.True(Vector3.Distance(centre, orbiting.CentreOfMass.ToSingle()) < 0.01f, $"its centre of mass is {Vector3.Distance(centre, orbiting.CentreOfMass.ToSingle()):0.000} m off the circle");
         var (fromCentre, fromOrigin) = (Planet.Orbit(centre, Planet.AmongStars(centre, velocity)).Periapsis, Planet.Orbit(position, Planet.AmongStars(position, velocity)).Periapsis);
         output.WriteLine($"Pe {fromCentre - Scene.AtmosphereHeight:+0.000;-0.000} m above the air from the centre of mass, {fromOrigin - Scene.AtmosphereHeight:+0.000;-0.000} m from the origin");
         // The case is one that tells the two apart: read from the origin, it would say "flying".

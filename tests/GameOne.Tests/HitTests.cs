@@ -46,7 +46,7 @@ public sealed class HitTests(ITestOutputHelper output)
     internal static (Simulation Sim, Vessel Below, Vessel Above) DroppedOnto(float gap, float speed)
     {
         var below = Standing();
-        var up = Planet.Up(below.Position);
+        var up = Planet.Up(below.Position.ToSingle());
         var nose = below.Position + up * RocketGeometry.StackHeight(Vehicle.Booster, 0, 0);
         var above = Drops.Placed(Zone, Planet.East(Zone), speed, legsOut: false, id: 1) with
         {
@@ -142,8 +142,8 @@ public sealed class HitTests(ITestOutputHelper output)
         // Lifting off at full throttle 0.4 m from another's side: a sudden change of its own speed
         // right beside another, but nothing touched it, so it is no hit on either.
         var below = Standing();
-        var up = Planet.Up(below.Position);
-        var east = Planet.East(below.Position);
+        var up = Planet.Up(below.Position.ToSingle());
+        var east = Planet.East(below.Position.ToSingle());
         var radius = Vehicle.Booster.Stages[0].Radius;
         var beside = Drops.Placed(Zone, east, 0f, legsOut: false, id: 1) with
         {
@@ -177,7 +177,7 @@ public sealed class HitTests(ITestOutputHelper output)
         // after it (which can read 6.5 m/s), are not a hit on the other.
         var (lying, side) = LyingDown();
         var radius = Vehicle.Booster.Stages[0].Radius;
-        var up = Planet.Up(lying.Position);
+        var up = Planet.Up(lying.Position.ToSingle());
         var other = lying with
         {
             Id = 1, Position = lying.Position + side * (2f * radius + 0.8f) + up * 0.3f, State = FlightState.Flying, Velocity = -up * 5.5f,
@@ -202,7 +202,7 @@ public sealed class HitTests(ITestOutputHelper output)
         // fall, touching the ground at every point in a step.
         var (lying, side) = LyingDown();
         var radius = Vehicle.Booster.Stages[0].Radius;
-        var up = Planet.Up(lying.Position);
+        var up = Planet.Up(lying.Position.ToSingle());
         var along = Vector3.Normalize(Vector3.Cross(side, up));
         for (var height = 0.30f; height < 0.65f; height += 0.03f)
         {
@@ -240,8 +240,8 @@ public sealed class HitTests(ITestOutputHelper output)
         // Flown into the standing one's side at 16 m/s, its legs stowed, about halfway up: they
         // close faster than either can take.
         var below = Standing();
-        var up = Planet.Up(below.Position);
-        var east = Planet.East(below.Position);
+        var up = Planet.Up(below.Position.ToSingle());
+        var east = Planet.East(below.Position.ToSingle());
         var height = RocketGeometry.StackHeight(Vehicle.Booster, 0, 0);
         var radius = Vehicle.Booster.Stages[0].Radius;
         var striker = Drops.Placed(Zone, east, 0f, legsOut: false, id: 1) with
@@ -270,7 +270,7 @@ public sealed class HitTests(ITestOutputHelper output)
             Assert.Equal(FlightState.Floating, vessel.State);
             floating = first.Flight.Capture().Vessels.Single(v => v.Id == 0);
         }
-        var up = Planet.Up(floating.Position);
+        var up = Planet.Up(floating.Position.ToSingle());
         var radius = Vehicle.Booster.Stages[0].Radius;
         // Lying as the floating one does, just over it, coming down at 16 m/s: closing faster than
         // either can take (Vessel.ImpactTolerance), both are wrecked.
@@ -396,13 +396,13 @@ public sealed class HitTests(ITestOutputHelper output)
             return woken && vessels.All(v => v.Craft.Frozen);
         }, maxSeconds: 30);
         output.WriteLine($"woken {woken}, all frozen again {settled}: upper {upper.State} {upper.CrashReason}, {upper.Ground:0.00} m up; "
-            + $"under it {first.State} and {second.State}, moved {Vector3.Distance(first.Position, a.Position):0.000} and {Vector3.Distance(second.Position, b.Position):0.000} m");
+            + $"under it {first.State} and {second.State}, moved {Vector3.Distance(first.Position, a.Position.ToSingle()):0.000} and {Vector3.Distance(second.Position, b.Position.ToSingle()):0.000} m");
         Assert.True(woken, "neither was woken by its touch");
         Assert.True(settled, "they never froze again");
         Assert.Equal(FlightState.Landed, upper.State);
         Assert.True(upper.Ground > radius, $"only {upper.Ground:0.0} m up: it isn't lying on the others");
         Assert.All([first, second], v => Assert.Equal(FlightState.Landed, v.State));
-        Assert.True(Vector3.Distance(first.Position, a.Position) < 0.2f && Vector3.Distance(second.Position, b.Position) < 0.2f, "the two under it were pushed from where they lay");
+        Assert.True(Vector3.Distance(first.Position, a.Position.ToSingle()) < 0.2f && Vector3.Distance(second.Position, b.Position.ToSingle()) < 0.2f, "the two under it were pushed from where they lay");
     }
 
     [Fact]
@@ -449,7 +449,7 @@ public sealed class HitTests(ITestOutputHelper output)
         Craft Lay(Vector3 at, Vector3 towards)
         {
             var placed = Drops.Placed(at, towards, 0f, leanDegrees: 90f, legsOut: false, clearance: 0.02f);
-            return physics.Restore(Vehicle.Booster, 0, 0, placed.Position, placed.Rotation, Vector3.Zero, Vector3.Zero, legDeploy: 0f, fairingOn: false);
+            return physics.Restore(Vehicle.Booster, 0, 0, placed.Position.ToSingle(), placed.Rotation, Vector3.Zero, Vector3.Zero, legDeploy: 0f, fairingOn: false);
         }
         var (cCraft, bCraft, aCraft) = (Lay(b - side, along), Lay(b, along), Lay(b + side + along * (length - bell), -along));
         var chain = new[] { cCraft, bCraft, aCraft };
@@ -616,8 +616,8 @@ public sealed class HitTests(ITestOutputHelper output)
         // foot about halfway up the other's side: the foot strikes it (its axis and its widest
         // radius are well clear of the other's, 4.9 m off), and the hit is judged then.
         var below = Standing();
-        var up = Planet.Up(below.Position);
-        var east = Planet.East(below.Position);
+        var up = Planet.Up(below.Position.ToSingle());
+        var east = Planet.East(below.Position.ToSingle());
         var radius = Vehicle.Booster.Stages[0].Radius;
         var striker = Drops.Placed(Zone, east, 0f, legsOut: true, id: 1);
         var foot = Vector3.Transform(RocketGeometry.Foot(LegGeometry.Rocket, 0), striker.Rotation); // pointing east
@@ -648,8 +648,8 @@ public sealed class HitTests(ITestOutputHelper output)
         // the blow is a touch with another vessel, judged by their closing speed, so a hit (held
         // over its gentle touchdown, which wrecks nothing, and then told).
         var landing = Drops.Placed(Zone, Planet.East(Zone), 3f, id: 0);
-        var up = Planet.Up(landing.Position);
-        var east = Planet.East(landing.Position);
+        var up = Planet.Up(landing.Position.ToSingle());
+        var east = Planet.East(landing.Position.ToSingle());
         var radius = Vehicle.Booster.Stages[0].Radius;
         var touchdown = Drops.Clearance / 3f; // seconds, about
         var striker = Drops.Placed(Zone, east, 0f, legsOut: false, id: 1) with

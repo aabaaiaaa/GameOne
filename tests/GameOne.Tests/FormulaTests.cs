@@ -213,7 +213,7 @@ public sealed class FormulaTests(ITestOutputHelper output)
     /// </summary>
     internal static (Simulation Sim, Vessel Vessel, Vessel[]? Watch) Start(VesselState state, bool watched, LaunchSite? site = null)
     {
-        var sim = new Simulation(world: new WorldState { Vessels = [state with { Id = 0 }, FarFrom(state.Position, 1)], NextVesselId = 2 }, site: site);
+        var sim = new Simulation(world: new WorldState { Vessels = [state with { Id = 0 }, FarFrom(state.Position.ToSingle(), 1)], NextVesselId = 2 }, site: site);
         var v = sim.Flight.WorldVessels.Single(x => x.Id == 0);
         Vessel[]? watch = watched ? [v] : null;
         sim.Step(new FlightInput(SwitchTo: sim.Flight.WorldVessels.Single(x => x.Id == 1), Watched: watch));
@@ -312,8 +312,8 @@ public sealed class FormulaTests(ITestOutputHelper output)
             {
                 // Pointed prograde from the start, holding it, burning its whole tank (39 s).
                 var comHeight = RocketGeometry.CentreOfMassHeight(satellite.Vehicle, satellite.First, satellite.Last);
-                var com = satellite.Position + Vector3.Transform(Vector3.UnitY, satellite.Rotation) * comHeight;
-                var prograde = Planet.AmongStars(com, satellite.Velocity);
+                var com = satellite.Position.ToSingle() + Vector3.Transform(Vector3.UnitY, satellite.Rotation) * comHeight;
+                var prograde = Planet.AmongStars(com, satellite.Velocity.ToSingle());
                 return (Pointed(satellite, prograde) with { Throttle = 1f, Hold = HoldMode.Prograde, Fuel = full }, 30, 20f);
             }
             case "fall through the air":
@@ -360,7 +360,7 @@ public sealed class FormulaTests(ITestOutputHelper output)
         var jolt = Ends(state, seconds, watched: true);
         var formula = Ends(state, seconds, watched: false);
         var gap = Vector3.Distance(jolt.At, formula.At);
-        var moved = Vector3.Distance(jolt.At, state.Position);
+        var moved = Vector3.Distance(jolt.At, state.Position.ToSingle());
         output.WriteLine($"{flight}, {seconds:0} s: {gap:0.00} m apart at the end (moved {moved:0} m); "
             + $"noses {float.RadiansToDegrees(MathF.Acos(Math.Clamp(Vector3.Dot(jolt.Up, formula.Up), -1f, 1f))):0.00}° apart, attitudes {Degrees(jolt.Rotation, formula.Rotation):0.00}°");
         Assert.InRange(gap, 0f, within);
@@ -421,7 +421,7 @@ public sealed class FormulaTests(ITestOutputHelper output)
     {
         var stage = state.Vehicle.Stages[state.First];
         var mass = stage.DryMass + state.Fuel[state.First];
-        var weight = (Planet.Gravity(state.Position) + Planet.OutwardPull(state.Position)).Length();
+        var weight = (Planet.Gravity(state.Position.ToSingle()) + Planet.OutwardPull(state.Position.ToSingle())).Length();
         return state with { Throttle = weights * weight * mass / stage.Thrust };
     }
 
@@ -889,7 +889,7 @@ public sealed class FormulaTests(ITestOutputHelper output)
         };
         var lifting = OnItsEngine(Drops.Placed(ground, downhill, 2f, fuel: 0.02f), 1.2f);
         var wet = Drops.Placed(SevenAndAHalfMetres.Value, Planet.East(SevenAndAHalfMetres.Value), 2f, legsOut: false);
-        VesselState Apart(VesselState s, int id, float metres) => s with { Id = id, Position = s.Position + Planet.North(s.Position) * metres };
+        VesselState Apart(VesselState s, int id, float metres) => s with { Id = id, Position = s.Position.ToSingle() + Planet.North(s.Position.ToSingle()) * metres };
         VesselState[] states = [Apart(fast, 0, 0f), Apart(fast, 1, 100f), Apart(lifting, 2, 0f), Apart(lifting, 3, 40f), Apart(wet, 4, -4f), Apart(wet, 5, 4f),
             FarFrom(sea, 6)];
         using var sim = new Simulation(world: new WorldState { Vessels = states, NextVesselId = states.Length });

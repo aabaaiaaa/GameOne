@@ -291,7 +291,7 @@ public sealed class FrameTests(ITestOutputHelper output)
         var a = WorldPresets.Satellites().Vessels[0];
         var stars = InOrbit.Stars(a);
         var along = Vector3.Normalize(stars);
-        var b = InOrbit.At(a, a.CentreOfMass + along * 60f, stars + along * 3f, a.Rotation) with { Id = 1 };
+        var b = InOrbit.At(a, a.CentreOfMass.ToSingle() + along * 60f, stars + along * 3f, a.Rotation) with { Id = 1 };
         using var sim = new Simulation(Mission.ReachOrbit, world: new WorldState { Vessels = [a, b], NextVesselId = 2 });
         var flight = sim.Flight;
         var (mine, theirs) = (flight.WorldVessels[0], flight.WorldVessels[1]);
@@ -444,7 +444,7 @@ public sealed class FrameTests(ITestOutputHelper output)
         // so the two frames' progrades are well apart. Surface picked, the hold turns the nose to
         // the way over the ground, and keeps it there.
         var start = Drops.Placed(Vector3.Zero, Planet.North(Vector3.Zero), 0f, leanDegrees: 90f, clearance: 3500f, legsOut: false);
-        var centre = start.CentreOfMass;
+        var centre = start.CentreOfMass.ToSingle();
         var placed = InOrbit.At(start, centre, Planet.North(centre) * Planet.CircularSpeed(Planet.Altitude(centre)) * 1.02f, start.Rotation);
         using var sim = new Simulation(world: new WorldState { Vessels = [placed], NextVesselId = 1 });
         var flight = sim.Flight;
@@ -515,7 +515,7 @@ public sealed class FrameTests(ITestOutputHelper output)
         // has climbed there, ten seconds or so on, the ground having turned some hundreds of metres
         // under it meanwhile (as it was, turned by the start's time alone, it was that far off).
         var start = Drops.Placed(Vector3.Zero, Planet.East(Vector3.Zero), 0f, clearance: 3500f, legsOut: false);
-        var placed = InOrbit.At(start, start.CentreOfMass, Planet.Up(start.CentreOfMass) * 100f);
+        var placed = InOrbit.At(start, start.CentreOfMass.ToSingle(), Planet.Up(start.CentreOfMass.ToSingle()) * 100f);
         using var sim = new Simulation(world: new WorldState { Vessels = [placed], NextVesselId = 1 });
         var flight = sim.Flight;
         sim.Step(new FlightInput(SwitchTo: flight.WorldVessels.First(v => v.Id == 0), ChooseFrame: FrameChoice.Surface));
@@ -724,14 +724,14 @@ public sealed class FrameTests(ITestOutputHelper output)
     {
         var world = WorldPresets.Satellites();
         var first = world.Vessels[0];
-        var turn = Quaternion.CreateFromAxisAngle(Vector3.Normalize(Vector3.Cross(first.Position - Planet.Centre, first.Velocity)), radians);
+        var turn = Quaternion.CreateFromAxisAngle(Vector3.Normalize(Vector3.Cross(first.Position.ToSingle() - Planet.Centre, first.Velocity.ToSingle())), radians);
         Vector3 Turned(Vector3 v) => Vector3.Transform(v, turn);
         return world with
         {
             Vessels = [first with
             {
-                Position = Planet.Centre + Turned(first.Position - Planet.Centre),
-                Velocity = Turned(first.Velocity),
+                Position = Planet.Centre + Turned(first.Position.ToSingle() - Planet.Centre),
+                Velocity = Turned(first.Velocity.ToSingle()),
                 Rotation = Quaternion.Concatenate(first.Rotation, turn),
                 Aim = Turned(first.Aim),
             }, .. world.Vessels.Skip(1)],
@@ -820,10 +820,10 @@ public sealed class FrameTests(ITestOutputHelper output)
         const int Around = 64, Site = 2; // of 72 places round; the drone ship
         var world = WorldPresets.Satellites();
         var first = world.Vessels[0];
-        var normal = Vector3.Normalize(Vector3.Cross(first.CentreOfMass - Planet.Centre, InOrbit.Stars(first)));
+        var normal = Vector3.Normalize(Vector3.Cross(first.CentreOfMass.ToSingle() - Planet.Centre, InOrbit.Stars(first)));
         var top = Planet.SeaRadius + Height;
         var turn = Quaternion.CreateFromAxisAngle(normal, Around * MathF.Tau / 72);
-        var up = Vector3.Normalize(Vector3.Transform(first.CentreOfMass - Planet.Centre, turn));
+        var up = Vector3.Normalize(Vector3.Transform(first.CentreOfMass.ToSingle() - Planet.Centre, turn));
         var at = Planet.Centre + up * top;
         Vector3 Stars(float bottom) => Vector3.Normalize(Vector3.Cross(normal, up)) * MathF.Sqrt(2 * Planet.Mu * bottom / (top * (top + bottom)));
         var bottom = Planet.SeaRadius + Low * Terrain.Map.MaxHeight;
@@ -1195,7 +1195,7 @@ public sealed class FrameTests(ITestOutputHelper output)
     {
         var world = WorldPresets.Satellites();
         var vessel = world.Vessels[which];
-        var up = Vector3.Normalize(vessel.CentreOfMass - Planet.Centre);
+        var up = Vector3.Normalize(vessel.CentreOfMass.ToSingle() - Planet.Centre);
         var at = Planet.Centre + up * (Planet.SeaRadius + height);
         var ahead = InOrbit.Stars(vessel);
         ahead = Vector3.Normalize(ahead - Vector3.Dot(ahead, up) * up);

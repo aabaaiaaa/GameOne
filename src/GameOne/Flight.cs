@@ -862,7 +862,7 @@ internal sealed class Flight : IDisposable
         foreach (var dropped in world.Vessels.Where(goes.Contains))
         {
             if (dropped.State != FlightState.Crashed && dropped.Vehicle.Stages[dropped.First].Kind != StageKind.Fairing)
-                AddToLog(new LogEntry(WorldTime, WorldLog.Named(dropped), WorldLog.RemovedForRoom, null, WorldLog.Where(Bodies.Named(dropped.Body), dropped.CentreOfMass), false));
+                AddToLog(new LogEntry(WorldTime, WorldLog.Named(dropped), WorldLog.RemovedForRoom, null, WorldLog.Where(Bodies.Named(dropped.Body), dropped.CentreOfMass.ToSingle()), false));
         }
         _bodiesAt = WorldTime;
         // The sites' body's physics now, for the new rocket on its pad, and the sea as it is now in
@@ -880,7 +880,7 @@ internal sealed class Flight : IDisposable
         _flights = world.Flights;
         _nextId = world.NextVesselId;
         var kept = world.Vessels.Where(s => !goes.Contains(s)).ToArray();
-        var (focusBody, focus) = flightStarts || flown is null ? (SitesBody, Site.Pad) : (Bodies.Named(flown.Body), flown.CentreOfMass);
+        var (focusBody, focus) = flightStarts || flown is null ? (SitesBody, Site.Pad) : (Bodies.Named(flown.Body), flown.CentreOfMass.ToSingle());
         var partedFrom = world.Vessels.Where(s => s.PartingFrom is not null).Select(s => s.PartingFrom!.Value).ToHashSet();
         foreach (var state in kept)
             _world.Add(new Vessel(_worlds, _sounds, state, WorldTime,
@@ -2074,13 +2074,13 @@ internal sealed class Flight : IDisposable
             if (v.State == FlightState.Crashed)
                 continue;
             // Near enough its body by its float place (the double copy rounded: a part in a million
-            // spares that rounding), it isn't asked; asked, its place in the physics is the
-            // physics' double copy (a float steps a kilometre out there). The part in a million is
+            // spares that rounding), it isn't asked; asked, its place is its double one, the
+            // physics' copy or the formula's (a float steps a kilometre out there). The part in a million is
             // about 2.4 times the most the float place can be off the copy (RocketPhysics' PlaceSteps,
             // 4 float steps, a few parts in ten million): raise that past about 8 and raise this with it.
             if (((Vector3Double)v.CentreOfMass - v.Body.Centre).Length() < clear[v.Body.Index] * (1 - 1e-6))
                 continue;
-            var place = v.Physics is { } physics ? physics.TrueCentreOfMass(v.Craft) : v.CentreOfMass;
+            var place = v.TrueCentreOfMass;
             asked++;
             if (SolarSystem.FromSun(v.Body, place, MotionTime(v, now)) < Scene.SolarSystemEdge)
                 continue;

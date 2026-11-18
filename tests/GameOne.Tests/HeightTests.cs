@@ -212,6 +212,6 @@ public sealed class HeightTests
     public void The_satellites_world_starts_in_stable_orbits()
     {
         foreach (var v in WorldPresets.Satellites().Vessels)
-            Assert.True(Planet.Orbit(v.CentreOfMass, Planet.AmongStars(v.CentreOfMass, v.Velocity)).Periapsis > Scene.AtmosphereHeight, $"vessel {v.Id}");
+            Assert.True(Planet.Orbit(v.CentreOfMass.ToSingle(), Planet.AmongStars(v.CentreOfMass.ToSingle(), v.Velocity.ToSingle())).Periapsis > Scene.AtmosphereHeight, $"vessel {v.Id}");
     }
 }

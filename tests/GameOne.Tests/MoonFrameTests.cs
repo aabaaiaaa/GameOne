@@ -211,7 +211,7 @@ public sealed class MoonFrameTests(ITestOutputHelper output)
         foreach (var (share, leaves) in new[] { (0.9, false), (1.2, true) })
         {
             var orbit = InOrbit.Round(Moon, 0, 400f);
-            var centre = orbit.CentreOfMass;
+            var centre = orbit.CentreOfMass.ToSingle();
             var (r, top) = ((double)(centre - Moon.Centre).Length(), leave * share);
             var speed = (float)Math.Sqrt(Moon.Mu * (2 / r - 2 / (r + top)));
             // As one that reached orbit round the planet before it came (its small view's line would say so).

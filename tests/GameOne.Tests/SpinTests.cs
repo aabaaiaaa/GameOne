@@ -192,7 +192,7 @@ public sealed class SpinTests(ITestOutputHelper output)
         var zone = LaunchSites.Named("Polar").LandingZone!.Value;
         using var physics = new RocketPhysics(GroundBody.Planet);
         var placed = Drops.Placed(zone, Planet.East(zone), 0f, leanDegrees: 90f, legsOut: false, clearance: 0.02f);
-        var craft = physics.Restore(Vehicle.Booster, 0, 0, placed.Position, placed.Rotation, Vector3.Zero, Vector3.Zero, legDeploy: 0f, fairingOn: false);
+        var craft = physics.Restore(Vehicle.Booster, 0, 0, placed.Position.ToSingle(), placed.Rotation, Vector3.Zero, Vector3.Zero, legDeploy: 0f, fairingOn: false);
         var start = physics.Position(craft);
         var t = 0f;
         for (; t < 60f && !craft.Frozen; t += 1f / 60)
@@ -238,7 +238,7 @@ public sealed class SpinTests(ITestOutputHelper output)
             void Lay(Vector3 at, Vector3 towards, int layer)
             {
                 var placed = Drops.Placed(at, towards, 0f, leanDegrees: 90f, legsOut: false, clearance: Gap);
-                pile.Add(physics.Restore(Vehicle.Booster, 0, 0, placed.Position + up * (rise * layer), placed.Rotation, Vector3.Zero, Vector3.Zero, legDeploy: 0f, fairingOn: false));
+                pile.Add(physics.Restore(Vehicle.Booster, 0, 0, placed.Position.ToSingle() + up * (rise * layer), placed.Rotation, Vector3.Zero, Vector3.Zero, legDeploy: 0f, fairingOn: false));
             }
             Lay(corner, east, 0);
             Lay(corner + n * Apart, east, 0);
@@ -289,8 +289,8 @@ public sealed class SpinTests(ITestOutputHelper output)
         using var physics = new RocketPhysics(GroundBody.Planet);
         var placed = Drops.Placed(zone, Planet.East(zone), 0f, leanDegrees: 90f, legsOut: false, clearance: 0.02f);
         var radius = Vehicle.Booster.Stages[0].Radius;
-        var lower = physics.Restore(Vehicle.Booster, 0, 0, placed.Position, placed.Rotation, up * 15f, Vector3.Zero, legDeploy: 0f, fairingOn: false);
-        var upper = physics.Restore(Vehicle.Booster, 0, 0, placed.Position + up * (2f * radius + 0.05f), placed.Rotation, up * 15f, Vector3.Zero, legDeploy: 0f, fairingOn: false);
+        var lower = physics.Restore(Vehicle.Booster, 0, 0, placed.Position.ToSingle(), placed.Rotation, up * 15f, Vector3.Zero, legDeploy: 0f, fairingOn: false);
+        var upper = physics.Restore(Vehicle.Booster, 0, 0, placed.Position.ToSingle() + up * (2f * radius + 0.05f), placed.Rotation, up * 15f, Vector3.Zero, legDeploy: 0f, fairingOn: false);
         physics.Update(1f / 60, []);
         Assert.True(lower.Grounded && upper.Grounded, "on the zone, one on the other, both should start grounded");
         for (var t = 0f; t < 0.5f; t += 1f / 60)

@@ -310,7 +310,11 @@ dotnet run --project src/GameOne
   or tip; engines, holds and fuel go on; no nodes flown, no staging): on its orbit by Kepler with
   its engine off, above the air and clear of the body's highest ground (`Formula.OnItsOrbitAt`:
   at a body with no air only its height keeps it clear); in the air, burning, or below that
-  height, stepped every `Scene.FormulaStepSeconds`; landed and afloat still.
+  height, stepped every `Scene.FormulaStepSeconds` (in double, as the physics' copy is: its pull
+  and air read where its drift takes it, `Formula.Lead` on, so a stepped orbit holds its size as a
+  plain kick and drift does); landed and afloat still. It goes on from the physics' double copy
+  as it leaves, and is handed back as that copy (`RocketPhysics.Keep`); on its orbit, it is moved
+  from where it started in double by what the Kepler orbit (in floats) says since (`FormulaOrbit`).
   Its touch is judged once, by its whole speed, against the physics' limits and with the
   physics' own reasons (the tower's is "Flew into the service tower."), read along each step so
   no ridge or floe is stepped over. Where the physics' outcome can't be matched it hands the
@@ -435,7 +439,9 @@ dotnet run --project src/GameOne
 - **Worlds:** a world carries on from flight to flight and is saved (`WorldStore`, one JSON file
   each, in `WorldStore.FormatVersion`: a file in any other is listed as unreadable). Each vessel is
   saved by its body (`VesselState.Body`, by name), its place, attitude and velocity in that body's
-  frame, and comes back into that body's physics, or under formula there. Anything new about a
+  frame (the place and velocity in double: flying, its origin is placed from its centre of mass in
+  double, `Vessel.TrueCentreOfMass`, so that comes back exactly, the physics' copy or the
+  formula's place), and comes back into that body's physics, or under formula there. Anything new about a
   vessel that should survive a save goes in `VesselState`, in `Vessel.Capture` and in the
   `Vessel` constructor that restores one (the store tests check every field round-trips): so
   far, besides its motion, fuel and inputs, its hold (`VesselState.Hold`, a `HoldMode`, with the
@@ -560,7 +566,9 @@ dotnet run --project src/GameOne
   moves it (a contact, the water, the legs, any set) is Jolt's, and the copy is taken from Jolt
   again whenever Jolt's state is no longer the copy's to its rounding (`Resync`, at each step's
   start and on each read). The copy is what a crossing, the edge's check, the handover to formula
-  and saving take; every other read may read Jolt's float, which is the copy rounded. Anything
+  and saving take (`Vessel.TrueCentreOfMass`, `TrueVelocity`: the copy, or under formula the
+  formula's double place, handed back into the physics as the copy, `RocketPhysics.Keep`, as a
+  vessel loaded flying is); every other read may read Jolt's float, which is the copy rounded. Anything
   new that changes a free craft's velocity in the step goes into the copy too.
 - **The planet turns, and the world's frame turns with it:** each body's Jolt world is its
   ground's frame (ground-fixed: the pad, the sea and the terrain don't move in it), and each body

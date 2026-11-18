@@ -52,7 +52,7 @@ public sealed class TouchTests(ITestOutputHelper output)
     {
         var (at, downhill, _) = Drops.FindSlope(0f, 0.02f, from: Drops.LevelGround);
         var placed = Drops.Placed(at, downhill, 4f, legsOut: false);
-        var craft = physics.AddLoose(Vehicle.Booster, placed.Position, placed.Rotation, placed.Velocity, Vector3.Zero);
+        var craft = physics.AddLoose(Vehicle.Booster, placed.Position.ToSingle(), placed.Rotation, placed.Velocity.ToSingle(), Vector3.Zero);
         return (craft, Planet.Up(at));
     }
 
@@ -110,7 +110,7 @@ public sealed class TouchTests(ITestOutputHelper output)
         using var physics = new RocketPhysics(GroundBody.Planet);
         var (at, downhill, _) = Drops.FindSlope(0f, 0.02f, from: Drops.LevelGround);
         var placed = Drops.Placed(at, downhill, 3f);
-        var craft = physics.AddLoose(Vehicle.Booster, placed.Position, placed.Rotation, placed.Velocity, Vector3.Zero);
+        var craft = physics.AddLoose(Vehicle.Booster, placed.Position.ToSingle(), placed.Rotation, placed.Velocity.ToSingle(), Vector3.Zero);
         physics.SetLegs(craft, 1f);
         var all = Gather(physics, craft, 2f);
         foreach (var m in all)
@@ -395,7 +395,7 @@ public sealed class TouchTests(ITestOutputHelper output)
             var (s, c) = MathF.SinCos(MathF.Tau * i / Count);
             var spot = at + (east * c + north * s) * ring;
             var placed = Drops.Placed(spot, east, 0f, legsOut: false, clearance: 0.01f);
-            crowd.Add(physics.AddLoose(Vehicle.Booster, placed.Position, placed.Rotation, Vector3.Zero, Vector3.Zero));
+            crowd.Add(physics.AddLoose(Vehicle.Booster, placed.Position.ToSingle(), placed.Rotation, Vector3.Zero, Vector3.Zero));
         }
         for (var t = 0f; t < 2f; t += Step)
             physics.Update(Step, []);

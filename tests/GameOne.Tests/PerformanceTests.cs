@@ -161,7 +161,7 @@ public sealed class PerformanceTests(ITestOutputHelper output)
         using var sim = new Simulation(Mission.LaunchAndLand, world: new WorldState { Time = noon, Vessels = states, NextVesselId = states.Length });
         sim.Step(new FlightInput(SwitchTo: sim.Flight.WorldVessels.First(v => v.Id == 0)));
         var others = sim.Flight.WorldVessels.Where(v => v != sim.Flight.Controlled).ToArray();
-        output.WriteLine($"{Floes.Near(state.Position, Scene.FloeDrawDistance).Count()} floes within {Scene.FloeDrawDistance:0} m of the flown booster");
+        output.WriteLine($"{Floes.Near(state.Position.ToSingle(), Scene.FloeDrawDistance).Count()} floes within {Scene.FloeDrawDistance:0} m of the flown booster");
 
         var results = TimeViews(sim, others, [0, 3]);
         var four = results.Single(r => r.Views == 4);

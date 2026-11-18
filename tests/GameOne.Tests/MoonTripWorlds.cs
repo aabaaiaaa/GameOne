@@ -124,7 +124,7 @@ public sealed class MoonTripWorlds(ITestOutputHelper output)
     public void Writes_the_lander_worlds()
     {
         var stack = MoonTrip.MoonOrbit(StageId, MoonTrip.MoonHeight, lander: true);
-        var fair = FairDay(stack.Position);
+        var fair = FairDay(stack.Position.ToSingle());
         using var sim = new Simulation(Mission.FreePlay, world: World(fair, stack), body: Moon);
         var lander = sim.Flight.WorldVessels.Single(v => v.Id == StageId);
         sim.Step(new FlightInput(SwitchTo: lander));

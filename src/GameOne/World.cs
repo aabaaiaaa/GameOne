@@ -30,8 +30,11 @@ internal sealed record VesselState
 
     public required FlightState State { get; init; }
 
-    /// <summary>Its origin (the bottom of its bottom stage's body), in its body's frame (<see cref="Body"/>): where the body is put back.</summary>
-    public required Vector3 Position { get; init; }
+    /// <summary>
+    /// Its origin (the bottom of its bottom stage's body), in its body's frame (<see cref="Body"/>):
+    /// where the body is put back. In double, as its centre of mass is kept (see <see cref="CentreOfMass"/>).
+    /// </summary>
+    public required Vector3Double Position { get; init; }
 
     /// <summary>
     /// Where its centre of mass is from its origin, in its own space (as <see cref="Vessel.Capture"/>
@@ -41,15 +44,19 @@ internal sealed record VesselState
     public required Vector3 CentreOfMassOffset { get; init; }
 
     /// <summary>
-    /// Its centre of mass, in its body's frame: where <see cref="Velocity"/> is (Jolt's velocity is the
-    /// centre of mass's), so its orbit is read from here, not from <see cref="Position"/>. Not used
-    /// to put it back (the body's shape and <see cref="Rotation"/> place it from the origin).
+    /// Its centre of mass, in its body's frame, worked out in double: where <see cref="Velocity"/>
+    /// is (Jolt's velocity is the centre of mass's), so its orbit is read from here, not from
+    /// <see cref="Position"/>. Its body is put back at its origin (its shape and <see cref="Rotation"/>
+    /// place its centre of mass from there), and flying, its place in double is this (the physics'
+    /// copy, or the formula's place: see <see cref="Vessel.TrueCentreOfMass"/>), so a vessel saved
+    /// in orbit comes back where it was, to more than a float holds.
     /// </summary>
     [JsonIgnore]
-    public Vector3 CentreOfMass => Position + Vector3.Transform(CentreOfMassOffset, Rotation);
+    public Vector3Double CentreOfMass => Position + QuaternionDouble.From(Rotation).Rotate(CentreOfMassOffset);
 
     public required Quaternion Rotation { get; init; }
-    public required Vector3 Velocity { get; init; }
+    /// <summary>How fast its centre of mass moves over its body's ground, in double (see <see cref="CentreOfMass"/>).</summary>
+    public required Vector3Double Velocity { get; init; }
     public required Vector3 AngularVelocity { get; init; }
 
     // Its last inputs, which it carries on with.

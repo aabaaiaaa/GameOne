@@ -267,7 +267,7 @@ internal static class PerfScenes
             var place = Planet.Centre + Planet.Up(at + (east * (i % 10 - 4.5f) + north * (i / 10 - 2f)) * 30f) * Planet.SeaRadius;
             var placed = Drops.Placed(place, downhill, 3f, clearance: 15f, id: i);
             var stage = placed.Vehicle.Stages[placed.First];
-            var weight = (Planet.Gravity(placed.Position) + Planet.OutwardPull(placed.Position)).Length();
+            var weight = (Planet.Gravity(placed.Position.ToSingle()) + Planet.OutwardPull(placed.Position.ToSingle())).Length();
             states.Add(placed with { Throttle = 0.95f * weight * (stage.DryMass + placed.Fuel[placed.First]) / stage.Thrust });
         }
         states.Add(FarSatellite(at, states.Count));
@@ -458,8 +458,8 @@ internal static class PerfScenes
                 // that costs a frame is measured.
                 var field = TerrainTileTests.FrozenField(within: 4, firstId: 1);
                 var zone = Scene.LandingZoneCentre;
-                var centre = field.MinBy(b => Vector3.Distance(b.Position, zone))!;
-                var middle = FastCollisionTests.Middle(centre.Position, centre.Rotation);
+                var centre = field.MinBy(b => Vector3.Distance(b.Position.ToSingle(), zone))!;
+                var middle = FastCollisionTests.Middle(centre.Position.ToSingle(), centre.Rotation);
                 var dive = Vector3.Normalize(Planet.East(middle) - Planet.Up(middle));
                 cases.Add(Fly($"a dive at {Scene.TopSpeed:#,0} m/s, 45° below level, into a field of {field.Count} frozen boosters",
                     new WorldState { Vessels = [FastCollisionTests.Flying(middle, dive, Scene.TopSpeed, 3f, 0), .. field], NextVesselId = field.Count + 1 }));

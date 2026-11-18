@@ -205,6 +205,114 @@ public sealed class PrecisionTests(ITestOutputHelper output)
         Assert.InRange(off, 0, 1e-6);
     }
 
+    /// <summary>
+    /// <paramref name="seconds"/> of game time with <paramref name="v"/> under formula, advanced
+    /// after each frame (as FormulaTests' Coast), <paramref name="watched"/> kept in the physics.
+    /// </summary>
+    private static void Coast(Simulation sim, Vessel v, double seconds, Vessel[] watched)
+    {
+        var last = sim.Flight.WorldTime;
+        sim.Run((_, _) => new FlightInput(Watched: watched), f =>
+        {
+            Formula.Advance(v, (float)(f.WorldTime - last), f.WorldTime);
+            last = f.WorldTime;
+            return false;
+        }, seconds);
+    }
+
+    [Theory]
+    [InlineData(false)] // on its orbit by Kepler: the Satellites preset's 60° satellite
+    [InlineData(true)]  // stepped: low over the moon, under its highest ground's height
+    public void A_vessel_handed_to_formula_and_back_keeps_its_place_in_double(bool low)
+    {
+        // Flown free in the physics a second (its copy stepped), handed to the formula, coasted
+        // ten seconds and handed back: the formula goes on from the copy itself, and the copy it
+        // comes back with is where the formula had it, in double (made from its float place, it
+        // would be off by a float's rounding: some 2 mm at the planet's satellites).
+        var world = low
+            ? new WorldState { Time = 0, Vessels = [LowPass.Start(0, Moon, 0, 1)], NextVesselId = 1, Flights = 1 }
+            : WorldPresets.Satellites();
+        using var sim = new Simulation(Mission.FreePlay, world: world);
+        foreach (var w in sim.Flight.WorldVessels)
+            sim.Flight.BringIn(w);
+        var v = sim.Flight.WorldVessels.Single(x => x.Id == (low ? 0 : 2));
+        var all = sim.Flight.WorldVessels.ToArray();
+        sim.Run((_, _) => new FlightInput(Watched: all), _ => false, maxSeconds: 1);
+        Assert.False(v.OnFormula);
+        Assert.True(v.Craft.Kept, "flying free, its copy should be kept");
+        var (copy, copyVelocity) = (v.Physics!.TrueCentreOfMass(v.Craft), v.Physics.TrueVelocity(v.Craft));
+
+        v.LeavePhysics(sim.Flight.WorldTime);
+        Assert.True(v.OnFormula);
+        Assert.Equal(low, v.Motion.Stepping);
+        Assert.Equal(copy, v.TrueCentreOfMass);
+        Assert.Equal(copyVelocity, v.TrueVelocity);
+        Coast(sim, v, 10, [.. all.Where(o => o != v)]);
+        Assert.True(v.OnFormula);
+        Assert.Equal(FlightState.Flying, v.State);
+        Assert.Equal(low, v.Motion.Stepping);
+        var (at, velocity) = (v.TrueCentreOfMass, v.TrueVelocity);
+        Assert.True((at - copy).Length() > 100, "it should have coasted on");
+        if (low)
+            Assert.NotEqual(at, (Vector3Double)at.ToSingle()); // stepped in double: more than its float holds
+
+        v.ReturnToPhysics(sim.Flight.WorldTime);
+        Assert.False(v.OnFormula);
+        Assert.True(v.Craft.Kept, "back in the physics, its copy should be kept");
+        var (off, offSpeed) = ((v.Craft.KeptCentre - at).Length(), (v.Craft.KeptVelocity - velocity).Length());
+        output.WriteLine($"back {off:0.000e0} m and {offSpeed:0.000e0} m/s from where the formula had it");
+        Assert.InRange(off, 0, 1e-6);
+        Assert.InRange(offSpeed, 0, 1e-9);
+        // And flown on from there by the physics, the copy kept and Jolt within its rounding.
+        sim.Run((_, _) => new FlightInput(Watched: all), _ => false, maxSeconds: 0.5);
+        var (place, speed) = Apart(v);
+        Assert.InRange(place, 0, 2);
+        Assert.InRange(speed, 0, 2);
+    }
+
+    [Fact]
+    public void A_stepped_vessel_under_formula_holds_its_orbit_as_in_the_physics()
+    {
+        // The lander alone low over the moon, under its highest ground's height (so the formula
+        // steps it, never on its orbit by Kepler), burning a little (prograde, a second at a 50th
+        // of its thrust, till its tank is dry), then coasting two laps. Each lap's mean size (the
+        // size worked out at each step swings some 15 mm round a lap) is the one before's, as the
+        // physics holds an orbit: stepped in floats, or with its pull read where it is rather than
+        // where its drift takes it, it gained some 34 m a lap.
+        const float Throttle = 0.02f, BurnSeconds = 1f;
+        var stage = LanderTests.Alone.Stages[0];
+        var start = LowPass.Start(0, Moon, 0, 3) with { Throttle = Throttle, Fuel = [stage.FuelMass / stage.BurnSeconds * Throttle * BurnSeconds] };
+        using var sim = new Simulation(Mission.FreePlay, world: new WorldState { Time = 0, Vessels = [start], NextVesselId = 1, Flights = 1 });
+        var v = sim.Flight.WorldVessels.Single(x => x.Id == 0);
+        static double Size(in FormulaMotion m) => Elements(Moon, m.At, m.Velocity).A;
+        var before = Elements(Moon, start.CentreOfMass, start.Velocity).A;
+        Assert.True(sim.Run((_, _) => default, _ => v.OnFormula && !v.EngineLit, maxSeconds: 10), "it should have burned its tank dry under formula");
+        Assert.True(v.Motion.Stepping);
+        var burned = Size(v.Motion);
+        Assert.True(burned - before > 0.1, $"the burn should have raised its orbit: {burned - before:0.000} m");
+
+        var lap = Math.Tau * Math.Sqrt(burned * burned * burned / Moon.Mu);
+        var steps = (int)Math.Round(lap / Scene.FormulaStepSeconds);
+        var t = sim.Flight.WorldTime;
+        var means = new double[2];
+        for (var n = 0; n < means.Length; n++)
+        {
+            var (sum, lo, hi) = (0.0, double.MaxValue, double.MinValue);
+            for (var i = 0; i < steps; i++)
+            {
+                Formula.Advance(v, Scene.FormulaStepSeconds, t += Scene.FormulaStepSeconds);
+                Assert.True(v.Motion.Stepping, "low, it should be stepped all the way round");
+                var a = Size(v.Motion);
+                (sum, lo, hi) = (sum + a, Math.Min(lo, a), Math.Max(hi, a));
+            }
+            means[n] = sum / steps;
+            output.WriteLine($"lap {n + 1}: mean size {means[n]:0.000000} m, swinging {hi - lo:0.000000} m");
+        }
+        Assert.Equal(FlightState.Flying, v.State);
+        output.WriteLine($"raised {burned - before:0.000} m by the burn; the second lap's mean {means[1] - means[0]:0.000000} m from the first's");
+        Assert.InRange(means[1] - means[0], -0.001, 0.001);
+    }
+
     [Fact]
     public void A_landing_is_unchanged()
     {

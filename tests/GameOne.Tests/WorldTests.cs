@@ -325,9 +325,9 @@ public sealed class WorldTests(ITestOutputHelper output)
     {
         var preset = WorldPresets.Satellites();
         var (low, high) = (preset.Vessels[0], preset.Vessels[1]);
-        var mine = Orbit.OverGround(GroundBody.Planet, low.CentreOfMass, low.Velocity);
+        var mine = Orbit.OverGround(GroundBody.Planet, low.CentreOfMass.ToSingle(), low.Velocity.ToSingle());
         var window = new List<Encounters.WindowPoint>();
-        Encounters.Transfer(mine, Orbit.OverGround(GroundBody.Planet, high.CentreOfMass, high.Velocity), Scene.TransferWithin, window);
+        Encounters.Transfer(mine, Orbit.OverGround(GroundBody.Planet, high.CentreOfMass.ToSingle(), high.Velocity.ToSingle()), Scene.TransferWithin, window);
         Assert.NotEmpty(window);
         var best = window.MinBy(p => p.Miss);
         var (from, to, at) = (mine.TimeTo(window[0].Anomaly), mine.TimeTo(window[^1].Anomaly), mine.TimeTo(best.Anomaly));
@@ -353,9 +353,9 @@ public sealed class WorldTests(ITestOutputHelper output)
                 many.Add(s with
                 {
                     Id = many.Count,
-                    Position = Planet.Centre + Vector3.Transform(s.Position - Planet.Centre, turn),
+                    Position = Planet.Centre + Vector3.Transform(s.Position.ToSingle() - Planet.Centre, turn),
                     Rotation = Quaternion.Concatenate(s.Rotation, turn), // still standing up from the planet, so the centre of mass is where it says
-                    Velocity = Vector3.Transform(s.Velocity, turn),
+                    Velocity = Vector3.Transform(s.Velocity.ToSingle(), turn),
                 });
         }
         return preset with { Vessels = many, NextVesselId = many.Count };
@@ -515,8 +515,17 @@ public sealed class WorldTests(ITestOutputHelper output)
             foreach (var state in world.Vessels.Where(s => s.Flight == 1))
             {
                 var vessel = flight.WorldVessels.Single(v => v.Id == state.Id);
-                Assert.Equal(state.Position, vessel.Position);
-                Assert.Equal(state.Velocity, vessel.Velocity);
+                // Flying, where its centre of mass was and moving so, in double; standing, where it stood.
+                if (state.State == FlightState.Flying)
+                {
+                    Assert.InRange((vessel.TrueCentreOfMass - state.CentreOfMass).Length(), 0, 1e-9);
+                    Assert.Equal(state.Velocity, vessel.TrueVelocity);
+                }
+                else
+                {
+                    Assert.Equal(state.Position.ToSingle(), vessel.Position);
+                    Assert.Equal(state.Velocity.ToSingle(), vessel.Velocity);
+                }
                 Assert.Equal(state.Fuel, vessel.Capture(flight.WorldVessels).Fuel);
                 Assert.Equal(state.State, vessel.State);
             }

@@ -2979,6 +2979,24 @@ internal sealed class RocketPhysics : IDisposable
     }
 
     /// <summary>
+    /// Gives <paramref name="craft"/>, just made (restored from a saved world, or back from the
+    /// formula), the place and velocity it had in double: its copy (see <see cref="TrueCentreOfMass"/>),
+    /// and Jolt handed them rounded, so it goes on from them with nothing lost to its floats. Only
+    /// if Jolt made it there to its rounding (its origin and attitude, and its body's own centre of
+    /// mass, put it within a few float steps of <paramref name="centre"/>); otherwise (a world
+    /// written by hand, its centre of mass somewhere its body's isn't) it is Jolt's, as it was
+    /// made. None for one frozen.
+    /// </summary>
+    public void Keep(Craft craft, Vector3Double centre, Vector3Double velocity)
+    {
+        if (craft.Removed || craft.Frozen || !Within(CentreOfMass(craft), centre, PlaceSteps) || !Within(Velocity(craft), velocity, VelocitySteps))
+            return;
+        (craft.KeptCentre, craft.KeptVelocity, craft.Kept) = (centre, velocity, true);
+        PutCentre(craft, centre);
+        _bodies.SetLinearVelocity(craft.Id, ToFloat3(velocity.ToSingle()));
+    }
+
+    /// <summary>
     /// How many of a float's steps (at its size) Jolt's place may be from the copy's, and still be
     /// the copy rounded and drifted by Jolt (each a step within half of one); and its velocity
     /// (which Jolt leaves as it was handed, if nothing touched it).

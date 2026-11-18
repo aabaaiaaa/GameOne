@@ -82,7 +82,7 @@ public sealed class LanderTripTests(ITestOutputHelper output)
         var flat = Vector3.Normalize(p - normal * Vector3.Dot(p, normal));
         var round = MoonTrip.AscentDegrees + 360.0 * (burn - t - MoonTrip.AscentSeconds) / MoonTrip.AscentLapSeconds;
         var stack = Vector3.Transform(flat, Quaternion.CreateFromAxisAngle(normal, (float)double.DegreesToRadians(round % 360.0)));
-        var stage = Vector3.Normalize(MoonTrip.LowOrbit(1, burn, wait: 0).Position - Planet.Centre); // nose up: its body straight over its centre of mass
+        var stage = Vector3.Normalize(MoonTrip.LowOrbit(1, burn, wait: 0).Position.ToSingle() - Planet.Centre); // nose up: its body straight over its centre of mass
         return float.RadiansToDegrees(MathF.Acos(Math.Clamp(Vector3.Dot(stack, stage), -1f, 1f)));
     }
 

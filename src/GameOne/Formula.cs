@@ -8,8 +8,14 @@ namespace GameOne;
 /// (as its body's ground's frame was at <paramref name="Since"/>, the world time it starts at), and
 /// its attitude then and how it turns among the stars, which nothing changes while it is on that
 /// orbit (one that can't be steered: one that can is turned to its aim, see <see cref="Formula"/>).
+/// And where it started, in double (<paramref name="At"/>, <paramref name="Velocity"/>), and where
+/// the orbit, worked out in floats, has it then (<paramref name="OrbitAt"/>, <paramref name="OrbitVelocity"/>):
+/// it is moved by how far the orbit has it from there, so at its start it is where it was to more
+/// than a float holds (handed back to the physics, or saved, at once), and the orbit's rounding is
+/// never carried on.
 /// </summary>
-internal readonly record struct FormulaOrbit(Orbit Orbit, double Since, Quaternion Attitude, Vector3 Spin);
+internal readonly record struct FormulaOrbit(Orbit Orbit, double Since, Quaternion Attitude, Vector3 Spin,
+    Vector3Double At, Vector3Double Velocity, Vector3 OrbitAt, Vector3 OrbitVelocity);
 
 /// <summary>
 /// How the formula is moving a vessel (<see cref="Vessel.Motion"/>): on its orbit by Kepler, its
@@ -33,9 +39,14 @@ internal struct FormulaMotion
     /// <summary>
     /// The stepped state: its centre of mass and velocity over the ground at world time
     /// <see cref="Time"/>, the last whole step's end; and how fast that step changed its velocity,
-    /// which it is moved on by between steps (see <see cref="Formula.Advance"/>).
+    /// which it is moved on by between steps (see <see cref="Formula.Advance"/>). The place and
+    /// velocity are in double, as the physics keeps a craft flying free (see
+    /// <see cref="RocketPhysics.TrueCentreOfMass"/>): stepped in floats, each step's rounding would
+    /// lean the same way lap after lap in the turning frame, so how an orbit creeps would turn on
+    /// whether anyone watches it.
     /// </summary>
-    public Vector3 At, Velocity, Change;
+    public Vector3Double At, Velocity;
+    public Vector3 Change;
     public double Time;
 
     /// <summary>
@@ -74,7 +85,7 @@ internal struct FormulaMotion
 /// air and pull, in its frame. Above the air with its engine off it is on a Kepler orbit (<see cref="Orbit.StateAfter"/>)
 /// from the state it last changed at, worked out afresh for the time asked, never integrated, so its
 /// orbit costs the same however long it is on it and never drifts. In the air, or burning, it is
-/// stepped every <see cref="Scene.FormulaStepSeconds"/> as the physics falls it (gravity, the
+/// stepped every <see cref="Scene.FormulaStepSeconds"/>, in double, as the physics falls it (gravity, the
 /// turn's pulls and the air's drag: <see cref="GroundBody.FallStep"/>), its thrust
 /// (<see cref="Vessel.Throttle"/> × <see cref="Vessel.MaxAcceleration"/>) along its
 /// <see cref="Vessel.Aim"/>, which its holds turn as they do in the physics (the fuel burns in
@@ -93,6 +104,12 @@ internal static class Formula
     private const float StepSeconds = Scene.FormulaStepSeconds;
 
     /// <summary>
+    /// How far on, in seconds of its velocity, a step reads its pull and air from where it is
+    /// (see <see cref="Step"/>): half of how much longer its step is than the physics'.
+    /// </summary>
+    private const double Lead = ((double)StepSeconds - RocketPhysics.StepSeconds) / 2;
+
+    /// <summary>
     /// How far apart along a step what is under it is read (metres): the smallest floe's width
     /// (as <see cref="Vessel.FormulaLowest"/> reads a hull), so neither a floe nor a ridge that
     /// narrow is stepped over. (The terrain's finest detail, 6 m across, is centimetres high.)
@@ -107,22 +124,27 @@ internal static class Formula
     private const float PlungeReach = 1.5f;
 
     /// <summary>Its orbit round <paramref name="body"/> with its engine off, from this state (in its frame), at world time <paramref name="now"/> (its velocity and turning over the ground, as the vessel has them).</summary>
-    public static FormulaOrbit Start(GroundBody body, Vector3 centreOfMass, Vector3 velocity, Quaternion rotation, Vector3 angularVelocity, double now) =>
+    public static FormulaOrbit Start(GroundBody body, Vector3Double centreOfMass, Vector3Double velocity, Quaternion rotation, Vector3 angularVelocity, double now)
+    {
         // Among the stars: the orbit takes the stars' velocity, and above the air a craft keeps its
         // attitude among them (see RocketPhysics' Fall), so its turning is kept as it is there.
-        new(new Orbit(body, centreOfMass, body.AmongStars(centreOfMass, velocity), findEnd: false), now, rotation, angularVelocity + body.Spin);
+        var (at, moving) = (centreOfMass.ToSingle(), velocity.ToSingle());
+        var orbit = new Orbit(body, at, body.AmongStars(at, moving), findEnd: false);
+        var (orbitAt, orbitVelocity) = OnOrbitAfter(orbit, 0);
+        return new(orbit, now, rotation, angularVelocity + body.Spin, centreOfMass, velocity, orbitAt, orbitVelocity);
+    }
 
     /// <summary>
     /// How the formula starts on a vessel at <paramref name="body"/> leaving the physics at world time
     /// <paramref name="now"/> in this state (in the body's frame): on its orbit if it can (flying above
     /// the air, its engine off), else stepped from here.
     /// </summary>
-    public static FormulaMotion Begin(GroundBody body, Vector3 centreOfMass, Vector3 velocity, Quaternion rotation, Vector3 angularVelocity, double now, bool onItsOrbit) =>
+    public static FormulaMotion Begin(GroundBody body, Vector3Double centreOfMass, Vector3Double velocity, Quaternion rotation, Vector3 angularVelocity, double now, bool onItsOrbit) =>
         new()
         {
             Stepping = !onItsOrbit,
             OnOrbit = Start(body, centreOfMass, velocity, rotation, angularVelocity, now),
-            At = centreOfMass, Velocity = velocity, Change = body.Gravity(centreOfMass), Time = now, Shown = now, Attitude = rotation,
+            At = centreOfMass, Velocity = velocity, Change = body.Gravity(centreOfMass.ToSingle()), Time = now, Shown = now, Attitude = rotation,
         };
 
     /// <summary>
@@ -148,7 +170,7 @@ internal static class Formula
             if (!v.EngineLit)
             {
                 var (at, velocity) = Along(m.OnOrbit, worldTime);
-                if (OnItsOrbitAt(v, at))
+                if (OnItsOrbitAt(v, at.ToSingle()))
                 {
                     ShowOnOrbit(v, ref m, at, velocity, worldTime);
                     return;
@@ -157,7 +179,7 @@ internal static class Formula
             // Lit, or come down into the air: stepped from here on, from where it was last moved to
             // (where its orbit had it then: unlit, and above the air).
             var (from, moving) = Along(m.OnOrbit, m.Shown);
-            (m.Stepping, m.At, m.Velocity, m.Change, m.Time, m.Attitude) = (true, from, moving, v.Body.Gravity(from), m.Shown, v.FormulaRotation);
+            (m.Stepping, m.At, m.Velocity, m.Change, m.Time, m.Attitude) = (true, from, moving, v.Body.Gravity(from.ToSingle()), m.Shown, v.FormulaRotation);
         }
 
         var stepped = false;
@@ -167,7 +189,7 @@ internal static class Formula
                 return; // it touched: landed, afloat or wrecked, there
             stepped = true;
             // Above the air with its engine off (and not about to come down into it), it goes on its orbit from here.
-            if (!v.EngineLit && OnItsOrbitAt(v, m.At) && OnItsOrbitAt(v, m.At + m.Velocity * StepSeconds))
+            if (!v.EngineLit && OnItsOrbitAt(v, m.At.ToSingle()) && OnItsOrbitAt(v, (m.At + m.Velocity * StepSeconds).ToSingle()))
             {
                 (m.Stepping, m.OnOrbit) = (false, Start(v.Body, m.At, m.Velocity, v.FormulaRotation, v.FormulaSpin, m.Time));
                 var (at, velocity) = Along(m.OnOrbit, worldTime);
@@ -178,10 +200,11 @@ internal static class Formula
         // Between steps, it is moved on from the last by its velocity, changing as that step's did;
         // and one that can't be steered turned on from the last by its spin, so it is drawn
         // turning smoothly, not a step's turn at a time (a tenth of a second's).
-        var r = (float)(worldTime - m.Time);
-        var rotation = v.Guided ? Follow(v, worldTime - m.Shown) : Turned(m.Attitude, v.FormulaSpin, r);
-        var spin = v.Guided ? GuidedSpin(v.Body, m.At) : v.FormulaSpin;
-        v.MoveByFormula(m.At + m.Velocity * r + m.Change * (r * r / 2f), m.Velocity + m.Change * r, rotation, spin, orbitChanged: stepped);
+        var r = worldTime - m.Time;
+        var rotation = v.Guided ? Follow(v, worldTime - m.Shown) : Turned(m.Attitude, v.FormulaSpin, (float)r);
+        var spin = v.Guided ? GuidedSpin(v.Body, m.At.ToSingle()) : v.FormulaSpin;
+        Vector3Double change = m.Change;
+        v.MoveByFormula(m.At + m.Velocity * r + change * (r * r / 2), m.Velocity + change * r, rotation, spin, orbitChanged: stepped);
         m.Shown = worldTime;
     }
 
@@ -221,11 +244,17 @@ internal static class Formula
         v.Body.AboveAir(at) && v.Body.Altitude(at) - v.Reach > v.Body.MaxHeight + Scene.FineDetailMargin;
 
     /// <summary>Where <paramref name="orbit"/> has its centre of mass and velocity at world time <paramref name="time"/>, in its body's ground's frame then.</summary>
-    private static (Vector3 At, Vector3 Velocity) Along(in FormulaOrbit orbit, double time)
+    private static (Vector3Double At, Vector3Double Velocity) Along(in FormulaOrbit orbit, double time)
     {
-        var body = orbit.Orbit.Body;
-        var since = time - orbit.Since;
-        var (position, stars) = orbit.Orbit.StateAfter(since);
+        var (at, velocity) = OnOrbitAfter(orbit.Orbit, time - orbit.Since);
+        return (orbit.At + ((Vector3Double)at - orbit.OrbitAt), orbit.Velocity + ((Vector3Double)velocity - orbit.OrbitVelocity));
+    }
+
+    /// <summary>Where <paramref name="orbit"/> has its centre of mass and velocity <paramref name="since"/> seconds on from its start, in its body's ground's frame then, in floats.</summary>
+    private static (Vector3 At, Vector3 Velocity) OnOrbitAfter(Orbit orbit, double since)
+    {
+        var body = orbit.Body;
+        var (position, stars) = orbit.StateAfter(since);
         // The orbit's points are among the stars as the ground's frame was at its start: turned
         // back into the ground's frame now, as every position and velocity in the game is.
         var at = body.Turned(position, -since);
@@ -233,7 +262,7 @@ internal static class Formula
     }
 
     /// <summary>Moves <paramref name="v"/> to where its orbit has it at <paramref name="worldTime"/>, turned as it turns there (or to its aim, steered).</summary>
-    private static void ShowOnOrbit(Vessel v, ref FormulaMotion m, Vector3 at, Vector3 velocity, double worldTime, bool orbitChanged = false)
+    private static void ShowOnOrbit(Vessel v, ref FormulaMotion m, Vector3Double at, Vector3Double velocity, double worldTime, bool orbitChanged = false)
     {
         Quaternion rotation;
         Vector3 spin;
@@ -295,21 +324,30 @@ internal static class Formula
     /// drift is the step's mean velocity plus the physics' own lead: under a steady pull (a burn,
     /// a fall) the two step to the same place, whatever their steps. True if it touched.
     /// </summary>
+    /// <remarks>
+    /// That drift is a plain kick and drift of the place <see cref="Lead"/> on by the velocity (the
+    /// place plus the lead, moved by the velocity the kick leaves), so the pull and the air are
+    /// read there: read at the place itself, the kick would hang on the velocity as well as the
+    /// place, and an orbit stepped so would gain some 34 m of its size a lap low over the moon
+    /// (a plain kick and drift holds it, as the physics' does). Under a steady pull where it is
+    /// read changes nothing. In double, as the physics' copy is stepped.
+    /// </remarks>
     private static bool Step(Vessel v, ref FormulaMotion m)
     {
         var (p, u) = (m.At, m.Velocity);
         var next = u;
         if (v.EngineLit)
-            next += v.Aim * (v.Throttle * v.MaxAcceleration * StepSeconds);
-        var drag = Scene.DragRate * v.Body.AirDensity(v.Body.Altitude(p));
-        next += v.Body.FallStep(next, v.Body.Gravity(p) + v.Body.OutwardPull(p), drag, StepSeconds);
+            next += (Vector3Double)v.Aim * (v.Throttle * v.MaxAcceleration * StepSeconds);
+        var read = p + u * Lead;
+        var drag = Scene.DragRate * v.Body.AirDensity(v.Body.Altitude(read.ToSingle()));
+        next += v.Body.FallStep(next, v.Body.Pull(read), drag, StepSeconds);
         var change = next - u;
-        var end = p + (u + next) * (StepSeconds / 2f) + change * (RocketPhysics.StepSeconds / 2f);
-        if (Touch(v, ref m, p, u, end, next))
+        var end = p + (u + next) * (StepSeconds / 2.0) + change * (RocketPhysics.StepSeconds / 2.0);
+        if (Touch(v, ref m, p.ToSingle(), u.ToSingle(), end.ToSingle(), next.ToSingle()))
             return true;
-        (m.At, m.Velocity, m.Change, m.Time) = (end, next, change / StepSeconds, m.Time + StepSeconds);
+        (m.At, m.Velocity, m.Change, m.Time) = (end, next, (change / StepSeconds).ToSingle(), m.Time + StepSeconds);
         if (!v.Guided)
-            Tumble(v, ref m, end);
+            Tumble(v, ref m, end.ToSingle());
         return false;
     }
 

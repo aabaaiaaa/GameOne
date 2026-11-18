@@ -291,7 +291,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
         const float Altitude = 9000f;
         var flownState = Satellite(0, Altitude, 0f, 60f);
         var ahead = Satellite(1, Altitude, 0f, 60f + DegreesApart(Altitude, 1950f));
-        ahead = ahead with { Velocity = ahead.Velocity + Vector3.Normalize(ahead.Velocity) * 50f };
+        ahead = ahead with { Velocity = ahead.Velocity.ToSingle() + Vector3.Normalize(ahead.Velocity.ToSingle()) * 50f };
         using var sim = new Simulation(world: new WorldState { Vessels = [flownState, ahead], NextVesselId = 2 });
         var (flown, edge) = (Get(sim, 0), Get(sim, 1));
         sim.Step(new FlightInput(SwitchTo: flown));
@@ -511,7 +511,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
         // Two satellites on one circle 9 km up, the one behind 3 m/s faster: its size-sphere
         // reaches the other's some 5 s in, closing at about 3 m/s, under the tolerance.
         var (a, b) = Closing(3f);
-        var (sim, first, second) = Unflown(new WorldState { Vessels = [a, b], NextVesselId = 2 }, a.Position);
+        var (sim, first, second) = Unflown(new WorldState { Vessels = [a, b], NextVesselId = 2 }, a.Position.ToSingle());
         using var _ = sim;
         Assert.True(Vector3.Distance(Middle(first), Middle(second)) > Collisions.Size(first) + Collisions.Size(second) + 5f, "they start within reach");
         var closest = RunUnwatched(sim, first, second, 15);
@@ -525,7 +525,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
     {
         // As the slow bump, the one behind 10 m/s faster: over the tolerance (6 m/s).
         var (a, b) = Closing(10f);
-        var (sim, first, second) = Unflown(new WorldState { Vessels = [a, b], NextVesselId = 2 }, a.Position);
+        var (sim, first, second) = Unflown(new WorldState { Vessels = [a, b], NextVesselId = 2 }, a.Position.ToSingle());
         using var _ = sim;
         Assert.True(Vector3.Distance(Middle(first), Middle(second)) > Collisions.Size(first) + Collisions.Size(second) + 5f, "they start within reach");
         RunUnwatched(sim, first, second, 10);
@@ -548,7 +548,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
         var widest = MathF.Max(stage.Radius, stage.BellRadius);
         var size = 2f * MathF.Sqrt(height * height / 4f + widest * widest); // both sizes (Collisions.Size)
         var behind = Satellite(0, Altitude, 0f, 60f);
-        behind = behind with { Velocity = behind.Velocity + Vector3.Normalize(behind.Velocity) * faster };
+        behind = behind with { Velocity = behind.Velocity.ToSingle() + Vector3.Normalize(behind.Velocity.ToSingle()) * faster };
         return (behind, Satellite(1, Altitude, 0f, 60f + DegreesApart(Altitude, size + 15f)));
     }
 
@@ -595,7 +595,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
         var place = Planet.Centre + Planet.Up(at + off) * Planet.SeaRadius;
         var placed = Drops.Placed(place, downhill, falling, clearance: clearance, legsOut: legsOut, id: id);
         var stage = placed.Vehicle.Stages[placed.First];
-        var weight = (Planet.Gravity(placed.Position) + Planet.OutwardPull(placed.Position)).Length();
+        var weight = (Planet.Gravity(placed.Position.ToSingle()) + Planet.OutwardPull(placed.Position.ToSingle())).Length();
         return placed with { Throttle = push * weight * (stage.DryMass + placed.Fuel[placed.First]) / stage.Thrust };
     }
 
@@ -629,7 +629,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
         var (east, north) = (Planet.East(at), Planet.North(at));
         var standing = Booster(0, Vector3.Zero, 0.5f, 1f);
         var hovering = Booster(1, -east * 50f + north * 15f, 2f, 0f, push: 1f);
-        hovering = hovering with { Velocity = Planet.East(hovering.Position) * 15f };
+        hovering = hovering with { Velocity = Planet.East(hovering.Position.ToSingle()) * 15f };
         var (sim, a, b) = Unflown(new WorldState { Vessels = [standing, hovering], NextVesselId = 2 }, at);
         using var _ = sim;
         var closest = RunUnwatched(sim, a, b, 8);
@@ -704,7 +704,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
         var height = RocketGeometry.StackHeight(Vehicle.Booster, 0, 0);
         var widest = MathF.Max(Vehicle.Booster.Stages[0].Radius, Vehicle.Booster.Stages[0].BellRadius);
         var upright = FastCollisionTests.Flying(hitPoint, east, 2000f, HitsAt, 0);
-        var middle = upright.Position + Vector3.Transform(Vector3.UnitY, upright.Rotation) * (height / 2f);
+        var middle = upright.Position.ToSingle() + Vector3.Transform(Vector3.UnitY, upright.Rotation) * (height / 2f);
         var standing = Planet.Up(middle);
         upright = upright with { Rotation = RotationTo(standing), Aim = standing, Position = middle - standing * (height / 2f) };
         var lying = FastCollisionTests.Flying(hitPoint + up * (height / 2f + widest / 2f), -east, 50f, HitsAt, 1, lieAcross: 90f);
@@ -824,7 +824,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
     private static VesselState? OnACellEdge(VesselState state, float most = 0.5f)
     {
         const float Cell = 400f;
-        var at = state.CentreOfMass;
+        var at = state.CentreOfMass.ToSingle();
         for (var axis = 0; axis < 3; axis++)
         {
             var x = at[axis];
@@ -858,8 +858,8 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
         {
             // Out from the corner (away from the field's middle), swung about it and drawn out a
             // little until its centre of mass is within half a metre of a cell's face, then put on it.
-            var corner = states[cornerOf].CentreOfMass;
-            var outward = Vector3.Normalize(corner - states[24].CentreOfMass);
+            var corner = states[cornerOf].CentreOfMass.ToSingle();
+            var outward = Vector3.Normalize(corner - states[24].CentreOfMass.ToSingle());
             var tried = new List<string>();
             for (var degrees = -30f; degrees <= 30f; degrees += 1f)
                 for (var d = apart; d < apart + 4f; d += 0.5f)
@@ -979,7 +979,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
         var hitPoint = Opposite;
         var pair = FastCollisionTests.Pair(2000f, 5000f, HitsAt, over: hitPoint);
         var second = pair.Vessels[1];
-        var third = second with { Id = 2, Position = second.Position - Vector3.Normalize(second.Velocity) * 40f };
+        var third = second with { Id = 2, Position = second.Position.ToSingle() - Vector3.Normalize(second.Velocity.ToSingle()) * 40f };
         var (sim, a, b) = Unflown(new WorldState { Vessels = [.. pair.Vessels, third], NextVesselId = 3 }, hitPoint);
         using var _ = sim;
         var c = Get(sim, 2);

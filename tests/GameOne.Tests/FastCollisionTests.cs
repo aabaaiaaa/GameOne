@@ -107,7 +107,7 @@ public sealed class FastCollisionTests(ITestOutputHelper output)
             case "frozen":
             {
                 var standing = StandingOnTheZone() with { Id = 1 };
-                var middle = Middle(standing.Position, standing.Rotation);
+                var middle = Middle(standing.Position.ToSingle(), standing.Rotation);
                 return (World(Flying(middle, Dive(middle), speed, seconds, 0), standing), middle);
             }
             case "floe":
@@ -169,7 +169,7 @@ public sealed class FastCollisionTests(ITestOutputHelper output)
     internal static WorldState Over(float speed, float seconds, float above)
     {
         var standing = StandingOnTheZone() with { Id = 1 };
-        var middle = Middle(standing.Position, standing.Rotation);
+        var middle = Middle(standing.Position.ToSingle(), standing.Rotation);
         return World(Flying(middle + Planet.Up(middle) * above, Planet.East(middle), speed, seconds, 0), standing);
     }
 
@@ -251,8 +251,8 @@ public sealed class FastCollisionTests(ITestOutputHelper output)
     /// </summary>
     internal static VesselState Overtaken(VesselState flown, float seconds, float slower, Vector3 offset, int id)
     {
-        var (at, arriving) = Flown(Middle(flown.Position, flown.Rotation), flown.Velocity, seconds);
-        return Flying(at + offset, Vector3.Normalize(arriving), flown.Velocity.Length() - slower, seconds, id);
+        var (at, arriving) = Flown(Middle(flown.Position.ToSingle(), flown.Rotation), flown.Velocity.ToSingle(), seconds);
+        return Flying(at + offset, Vector3.Normalize(arriving), flown.Velocity.ToSingle().Length() - slower, seconds, id);
     }
 
     /// <summary>A rotation that points a stage's axis (its own +Y) along <paramref name="nose"/>.</summary>

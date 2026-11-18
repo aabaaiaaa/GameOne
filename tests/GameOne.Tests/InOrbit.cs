@@ -10,7 +10,7 @@ namespace GameOne.Tests;
 internal static class InOrbit
 {
     /// <summary>How <paramref name="vessel"/> moves among the stars, at its centre of mass.</summary>
-    public static Vector3 Stars(VesselState vessel) => Planet.AmongStars(vessel.CentreOfMass, vessel.Velocity);
+    public static Vector3 Stars(VesselState vessel) => Planet.AmongStars(vessel.CentreOfMass.ToSingle(), vessel.Velocity.ToSingle());
 
     /// <summary>
     /// <paramref name="vessel"/> with its centre of mass at <paramref name="centre"/>, moving
