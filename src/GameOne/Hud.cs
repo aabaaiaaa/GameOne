@@ -765,8 +765,10 @@ internal sealed class Hud : IDisposable
         if (Readout.On)
             GatherPoints(navigation, new Vector2(display.X, display.Y));
         if (!camera.ZoomedOut) // which way the camera faces over the ground means nothing from out there
+        {
             _tapeFacing = TapeFacing(camera.Centre, flight.Body.Bearing(camera.Focus, camera.GroundForward), _tapeFacing);
             Compass(flight, _tapeFacing, display);
+        }
         // The flight takes a frame picked on the selector only when it isn't paused, so one picked
         // just as a menu came up would wait, and land after the pause, or in the next flight past
         // its start on Auto. While a menu is up the selector is off, and any such choice let go.

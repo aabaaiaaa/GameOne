@@ -267,6 +267,7 @@ public sealed class SteeringTests(ITestOutputHelper output)
         var (sim, flown) = Pointed(GroundBody.Moon, 0f, 45f);
         using (sim)
         {
+            Assert.Same(GroundBody.Moon, NavigationControl.CompassOf(sim.Flight));
             var (heading, pitch) = (float.DegreesToRadians(250f), float.DegreesToRadians(30f));
             sim.Step(new FlightInput(RingHeading: heading, RingPitch: pitch));
             sim.Run((_, _) => default, _ => false, maxSeconds: 15);

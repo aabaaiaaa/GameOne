@@ -169,7 +169,7 @@ internal sealed class NavigationControl
         _camera = camera;
         _display = display;
         _centre = flight.CentreOfMass;
-        _body = flight.Controlled.Body;
+        _body = CompassOf(flight);
         _up = _body.Up(_centre);
         _travel = flight.FrameVelocity; // the way the holds steer by, in the frame in use
         _towards = flight.TowardsTarget;
@@ -251,6 +251,9 @@ internal sealed class NavigationControl
     }
 
     /// <summary>Sets the handles to where the nose points. With the nose straight up, the heading stays as it was.</summary>
+    /// <summary>The body whose compass the rings are drawn and read by: the flown vessel's, as its hold steers by.</summary>
+    internal static GroundBody CompassOf(Flight flight) => flight.Controlled.Body;
+
     private void FollowNose(Vector3 aim) => (_heading, _pitch) = RingAngles.Of(_body, _centre, aim, _heading);
 
     /// <summary>Moves the dragged ring's handle to the point on it nearest <paramref name="at"/> (the pointer), snapping to straight up and the compass points.</summary>
