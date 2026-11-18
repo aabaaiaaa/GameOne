@@ -2040,7 +2040,7 @@ internal sealed class Flight : IDisposable
     internal int CrossAsked { get; private set; }
 
     /// <summary>
-    /// Takes out of the game every vessel past the solar system's edge (<see cref="Scene.SolarSystemEdge"/>,
+    /// Takes out of the game every vessel not wrecked past the solar system's edge (<see cref="Scene.SolarSystemEdge"/>,
     /// round the sun), each written to the log as lost there (<see cref="WorldLog.LeftTheSolarSystem"/>),
     /// seen if it was in the physics: checked by its distance, not by a crossing, so one the warp
     /// carried well past it in a step goes all the same, and one loaded past it goes in the first

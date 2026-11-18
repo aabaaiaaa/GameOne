@@ -325,16 +325,17 @@ dotnet run --project src/GameOne
   one body (`CollisionSearch`, off the step on its own thread, the landed and afloat held where they stand;
   `Paths` draws them; no pass is asked while the world's clock stands still), information only.
   Every vessel lost, watched or not, and every one removed (to make room, as a world loads or is
-  added to, cleared from the launch pad, or gone past the solar system's edge: once a step, after
-  the bodies are chosen, by its distance from the sun, not a crossing, so the warp can't step it
-  past unseen; one nearer its body's centre than the edge less the farthest that body gets from
-  the sun, `SolarSystem.FarthestFromSun`, not asked, `Flight.EdgeAsked`; lost as a crash,
-  `Vessel.LeaveTheSystem`, its run failed if it needed it, the flown one kept as the one flown, its
-  message shown, until another is flown), is written to the world's log (`Flight.Log`,
+  added to, cleared from the launch pad, or gone past the solar system's edge), is written to the world's log (`Flight.Log`,
   `WorldLog`: fairing halves are not; a removal with no speed, and seen only if the last step had
   it in the physics; two lost to one collision one entry, paired by the vessel actually hit,
   `Vessel.HitCraft`, however many steps apart; saved with the world, and a rewind (`FlightInput.Rewind`) reverts
-  it with the world it brings back), shown by the game menu's "World log...". The timings panel counts those under formula (the readout's
+  it with the world it brings back), shown by the game menu's "World log...". A vessel not wrecked
+  that is past the solar system's edge (`Scene.SolarSystemEdge`, round the sun) is lost as a crash
+  (`Vessel.LeaveTheSystem`, its run failed if it needed it) and taken out: checked once a step,
+  after the bodies are chosen, by its distance from the sun, not a crossing, so the warp can't
+  step it past unseen; one nearer its body's centre than the edge less the farthest that body
+  gets from the sun (`SolarSystem.FarthestFromSun`) is not asked (`Flight.EdgeAsked`); the flown
+  one is kept as the one flown, its message shown, until another is flown. The timings panel counts those under formula (the readout's
   "Timings under formula"); its step's parts are every body's physics' together.
   **Crossing a sphere's edge:** each step, after the physics and the vessels' rules, every vessel's
   body is chosen by `Bodies.Choose` (into a child's sphere at its radius, out to the parent only
