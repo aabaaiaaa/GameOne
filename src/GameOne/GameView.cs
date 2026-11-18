@@ -106,7 +106,7 @@ internal sealed class GameView : IDisposable
     {
         flight.Restarted += () =>
         {
-            Camera.Snap();
+            Restart(Camera);
             _smokeStirs.Reset();
             _effects.Clear();
             _trail.Clear();
@@ -114,6 +114,19 @@ internal sealed class GameView : IDisposable
         Views.Follow(flight); // the small views reset with the flight, and as something is carried on
         flight.ViewTaken += vessel => Camera.Apply(vessel.View ?? DefaultView); // straight to the vessel now being flown (which may be far off), looked at as it was left
         flight.ViewRebased += Hud.Rebase; // what the HUD keeps from frame to frame in the flown vessel's frame (the paths' window), dropped
+    }
+
+    /// <summary>
+    /// What a flight starting (a new one, or a world restored) does to the main camera: it goes back
+    /// on the flown vessel, as anything else it was on (a vessel by its id, a site, a body or a point
+    /// by its index) is the last flight's and may name something else in this world, and it jumps
+    /// there rather than flying across. A new rocket's view is the default one (<see cref="Flight.ViewTaken"/>).
+    /// </summary>
+    internal static void Restart(ChaseCamera camera)
+    {
+        if (camera.Centre.Kind != CentreKind.Own)
+            camera.CentreOn(CameraCentre.Own);
+        camera.Snap();
     }
 
     /// <summary>

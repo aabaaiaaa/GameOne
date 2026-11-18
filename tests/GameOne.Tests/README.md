@@ -671,7 +671,9 @@ say) stalls frames and spoils the timing.
   view (`Vessel.View`): Tab, a swap by a small view, a carry-on and a rewind each bringing back the
   vessel's view after its link-up, the one left keeping its own, one never flown getting the
   default; and a world picked and carried on, each frame's input carrying the camera's view as it
-  stands, still bringing back the saved view (the camera's taken as the vessel's only once it is).
+  stands, still bringing back the saved view (the camera's taken as the vessel's only once it is);
+  a new rocket getting the default view whatever the camera was on, and a world restored putting
+  the camera back on the flown vessel.
 - **`PadLightTests`:** where each pad's, zone's and drone ship's lamps and masts stand (the masts
   only where the ground allows, clear of the towers, in a zone's own frame, aimed at the place's
   top, solid); which place's floods cast shadows, held for a few metres; the nearest lights and

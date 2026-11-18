@@ -348,9 +348,10 @@ dotnet run --project src/GameOne
   (its crossing, or a switch to one at another body) raises `Flight.ViewRebased` with the change.
   Every switch, carry-on and rewind shows the communications link-up first, and the view comes
   back as that vessel left it (`Flight.ViewTaken`, raised as it is flown: `GameView` gives the
-  camera `Vessel.View`, or `GameView.DefaultView` for one never flown; each frame's
-  `FlightInput.View` is kept as the flown vessel's, but not from a world restored until the vessel
-  carried on is taken, as the camera shows what it did meanwhile; `LinkUp`, drawn by `Hud`:
+  camera `Vessel.View`, or `GameView.DefaultView` for one never flown, as each new rocket is; a
+  flight started or a world restored puts the camera back on the flown vessel, `GameView.Restart`;
+  each frame's `FlightInput.View` is kept as the flown vessel's, but not from a world restored
+  until the vessel carried on is taken, as the camera shows what it did meanwhile; `LinkUp`, drawn by `Hud`:
   the picture breaking into static, clearing as it connects, `Scene.LinkUpSeconds` (1 s) of real
   time in all, the same however soon the physics is made; the vessel is flown, its body's
   physics made if it isn't, the frame after the link-up is first drawn, never the switch's own,

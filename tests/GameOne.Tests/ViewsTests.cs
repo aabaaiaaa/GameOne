@@ -341,7 +341,46 @@ public sealed class ViewsTests
     {
         var camera = new ChaseCamera(null);
         flight.ViewTaken += vessel => camera.Apply(vessel.View ?? GameView.DefaultView);
+        flight.Restarted += () => GameView.Restart(camera);
         return camera;
+    }
+
+    [Fact]
+    public void A_new_rocket_gets_the_default_view_whatever_the_camera_was_on()
+    {
+        var (sim, _, _) = ThreeVessels();
+        using (sim)
+        {
+            var flight = sim.Flight;
+            var camera = Taking(flight);
+            camera.Apply(Seen);
+            camera.CentreOn(new CameraCentre(CentreKind.Site, 0));
+            var old = flight.Controlled;
+
+            sim.Step(new FlightInput(View: camera.View, StartAgain: true));
+
+            Assert.NotSame(old, flight.Controlled);
+            Assert.Equal(CameraCentre.Own, camera.Centre);
+            Assert.Equal(GameView.DefaultView, camera.View);
+            sim.Step(new FlightInput(View: camera.View));
+            Assert.Equal(GameView.DefaultView, flight.Controlled.View);
+        }
+    }
+
+    [Fact]
+    public void A_world_restored_puts_the_camera_back_on_the_flown_vessel()
+    {
+        // Behind the world list the camera shows the restored world: a centre on a vessel, site or
+        // body of the last world (named by an id or an index) means nothing in this one.
+        var (sim, _, _) = ThreeVessels();
+        WorldState world;
+        using (sim)
+            world = sim.Flight.Capture();
+        using var back = new Simulation(Mission.DeploySatellite);
+        var camera = Taking(back.Flight);
+        camera.CentreOn(new CameraCentre(CentreKind.Vessel, back.Flight.Controlled.Id));
+        back.Flight.Restore(world);
+        Assert.Equal(CameraCentre.Own, camera.Centre);
     }
 
     private static void ThroughLinkUp(Simulation sim, Views views, ChaseCamera camera)

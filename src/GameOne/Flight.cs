@@ -218,8 +218,8 @@ internal sealed class RunNotice(string text)
 /// they were pointed, prograde hold, their legs. The properties here (<see cref="Altitude"/>,
 /// <see cref="Fuel"/> and so on) are the controlled vessel's.</para>
 /// <para>The world carries on from flight to flight (see <see cref="WorldState"/>): choosing a mission
-/// starts another flight in it, everything else staying where it is; starting again (R) undoes
-/// this flight, putting the world back as it was when it started.</para>
+/// starts another flight in it, everything else staying where it is; a rewind (see
+/// <see cref="CanRewind"/>) undoes this flight, putting the world back as it was when it started.</para>
 /// </remarks>
 internal sealed class Flight : IDisposable
 {
@@ -637,7 +637,8 @@ internal sealed class Flight : IDisposable
 
     /// <summary>
     /// Raised with the vessel now flown once it has been flown (after the link-up of every switch,
-    /// carry-on and rewind): its view (<see cref="Vessel.View"/>) is to be brought back to the camera.
+    /// carry-on and rewind), and with each new rocket: its view (<see cref="Vessel.View"/>) is to be
+    /// brought back to the camera, or the default one for a vessel never flown.
     /// </summary>
     public event Action<Vessel>? ViewTaken;
 
@@ -2476,6 +2477,7 @@ internal sealed class Flight : IDisposable
         _world.Add(Controlled);
         _worldChanges++;
         MakeRoom();
+        ViewTaken?.Invoke(Controlled); // never flown, so the default view, whatever the camera was on
         Begun();
     }
 
