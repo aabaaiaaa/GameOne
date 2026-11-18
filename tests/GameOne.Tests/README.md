@@ -456,7 +456,8 @@ say) stalls frames and spoils the timing.
   step's travel within `Scene.FastCollisionStep` if that is deeper), held from
   `Scene.SlowdownHoldWithin` before the collision to as far past; only from `Scene.SlowdownFrom`
   out (`Slowdown.Lead`, with the sizes' touch, `Collision.Touch`); the rate keys doing nothing meanwhile and the player's rate
-  given back; eased back over `Scene.SlowdownEaseSeconds` after a crash, or on switching away; a pause changing nothing;
+  given back; eased back over `Scene.SlowdownEaseSeconds` after a crash, or on switching away (still
+  slowed until the other is flown, after its link-up, then easing back in the ease's own time); a pause changing nothing;
   its reason and the HUD's and readout's words (the time line slowed always saying so, with the
   player's slower slow motion, never the rate keys' hint); a small view's vessel slowing the game
   too, and two near the flown one in no small view (the main view's, near its camera), even past a
@@ -576,7 +577,8 @@ say) stalls frames and spoils the timing.
   round the moon, where the rings are drawn and read by the moon's compass as the hold steers
   by it (`RingAngles`: the nose settles on the ring's point); and a ring press let go without
   moving (under `Scene.RightClickSlopPixels` all told, however many frames it is held) a click,
-  moved further a drag (`NavigationControl.RingPress`).
+  moved further a drag (`NavigationControl.RingPress`), and what each press does as `Update` wires
+  it (`NavigationControl.Judge`: moves, holds, clicks, lets go).
 - **`VesselTests`:** several vessels in one flight: staging makes the dropped stage a vessel, one
   without guidance is debris that can't be flown, switching hands the controls over while the other
   keeps its last inputs, losing the flown vessel doesn't end the flight while another flies, and
@@ -621,7 +623,9 @@ say) stalls frames and spoils the timing.
   vessel id and position.
 - **`NodeEditorTests`:** the node editor's handle rate: out as it adds, in a quarter of that
   taking away, past zero; and a chain changed by the flight rather than the editor told apart
-  (`NodeEditor.ChangedElsewhere`: a node gone as it matched), by which a grab is let go.
+  (`NodeEditor.ChangedElsewhere`: a node gone as it matched), by which a grab is let go. Its
+  handles shown (giving the steering rings way) only with the node and one of them on the screen
+  (`NodeEditor.ShowsHandles`).
 - **`NodeTests`:** manoeuvre nodes as a chain (`ManoeuvreChain`): a prograde node raising the far
   side, one flown by its guide turning matched and going as the engine is cut (in warp too),
   giving the orbit it planned, the guide counting down and saying when it goes past; a node past
@@ -642,12 +646,18 @@ say) stalls frames and spoils the timing.
   chain after it redone; an empty chain clearing the plan; one anchored past
   where the path ends (falling, a hop, escaping) anchored where it ends, and saving; a node moved
   only once the pointer leaves where it was grabbed; each vessel keeping its own; and the readout
-  giving each node's world time (`Node times`), none with no nodes.
+  giving each node's world time (`Node times`), none with no nodes, written once a chain
+  (`Readout.NodeTimes`); the manoeuvre hold let go by a ring's drag, steering in warp as at normal
+  speed, and steering nothing under formula; the hold buttons' and frame buttons' readout names and
+  the `Hold` reading; the view's burn mark (`NavigationControl.BurnMark`: along the burn left, green
+  once matched); a landed or afloat vessel's node judged only as a touch begins or ends
+  (`Vessel.Rejudged`); and anchoring a chain allocating only the chain.
 - **`WorldLogTests`:** the world's log: a crash on the ground, two vessels colliding (one entry; and two wrecked by one collision steps apart joined into the first's entry; two pairs colliding side by side an entry each, by who hit whom), an unwatched loss under formula (not witnessed, near its site), those removed to make room as a world loads (oldest first, unseen, no speed, printed without one), one cleared from the launch pad (unseen as a world loads; seen, flown, as a flight from its site starts), and the newest 300 kept; the missions' entries (a run begun, a step done with its points, completed with its score, and nothing for free play); and each crash reason worded without its advice (or the break-up's cause after its colon), its speed taken out to be the entry's (a line never says two speeds).
 - **`WorldStoreTests`:** saving and loading, in a folder of the test's own: a world loads back
   exactly (every field of every vessel, a body targeted from the planet and from the moon
   included, each still its vessel's target once loaded) and flies on the same as the one saved; a node chain
-  anchored round the moon loading back as it was; the world list
+  anchored round the moon loading back as it was, and one anchored at an unknown body or saved with
+  no nodes refused (listed as unreadable); the world list
   (the latest first, what is in each, a file it can't read listed with why); a file from a newer
   version refused; a world flown in free play saved and loaded; worlds made from presets with names of their own, renamed, reset and deleted; a vessel afloat saving and coming back floating (and one saved while still settling in the water, coming back and floating with nobody near); vessels saved while out of the physics, under formula, saved where the formula had them and loading back there.
 - **`ControlsListTests`:** every line of the HUD's controls list (`Hud.ControlLine`) short enough to
@@ -926,8 +936,10 @@ say) stalls frames and spoils the timing.
   and building and laying out the map allocating nothing; a click on the moon's drawn path (or a
   few pixels off it) the moon's, never the flown vessel's own body's, a click off every line
   nothing, and the point the readout gives a script on the moon's line (`SystemMap.LinePoint`)
-  on it. Each of the map's tests was seen
-  failing with its fix taken out.
+  on it; a line takes a click only as a body's, not the flown vessel's body's, and drawn at least
+  `Scene.MapLineClickAlpha` strongly (`SystemMap.Clickable`), none once the map is forgotten
+  (`Forget`); and a sphere hiding what is behind it, nothing in front or beside, millions of metres
+  out too (`SystemMap.Covers`). Each of the map's tests was seen failing with its fix taken out.
 - **`MapLabelTests`:** the labels over the view laid out together (`MapLabels.Lay`): a vessel's
   label under a body's faded to `Scene.MapLabelUnderAlpha`, the body's and the rest in full and
   none moved, and the same with the pointer elsewhere; two of a vessel's on each other neither
@@ -962,9 +974,16 @@ say) stalls frames and spoils the timing.
   where the two ups are 80 degrees apart: its place and view kept within 1 cm and 0.1 degrees, at
   once and after the next frame against a camera left in the planet's frame, then its up easing
   round to the moon's over `Scene.CameraBodyEaseSeconds`, under 5 degrees a frame, still well
-  short half way; and "Reset camera" after a place bringing back the chase view as it was left. In `PathTests`, zoomed out (M): the vessel looked at from far enough to fit the orbit, and back to just where it
-  was, in the same real time in a warp; the map looking down from the pole's side; and the map
-  opening on the view its vessel left (turned or zoomed by hand, or given with a view brought back).
+  short half way; "Reset camera" after a place bringing back the chase view as it was left; a
+  still camera handing back the same view each frame; and turning down under a low vessel, the
+  camera keeping on the slide's least sphere round it, with no jump. In `PathTests`, zoomed out
+  (M): the vessel looked at from far enough to fit the orbit, and back to just where it was, in
+  the same real time in a warp; the map looking down from the pole's side; and the map opening on
+  the view its vessel left (turned or zoomed by hand, or given with a view brought back). There
+  too, the path's chevrons (`Paths.Chevrons`): spaced along a line and pointing its way, round a
+  corner and round a circle, none on a short line, the cap spent only on the screen, a line in
+  stretches keeping the whole line's places, allocating nothing; and a label at the half-way point
+  between two steps not flipping (`Paths.StillShows`).
 - **`CameraSubjectTests`:** the main camera on something other than the flown vessel
   (`CameraSubject`, `GameView.Aim`): each kind of subject found at its body (a vessel's middle, a
   body's centre, a site's top, a point of interest), and none for a number naming nothing; a
@@ -983,7 +1002,9 @@ say) stalls frames and spoils the timing.
   seen at another body (`Hud.VesselClicked`, changed into the view's frame); a click on a body's
   disc finding it, and none off it, behind the camera or behind the sun (`Hud.BodyDisc`); and the
   compass tape keeping the facing it had on the flown vessel while the camera is elsewhere
-  (`Hud.TapeFacing`).
+  (`Hud.TapeFacing`); the main view's sun area and the camera's velocity by what it is on
+  (`GameView.MainSunArea`, `CameraVelocityOf`); a camera on a vessel of another world watching
+  nothing; and the stage round the moon's checks bounded by a float's rounding there.
 - **`BodiesInPlayTests`:** a physics at each body in use (`Worlds`), every vessel at its own body,
   all played out at once: flying a lander in a moon orbit (the moon's physics), a small view's
   booster flies its landing burn down onto Home's zone by its retrograde hold (the planet's
