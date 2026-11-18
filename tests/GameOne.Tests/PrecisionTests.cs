@@ -23,11 +23,17 @@ public sealed class PrecisionTests(ITestOutputHelper output)
         return MathF.BitIncrement(f) - f;
     }
 
-    /// <summary>How many of a float's steps (at the copy's size) Jolt's centre of mass and velocity are from <paramref name="v"/>'s copy, at worst in any one axis.</summary>
+    /// <summary>
+    /// How many of a float's steps (at the copy's size) Jolt's centre of mass and velocity are from
+    /// <paramref name="v"/>'s copy, at worst in any one axis: the copy as the last step left it,
+    /// read as it is (not through <see cref="Physics.RocketPhysics.TrueCentreOfMass"/>, which would
+    /// take it from Jolt again were they apart), and still kept, as it is for a craft flying free.
+    /// </summary>
     private static (double Place, double Speed) Apart(Vessel v)
     {
         var physics = v.Physics!;
-        var (centre, velocity) = (physics.TrueCentreOfMass(v.Craft), physics.TrueVelocity(v.Craft));
+        Assert.True(v.Craft.Kept, $"{v.Name}'s copy was let go, flying free");
+        var (centre, velocity) = (v.Craft.KeptCentre, v.Craft.KeptVelocity);
         var (jolt, joltVelocity) = (physics.CentreOfMass(v.Craft), physics.Velocity(v.Craft));
         static double Worst(Vector3 a, Vector3Double b) => Math.Max(Math.Abs(a.X - b.X), Math.Max(Math.Abs(a.Y - b.Y), Math.Abs(a.Z - b.Z)));
         return (Worst(jolt, centre) / FloatStep(centre.Length()), Worst(joltVelocity, velocity) / FloatStep(velocity.Length()));

@@ -2073,10 +2073,12 @@ internal sealed class Flight : IDisposable
             }
             if (v.State == FlightState.Crashed)
                 continue;
-            // In the physics, its place is the physics' double copy (a float steps a kilometre out there).
-            var place = v.Physics is { } physics ? physics.TrueCentreOfMass(v.Craft) : v.CentreOfMass;
-            if ((place - v.Body.Centre).Length() < clear[v.Body.Index])
+            // Near enough its body by its float place (the double copy rounded: a part in a million
+            // spares that rounding), it isn't asked; asked, its place in the physics is the
+            // physics' double copy (a float steps a kilometre out there).
+            if (((Vector3Double)v.CentreOfMass - v.Body.Centre).Length() < clear[v.Body.Index] * (1 - 1e-6))
                 continue;
+            var place = v.Physics is { } physics ? physics.TrueCentreOfMass(v.Craft) : v.CentreOfMass;
             asked++;
             if (SolarSystem.FromSun(v.Body, place, MotionTime(v, now)) < Scene.SolarSystemEdge)
                 continue;

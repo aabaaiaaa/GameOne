@@ -243,6 +243,16 @@ public sealed class WorldTests(ITestOutputHelper output)
         var periods = satellites.Select(s => Orbit.OverGround(GroundBody.Planet, s.CentreOfMass, s.Velocity).Period).ToArray();
         var semiMajor = satellites.Select(s => (s.Apoapsis + s.Periapsis) / 2).ToArray();
         var drift = new float?[count];
+        // Each one's size as the physics' double copy has it too (its float Ap and Pe read it only to millimetres).
+        double TrueSize(Vessel s)
+        {
+            var physics = s.Physics!;
+            var r = physics.TrueCentreOfMass(s.Craft) - (Vector3Double)Planet.Centre;
+            var v = physics.TrueVelocity(s.Craft) + Vector3Double.Cross((Vector3Double)Planet.Spin, r);
+            return 1 / (2 / r.Length() - v.LengthSquared() / Planet.Mu);
+        }
+        var trueSize = satellites.Select(TrueSize).ToArray();
+        var trueDrift = new double[count];
         var lowest = new float[count].Select(_ => float.MaxValue).ToArray();
         var highest = new float[count].Select(_ => float.MinValue).ToArray();
         var (apoapsis, periapsis) = (satellites[0].Apoapsis, satellites[0].Periapsis);
@@ -257,14 +267,17 @@ public sealed class WorldTests(ITestOutputHelper output)
                 // Above the sea, as the orbit is: the ground under it rises and falls.
                 (lowest[i], highest[i]) = (MathF.Min(lowest[i], Planet.Altitude(s.Position)), MathF.Max(highest[i], Planet.Altitude(s.Position)));
                 if (drift[i] is null && sim.Time - start >= periods[i])
+                {
                     drift[i] = (s.Apoapsis + s.Periapsis) / 2 - semiMajor[i];
+                    trueDrift[i] = TrueSize(s) - trueSize[i];
+                }
             }
             apoapsisOff = MathF.Max(apoapsisOff, MathF.Abs(satellites[0].Apoapsis - apoapsis));
             periapsisOff = MathF.Max(periapsisOff, MathF.Abs(satellites[0].Periapsis - periapsis));
             return drift.All(d => d is not null);
         }, maxSeconds: periods.Max() + 1);
         for (var i = 0; i < count; i++)
-            output.WriteLine($"satellite {satellites[i].Id}: {lowest[i]:0.0} to {highest[i]:0.0} m over its lap of {periods[i]:0} s; the semi-major axis drifted {drift[i]:0.000} m in it");
+            output.WriteLine($"satellite {satellites[i].Id}: {lowest[i]:0.0} to {highest[i]:0.0} m over its lap of {periods[i]:0} s; the semi-major axis drifted {drift[i]:0.000} m in it as read, {trueDrift[i]:0.000000} m by the copy");
         output.WriteLine($"the lowest's Ap strayed up to {apoapsisOff:0.00} m, its Pe {periapsisOff:0.00} m");
         for (var i = 0; i < count; i++)
         {
@@ -277,18 +290,21 @@ public sealed class WorldTests(ITestOutputHelper output)
         // The lowest's Ap and Pe are watched for about one lap (its slow drift, over many, is the drift check's).
         Assert.InRange(apoapsisOff, 0f, 10f); // measured 0.5 m
         Assert.InRange(periapsisOff, 0f, 10f); // and 0.4 m
-        // The orbits' sizes hold, every one, tilted or not: within 0.01 m a lap. A craft flying
-        // free is stepped in double by the physics' own copy (RocketPhysics.TrueCentreOfMass) and
-        // Jolt handed it rounded once a step, so no float rounding is carried from step to step:
-        // worked out from the copy, every one's size is back within 0.0001 m at its lap's end
-        // (the tilted ones wander up to 0.45 m within it, and come back). What is read here is
-        // the vessels' Ap and Pe, worked out from Jolt's floats, which read it only to a few
-        // millimetres (measured -0.008 to 0.003 m). (Stepped in Jolt's floats, the 60° one creeps
+        // The orbits' sizes hold, every one, tilted or not. A craft flying free is stepped in
+        // double by the physics' own copy (RocketPhysics.TrueCentreOfMass) and Jolt handed it
+        // rounded once a step, so no float rounding is carried from step to step: by the copy,
+        // every one's size is back within 0.0001 m at its lap's end (measured; the tilted ones
+        // wander up to 0.45 m within it, and come back), held to 0.001 m. As the vessels' Ap and
+        // Pe read it (worked out from Jolt's floats, to a few millimetres: measured -0.008 to
+        // 0.003 m, all of it the reading's), held to 0.01 m. (Stepped in Jolt's floats, the 60° one creeps
         // 0.2 m a lap, steadily, the same way: each step's rounding leans one way in the turning
         // frame. A plain Euler kick of the turning pulls costs the lowest 3.15 m a lap and the 60°
         // one 0.35 m: either shows here.)
         for (var i = 0; i < count; i++)
+        {
+            Assert.InRange(trueDrift[i], -0.001, 0.001);
             Assert.InRange(drift[i]!.Value, -0.01f, 0.01f);
+        }
     }
 
     [Fact]

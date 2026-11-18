@@ -334,6 +334,17 @@ internal sealed class Craft(Vehicle vehicle, int first, int last, uint id, Shape
     /// </summary>
     internal bool Kept { get; set; }
 
+    /// <summary>
+    /// Jolt's centre of mass and velocity as the step's resync read them (with the thrust added
+    /// since, as Jolt adds it), while <see cref="StepRead"/>: what its fall works from this step,
+    /// rather than reading them from Jolt again.
+    /// </summary>
+    internal Vector3 ReadCentre { get; set; }
+    internal Vector3 ReadVelocity { get; set; }
+
+    /// <summary>Whether <see cref="ReadCentre"/> and <see cref="ReadVelocity"/> are Jolt's now, in this step, until its fall.</summary>
+    internal bool StepRead { get; set; }
+
     /// <summary>What it touched over the last update's steps, oldest first (see <see cref="RocketPhysics.TouchesBegun"/>).</summary>
     internal List<Touch> TouchesBegun { get; } = [];
 
@@ -2105,7 +2116,7 @@ internal sealed class RocketPhysics : IDisposable
         {
             var time = worldTime is { } end ? end - _accumulator : _time;
             foreach (var craft in _crafts)
-                Resync(craft); // anything that moved it since the last step, its copy follows
+                Resync(craft, stepRead: true); // anything that moved it since the last step, its copy follows
             Timings.Lap(StepPart.Rest);
             if (_body.HasSea)
             {
@@ -2140,7 +2151,15 @@ internal sealed class RocketPhysics : IDisposable
                 var up = Up(control.Craft);
                 if (control.ThrustAcceleration > 0)
                 {
-                    _bodies.AddLinearVelocity(control.Craft.Id, ToFloat3(up * (control.ThrustAcceleration * StepLength)));
+                    var push = up * (control.ThrustAcceleration * StepLength);
+                    _bodies.AddLinearVelocity(control.Craft.Id, ToFloat3(push));
+                    if (control.Craft.StepRead)
+                    {
+                        // As Jolt adds it (in floats), so the fall's read is Jolt's; past the top
+                        // speed Jolt clamps it, so the fall reads it again.
+                        control.Craft.ReadVelocity += push;
+                        control.Craft.StepRead = control.Craft.ReadVelocity.LengthSquared() <= Scene.TopSpeed * Scene.TopSpeed;
+                    }
                     if (control.Craft.Kept)
                         control.Craft.KeptVelocity += (Vector3Double)up * (control.ThrustAcceleration * (double)StepLength);
                 }
@@ -2904,10 +2923,9 @@ internal sealed class RocketPhysics : IDisposable
     /// </remarks>
     private void Fall(Craft craft)
     {
-        var p = _bodies.GetCenterOfMassPosition(craft.Id);
-        var position = new Vector3(p.X, p.Y, p.Z);
-        var v = _bodies.GetLinearVelocity(craft.Id);
-        var velocity = new Vector3(v.X, v.Y, v.Z);
+        // As this step's resync read them (and the thrust since), unless it was woken since.
+        var (position, velocity) = craft.StepRead ? (craft.ReadCentre, craft.ReadVelocity) : (CentreOfMass(craft), Velocity(craft));
+        craft.StepRead = false;
         var altitude = _body.Altitude(position);
         var drag = Scene.DragRate * _body.AirDensity(altitude);
         var change = _body.FallStep(velocity, Weight(craft, position), drag, StepLength, noHalfKick: craft.Grounded); // see the remarks for why not on the ground
@@ -2971,21 +2989,31 @@ internal sealed class RocketPhysics : IDisposable
     /// Keeps <paramref name="craft"/>'s copy if Jolt's centre of mass and velocity are still the
     /// copy's as far as their rounding goes; otherwise (a contact in the step, any set since, or a
     /// craft with none) takes the copy from Jolt. None for one frozen (Jolt holds it still) or gone.
+    /// With <paramref name="stepRead"/> (at a step's start), what it read is kept for the step's
+    /// fall (<see cref="Craft.ReadCentre"/>).
     /// </summary>
-    private void Resync(Craft craft)
+    private void Resync(Craft craft, bool stepRead = false)
     {
         if (craft.Removed || craft.Frozen)
         {
-            craft.Kept = false;
+            (craft.Kept, craft.StepRead) = (false, false);
             return;
         }
         var (centre, velocity) = (CentreOfMass(craft), Velocity(craft));
+        if (stepRead)
+            (craft.ReadCentre, craft.ReadVelocity, craft.StepRead) = (centre, velocity, true);
         if (craft.Kept && Within(centre, craft.KeptCentre, PlaceSteps) && Within(velocity, craft.KeptVelocity, VelocitySteps))
             return;
         (craft.KeptCentre, craft.KeptVelocity, craft.Kept) = (centre, velocity, true);
     }
 
-    /// <summary>Whether each part of <paramref name="jolt"/> is within <paramref name="steps"/> of a float's steps of <paramref name="kept"/>, at the size of <paramref name="kept"/>.</summary>
+    /// <summary>
+    /// Whether each part of <paramref name="jolt"/> is within <paramref name="steps"/> of a float's
+    /// steps of <paramref name="kept"/>, at the size of <paramref name="kept"/>. A set that moves it
+    /// by less than that is taken into the copy, deliberately: it can't be told from rounding, and
+    /// does nothing a float could show. A touch never relies on this: touching anything lets the
+    /// copy go by itself (see Fall and HandOver).
+    /// </summary>
     private static bool Within(Vector3 jolt, Vector3Double kept, double steps)
     {
         var size = (float)kept.Length();
