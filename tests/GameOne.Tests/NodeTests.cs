@@ -158,6 +158,17 @@ public sealed class NodeTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void The_readout_s_node_times_are_written_once_a_chain()
+    {
+        var chain = new ManoeuvreChain(new ChainAnchor(GroundBody.Planet.Name, 100.0, Vector3.UnitY, Vector3.UnitX),
+            [new ManoeuvreNode(0), new ManoeuvreNode(50.25)]);
+        var text = Readout.NodeTimes(chain);
+        Assert.Equal("100.0 150.3", text);
+        Assert.Same(text, Readout.NodeTimes(chain)); // read every frame: the same string while the chain is
+        Assert.Equal("100.0 160.0", Readout.NodeTimes(chain.WithNode(1, new ManoeuvreNode(60))));
+    }
+
+    [Fact]
     public void The_view_s_burn_mark_points_along_the_burn_left_green_once_matched()
     {
         var centre = new Vector3(1f, 2f, 3f);

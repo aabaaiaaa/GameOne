@@ -117,6 +117,22 @@ internal sealed class Readout
             Show("Message text", string.Join(" / ", lines.Select(l => l.Text)));
     }
 
+    [ThreadStatic]
+    private static (ManoeuvreChain? Chain, string Text) _nodeTimes; // the last chain's node times, as read out (one a thread: the tests read several flights at once)
+
+    /// <summary>Each of <paramref name="chain"/>'s nodes' world time, in seconds, in its order: written again only for another chain (one is new each time it changes).</summary>
+    internal static string NodeTimes(ManoeuvreChain chain)
+    {
+        if (!ReferenceEquals(chain, _nodeTimes.Chain))
+        {
+            var text = new System.Text.StringBuilder();
+            for (var i = 0; i < chain.Nodes.Length; i++)
+                text.Append(i > 0 ? " " : "").Append($"{chain.TimeOf(i):0.0}");
+            _nodeTimes = (chain, text.ToString());
+        }
+        return _nodeTimes.Text;
+    }
+
     /// <summary>
     /// What <see cref="Write"/> would emit now, less the HUD's own readings (the menu, the controls
     /// list, the time and the big message): the readings that are the flight's alone, which need
@@ -251,7 +267,7 @@ internal sealed class Readout
         // Each node's world time, in seconds, in the chain's order: these change only as the chain is
         // edited, so a script sees a drag move the nodes after the one dragged.
         if (flight.Controlled.Chain is { Nodes.Length: > 0 } chain)
-            Show("Node times", string.Join(" ", Enumerable.Range(0, chain.Nodes.Length).Select(i => $"{chain.TimeOf(i):0.0}")));
+            Show("Node times", NodeTimes(chain));
 
         Show("Site", flight.Site.Name);
         Show("Mission", flight.Mission.Name);
