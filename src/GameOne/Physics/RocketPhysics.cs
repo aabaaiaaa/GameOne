@@ -2116,7 +2116,7 @@ internal sealed class RocketPhysics : IDisposable
         {
             var time = worldTime is { } end ? end - _accumulator : _time;
             foreach (var craft in _crafts)
-                Resync(craft, stepRead: true); // anything that moved it since the last step, its copy follows
+                Resync(craft, stepRead: true); // anything that moved it since the last step, its copy follows; Fall reuses this read, so nothing but the thrust may change a craft's velocity between here and Fall
             Timings.Lap(StepPart.Rest);
             if (_body.HasSea)
             {
@@ -2983,7 +2983,7 @@ internal sealed class RocketPhysics : IDisposable
     /// the copy rounded and drifted by Jolt (each a step within half of one); and its velocity
     /// (which Jolt leaves as it was handed, if nothing touched it).
     /// </summary>
-    private const double PlaceSteps = 4, VelocitySteps = 2;
+    private const double PlaceSteps = 4, VelocitySteps = 2; // Flight.LeaveTheSystem's skip margin allows for PlaceSteps: raise one, check the other
 
     /// <summary>
     /// Keeps <paramref name="craft"/>'s copy if Jolt's centre of mass and velocity are still the
