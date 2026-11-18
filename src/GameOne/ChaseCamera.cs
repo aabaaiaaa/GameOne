@@ -754,8 +754,9 @@ internal sealed class ChaseCamera
     /// vessel looking the wrong way): it comes in along its line to the vessel to where the ground leaves
     /// it clear, so looking up at a landed vessel it is under it, close to the ground. Never nearer the
     /// vessel than <see cref="Scene.CameraSlideMinDistance"/>: where no clear ground is found that far
-    /// out it is put there and lifted clear, and, if the lift brings it nearer than that, moved out
-    /// along <paramref name="side"/> (how it lies from the vessel, flat) and lifted again.
+    /// out it is put there and lifted clear, and, if the lift brings it nearer than that, put on the
+    /// sphere of that radius round the vessel, as low on it as the ground lets it be (straight under or
+    /// over the vessel, out along <paramref name="side"/>, how it lies from the vessel, flat).
     /// </summary>
     private static Vector3 KeepClear(GroundBody body, Vector3 position, Vector3 focus, Vector3 side)
     {
@@ -783,10 +784,31 @@ internal sealed class ChaseCamera
             position += body.Up(position) * lift;
         if (Vector3.Distance(position, focus) < Scene.CameraSlideMinDistance)
         {
-            var upHere = body.Up(position);
-            var flat = side - upHere * Vector3.Dot(side, upHere);
+            // On the sphere of that radius round the vessel instead, in the upright plane through
+            // where it is (or along side, straight under or over it), as low as it is now but as
+            // high as the ground needs: so as it first comes nearer than that it moves on smoothly,
+            // and further down it rises round the sphere rather than popping across to a place apart.
+            var upHere = body.Up(focus);
+            var away = position - focus;
+            var flat = away - upHere * Vector3.Dot(away, upHere);
+            if (flat.LengthSquared() < 1e-4f)
+                flat = side - upHere * Vector3.Dot(side, upHere);
             flat = flat.LengthSquared() > 1e-6f ? Vector3.Normalize(flat) : Vector3.Normalize(Vector3.Cross(upHere, Vector3.UnitX));
-            position = focus + flat * Scene.CameraSlideMinDistance;
+            Vector3 On(float rise) => focus + (flat * MathF.Cos(rise) + upHere * MathF.Sin(rise)) * Scene.CameraSlideMinDistance;
+            float low = MathF.Asin(Math.Clamp(Vector3.Dot(away, upHere) / MathF.Max(away.Length(), 1e-6f), -1f, 1f)), high = MathF.PI / 2;
+            if (Lift(body, On(low)) > 0f)
+            {
+                for (var i = 0; i < 12; i++) // the lowest rise clear of the ground, to a few millimetres
+                {
+                    var mid = (low + high) / 2f;
+                    if (Lift(body, On(mid)) > 0f)
+                        low = mid;
+                    else
+                        high = mid;
+                }
+                low = high;
+            }
+            position = On(low);
             lift = Lift(body, position);
             if (lift > 0f)
                 position += body.Up(position) * lift;

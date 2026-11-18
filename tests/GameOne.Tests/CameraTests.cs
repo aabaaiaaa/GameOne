@@ -374,6 +374,32 @@ public sealed class CameraTests
     }
 
     [Fact]
+    public void Turning_down_under_a_low_vessel_the_camera_moves_without_a_jump()
+    {
+        // Under 3 m up, the slide's least distance comes into play as the camera turns down: it keeps
+        // on that sphere round the vessel, so a small turn moves it a little, never a pop across.
+        foreach (var height in (ReadOnlySpan<float>)[1.5f, 2.5f])
+        {
+            var focus = Scene.RocketStart - Planet.Up(Scene.RocketStart) * Scene.RocketBellHeight + new Vector3(0f, Scene.PadTop + height, 0f);
+            Vector3? last = null;
+            var worst = 0f;
+            for (var pitch = -5f; pitch >= -89f; pitch -= 0.5f)
+            {
+                var camera = new ChaseCamera(null);
+                camera.Place(0.6f, float.DegreesToRadians(pitch), Scene.CameraDistance);
+                camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+                camera.Update(Dt, focus, null, GroundBody.Planet, 0);
+                if (last is { } before && Vector3.Distance(before, focus) < 1.1f * Scene.CameraSlideMinDistance)
+                    worst = MathF.Max(worst, Vector3.Distance(before, camera.Position));
+                last = camera.Position;
+            }
+            // Near it (the slide in along the ground before it is quick, by its own rule), half a degree on
+            // the 3 m sphere is some 3 cm, coming onto it no more than the slide's own step.
+            Assert.True(worst < 0.25f, $"{height} m up: the camera jumped {worst:0.00} m for half a degree");
+        }
+    }
+
+    [Fact]
     public void Looking_up_from_below_a_vessel_on_a_steep_slope_the_camera_keeps_clear_of_the_ground()
     {
         var site = LaunchSites.All.First(s => s.Name == "Polar");
