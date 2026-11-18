@@ -53,11 +53,12 @@ too small to see for itself, and behind the planet it is hidden. The most import
 the rest give way where they would overlap; the quieter ones (earlier flights', places, debris) are
 fainter and only labelled when the pointer is on them or they are within 2 km. Click a marker to
 make it your **target** (a body too: by its marker, its path round what it goes round in the map,
-or its disc, as when it fills too much of the screen to have a ring; never the body you are at): it turns brighter with a box round it and, off the screen, an arrow at the
-edge points the way to it (as it does for the mission's landing site); behind the planet it shows
-faintly through it. Click it again, or anywhere that isn't a marker or the steering rings, to let
-it go. Each vessel has its own target, kept when you switch away and back and saved with the
-world; a target that is destroyed is let go. Which kinds of marker show is in Settings (in the game
+or its disc, as when it fills too much of the screen to have a ring; never the body you are at):
+it turns brighter with a box round it and, off the screen, an arrow at the edge points the way
+to it (as it does for the mission's landing site); behind the planet it shows faintly through it.
+Click it again, or anywhere that isn't a marker or the steering rings, to let it go. Each vessel
+has its own target, kept when you switch away and back and saved with the world; a target that
+is destroyed is let go. Which kinds of marker show is in Settings (in the game
 menu), kept for you across every world. A vessel coming at the one you fly (from its warning until
 it has hit or passed) is marked in red instead (amber for a near miss, which misses if nothing is done), with its name, the seconds to the collision and its
 distance: a warning, not a marker, so it shows whatever the settings say, and neither fades as it
@@ -135,7 +136,11 @@ you, so a late burn still counts. While what is still needed is within a share o
 held between 1 and 5 m/s), your path matches the planned one: cut the engine then and the node
 goes, and the next is put on the path you are on then, at its time, keeping its burn. Cut it
 before it matches and the node stays, however long past its time, until it is matched or you
-delete it. Each vessel keeps its own nodes, saved with the world.
+delete it. While it stays, a new node goes only on its own path or after it (your path now, past
+its time, takes none): drag it to put it back on the path you are on, or delete it. A node placed
+before the first is the first, on your path as it is now, and the old first goes after it on that
+path, keeping its time (the new one plans nothing yet, so its path is yours). Each vessel keeps
+its own nodes, saved with the world.
 
 **Worlds.** A world keeps everything flown in it, from one mission to the next: satellites left in
 orbit, boosters standing where they landed, stages still falling. The next mission's rocket appears
@@ -294,7 +299,7 @@ The controls are the same for every mission:
 | G | Deploy or stow the landing legs. |
 | Right drag / wheel | Orbit the camera round the rocket, from straight down to straight up (looking up from below a landed rocket it slides along the ground under it, clear of it; below level it also comes in nearer than its distance where the ground is in the way) / zoom (far enough out to see the planet). |
 | Right click on the vessel | Its actions, in a menu where you clicked: the bay doors (the lander's: "Open bay doors" or "Close bay doors", which no key does) and the legs ("Deploy legs" or "Stow legs", as G does), each saying what it will do now. Only on the vessel you fly, in the main view, not zoomed out; a vessel with no actions (a satellite) opens none. A right press that moves 4 px or more before it is let go is a drag (the camera turns), not a click. The menu closes on an item, a click elsewhere, Esc, M, or that vessel no longer flown (Tab), wrecked or staged; the keys still fly while it is open. |
-| Right click on anything else | Centres the camera on it. In the map: a body (its disc, whether markers are shown or not), a site or a point of interest (by its marker, so only with markers on) or a vessel; in the chase view: another vessel. A site or a point of interest is looked at from beside it. Right click on your own vessel brings the camera back to it (while it is elsewhere; on it, in the chase view, it opens the actions as above). While the camera is not on your vessel, the steering rings are not drawn (the keys steer as always, in the vessel's own frame), and the strip's "Reset camera" button brings the camera back to it. |
+| Right click on anything else | Centres the camera on it. In the map: a body (its disc, whether markers are shown or not), a site or a point of interest (by its marker, so only with markers on) or a vessel; in the chase view: another vessel. A site or a point of interest is looked at from beside it. Right click on your own vessel brings the camera back to it (while it is elsewhere; on it, in the chase view, it opens the actions as above). While the camera is not on your vessel, the steering rings are not drawn (the keys steer as always, in the vessel's own frame), and the strip's "Reset camera" button brings the camera back to it, looked at as you left it (a place's view from beside it is the place's alone). |
 | Middle drag | Free look: turn the view in place, up to straight up or down, the camera staying where it is (to frame the high sky, or the planet overhead from the moon). A right drag or the wheel looks at the rocket again. |
 | M | Zoom all the way out, to see the whole planet and the path ahead of the vessel you're flying (the white dot on it); M again comes back to the vessel, just where the camera was. From the map centred on a vessel, a site or a point of interest, M gives the chase view of it; centred on a body, the chase view of your vessel; from the chase view, M goes to the map with the same centre. It takes the same moment whatever the time warp. Out there, right drag and the wheel turn and zoom round the planet instead, and you keep flying with the keys. The wheel zooms on out to the whole system: the sun (ringed and named), the planet's path round it, the moon's round the planet, and every vessel flying faintly round the body it is at. The path also fades in by itself as you zoom out with the wheel, and is what the vessel would do with its engine off and only gravity on it (in the air, drag pulls it short). |
 | Tab, or click its view | Fly another vessel: a part that has come away and has guidance of its own (see below). Every switch (and every carry-on and rewind) shows the communications link-up, and the camera comes back as that vessel left it. |
