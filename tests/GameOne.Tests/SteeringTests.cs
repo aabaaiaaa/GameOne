@@ -231,6 +231,19 @@ public sealed class SteeringTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void A_ring_press_moves_holds_clicks_and_lets_go_as_it_is_judged()
+    {
+        // (Moves, Holds, Clicks, LetsGo), as NavigationControl.Update wires them.
+        Assert.Equal(default, NavigationControl.Judge(grabbed: false, released: true, dragging: true, onScreen: true)); // no ring grabbed
+        Assert.Equal((false, false, false, false), NavigationControl.Judge(true, released: false, dragging: false, onScreen: true)); // held still: nothing yet
+        Assert.Equal((true, true, false, false), NavigationControl.Judge(true, released: false, dragging: true, onScreen: true)); // a drag
+        Assert.Equal((false, true, false, false), NavigationControl.Judge(true, released: false, dragging: true, onScreen: false)); // held on, the rings off the screen
+        Assert.Equal((false, false, false, true), NavigationControl.Judge(true, released: true, dragging: true, onScreen: true)); // the drag let go
+        Assert.Equal((true, false, true, true), NavigationControl.Judge(true, released: true, dragging: false, onScreen: true)); // a click
+        Assert.Equal((false, false, false, true), NavigationControl.Judge(true, released: true, dragging: false, onScreen: false)); // a click with the rings off the screen
+    }
+
+    [Fact]
     public void The_ring_hold_works_round_the_moon()
     {
         var (sim, flown) = Pointed(GroundBody.Moon, 0f, 45f);

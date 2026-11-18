@@ -205,21 +205,18 @@ internal sealed class NavigationControl
         // as a person's click lasts several frames) sets that ring's angle, where it was pressed, for
         // the rings' hold. Until the pointer moves it is no drag, so it steers nothing meanwhile and
         // lets no other hold go.
-        var tap = released && _dragging != Ring.None && !_press.Dragging;
-        if (released && !tap)
-            _dragging = Ring.None;
-
-        if (_dragging != Ring.None && _onScreen && (tap || _press.Dragging))
-            Drag(tap ? _pressAt : _cursor);
-        Hold = _dragging != Ring.None && !tap && _press.Dragging ? Direction(_heading, _pitch) : null;
-        if (tap && _onScreen)
+        var press = Judge(_dragging != Ring.None, released, _press.Dragging, _onScreen);
+        if (press.Moves)
+            Drag(press.Clicks ? _pressAt : _cursor);
+        Hold = press.Holds ? Direction(_heading, _pitch) : null;
+        if (press.Clicks)
         {
             if (_dragging == Ring.Heading)
                 _clickHeading = _heading;
             else
                 _clickPitch = _pitch;
         }
-        if (tap)
+        if (press.LetsGo)
             _dragging = Ring.None;
 
         var near = _onScreen && !ImGui.GetIO().WantCaptureMouse && !Blocked
@@ -234,6 +231,23 @@ internal sealed class NavigationControl
             front = d < depth;
             return visible;
         }
+    }
+
+    /// <summary>
+    /// What a ring's press does this frame: with a ring <paramref name="grabbed"/>, the pointer let
+    /// go (<paramref name="released"/>) or not, the press a drag (<paramref name="dragging"/>, see
+    /// <see cref="RingPress"/>) or not yet, and the rings on the screen (<paramref name="onScreen"/>).
+    /// A drag moves the handle to the pointer and holds that way while it lasts; let go, it lets go.
+    /// A press let go before it was a drag is a click: the handle set where it was pressed, that
+    /// angle sent once, and the ring let go. Until a press moves, it moves and holds nothing, so it
+    /// lets no other hold go.
+    /// </summary>
+    internal static (bool Moves, bool Holds, bool Clicks, bool LetsGo) Judge(bool grabbed, bool released, bool dragging, bool onScreen)
+    {
+        if (!grabbed)
+            return default;
+        var click = released && !dragging;
+        return (onScreen && (click || dragging && !released), dragging && !released, click && onScreen, released);
     }
 
     /// <summary>Sets the handles to where the nose points. With the nose straight up, the heading stays as it was.</summary>
