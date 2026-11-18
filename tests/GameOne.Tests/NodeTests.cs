@@ -964,10 +964,10 @@ public sealed class NodeTests(ITestOutputHelper output)
     {
         var state = InOrbit.UpperStage(0, 9000f, share);
         var (centre, stars) = (state.CentreOfMass, InOrbit.Stars(state));
-        var chain = ManoeuvreChain.AnchoredOn(GroundBody.Planet, centre, stars, 1e7, [new ManoeuvreNode(0, Prograde: 5f)], 0);
+        var chain = ManoeuvreChain.AnchoredOn(GroundBody.Planet, centre, stars, 1e13, [new ManoeuvreNode(0, Prograde: 5f)], 0);
         var anchor = chain.Anchor;
         output.WriteLine($"share {share}: anchored at {anchor.Time:0.0} s, {anchor.Position}, {anchor.StarsVelocity}");
-        Assert.True(double.IsFinite(anchor.Time) && anchor.Time < 1e7, "anchored no later than where the path ends");
+        Assert.True(double.IsFinite(anchor.Time) && anchor.Time < 1e13, "anchored no later than where the path ends");
         Assert.True(Finite(anchor.Position) && Finite(anchor.StarsVelocity), "the anchor should be a state, not NaN or infinity");
         Assert.True(PlanOf(chain, 0).Legs.All(leg => Finite(leg.Orbit.StateAfter(0).Position)));
 

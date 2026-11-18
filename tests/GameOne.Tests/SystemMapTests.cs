@@ -479,6 +479,30 @@ public sealed class SystemMapTests(ITestOutputHelper output)
         Assert.True(Vector3.Dot(points[1] - points[0], points[2] - points[1]) > 0f, "its line goes back to where it was first, the stretch it has flown since");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_vessel_escaping_under_formula_has_its_path_end_at_the_solar_systems_edge(bool straightUp)
+    {
+        var planet = GroundBody.Planet;
+        var from = planet.Centre + Vector3.Normalize(new Vector3(0.5f, -0.3f, 0.6f)) * (planet.SeaRadius + 20000f);
+        var way = straightUp ? planet.Up(from) : planet.East(from);
+        using var sim = WorldWith(777.7, InOrbit.At(InOrbit.Round(planet, 0, 2000f), from, way * 1500f));
+        var flight = sim.Flight;
+        var v = flight.WorldVessels.Single(w => w.Id == 0);
+        Assert.True(v.OnFormula);
+        var frames = new BodyFrames();
+        frames.Begin(flight.WorldTime, planet);
+        var map = new SystemMap();
+        map.Build(flight, frames, planet.Centre + new Vector3(0f, 0f, -1f) * 100_000f);
+        var points = new List<Vector3>();
+        Assert.True(map.PathOf(v, points));
+        var end = SolarSystem.FromSun(planet, points[^1], flight.WorldTime); // the map's points are among the stars, a long way on
+        output.WriteLine($"{points.Count} points, ending {end / 1e3:#,0} km from the sun");
+        Assert.InRange(end, 0.99 * Scene.SolarSystemEdge, 1.01 * Scene.SolarSystemEdge);
+        Assert.True(points.Count <= SystemMap.LapSegments + 2);
+    }
+
     [Fact]
     public void A_vessel_going_straight_up_has_its_line_drawn()
     {

@@ -46,6 +46,14 @@ internal static class Scene
     public const float SunDistance = 3_000_000f;   // from the planet's centre to the sun's
     public const float SunRadius = 89_000f;        // its disc about 3.4° across
 
+    /// <summary>
+    /// The solar system's edge: a sphere this far (metres) round the sun's centre, the star nothing
+    /// else goes round. A path that reaches it ends there, marked (<see cref="Patched.Legs"/>). Far
+    /// enough out to leave room for bodies a long way from the sun, and well short of where a
+    /// double loses its millimetres (it holds a place here to about 0.002 mm; a float only to a km).
+    /// </summary>
+    public const double SolarSystemEdge = 1e10;
+
     // The moon: its distance (judged by how big it looks), size and pull; its lap follows from the
     // planet's pull (about 27 minutes). It goes round the way the planet turns, keeping one face to it.
     public const float MoonDistance = 40_000f;     // from the planet's centre to the moon's

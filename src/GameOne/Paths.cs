@@ -192,6 +192,39 @@ internal sealed class Paths
     /// <summary>The predicted collisions between vessels, as drawn from the last <see cref="Build"/>: each one's cross (see <see cref="Flight.MapCollisions"/>).</summary>
     internal IReadOnlyList<CollisionMark> CollisionMarks => _collisionMarks;
 
+    /// <summary>
+    /// Where each path drawn ends at the solar system's edge (<see cref="PathLeg.LeavesSystem"/>),
+    /// as drawn from the last <see cref="Build"/>: the flown vessel's, a flying target's, the plan's.
+    /// Information only, as every mark on the path: where it leaves, never what to do about it.
+    /// </summary>
+    internal IReadOnlyList<CollisionMark> EdgeMarks => _edgeMarks;
+
+    private readonly List<CollisionMark> _edgeMarks = [];
+
+    /// <summary>The label of a path's end at the solar system's edge.</summary>
+    internal const string EdgeLabel = "Leaves the solar system";
+
+    /// <summary>The colour of a path's end at the solar system's edge, and its label's.</summary>
+    internal static readonly (byte R, byte G, byte B) EdgeColor = (190, 205, 255);
+
+    /// <summary>
+    /// Draws a path's end at the solar system's edge at <paramref name="at"/> (on the screen): a
+    /// ring round a dot, as strongly as <paramref name="alpha"/>.
+    /// </summary>
+    internal static void EdgeIcon(ImDrawListPtr draw, float2 at, float alpha)
+    {
+        var c = new ImColor8(EdgeColor.R, EdgeColor.G, EdgeColor.B, (byte)(255 * Math.Clamp(alpha, 0f, 1f)));
+        draw.AddCircle(at, 6f, c, 0, 2f);
+        draw.AddCircleFilled(at, 2f, c);
+    }
+
+    /// <summary>Adds an edge mark at the end of <paramref name="points"/> (as drawn) if its last leg, <paramref name="last"/>, leaves the solar system.</summary>
+    private void EdgeMark(List<Vector3> points, in PathLeg last)
+    {
+        if (last.LeavesSystem && points.Count > 0)
+            _edgeMarks.Add(new CollisionMark(points[^1], EdgeLabel));
+    }
+
     /// <summary>The stretches of path into the collisions, two to each, as drawn from the last <see cref="Build"/>.</summary>
     internal IReadOnlyList<LeadIn> LeadIns => _leadIns;
 
@@ -272,6 +305,13 @@ internal sealed class Paths
             if (stacked || !Cross(draw, collision.At, Scene.CollisionColor, collision.Label))
                 continue;
             _crossesAt[CollisionsDrawn++] = at;
+        }
+        foreach (var edge in _edgeMarks)
+        {
+            if (!InView(edge.At, out var at))
+                continue;
+            EdgeIcon(draw, at, _fade);
+            Label(at + new float2(10f, -8f), at, EdgeColor, edge.Label);
         }
         foreach (var mark in _marks)
             DrawMark(draw, mark.At, mark.Color, mark.Label);
@@ -365,6 +405,8 @@ internal sealed class Paths
         _lineGlowsFrom = 0;
         for (var i = 0; i < current.Count; i++)
             _lineGlowsFrom += Fill(_line, _lineStarts, current[i], view, now, frame, firstNodeAt);
+        _edgeMarks.Clear();
+        EdgeMark(_line, current[^1]);
         // And its own path to the first node, drawn over the line as it is (the chain's own legs up to
         // the node are from its anchor, which is the node itself for one set where it is).
         _toFirst.Clear();
@@ -411,6 +453,7 @@ internal sealed class Paths
                 Patched.Legs(found.Body, own, found.Body.AmongStars(own, ownVelocity), now, _theirLegs);
                 for (var i = 0; i < _theirLegs.Count; i++)
                     Fill(_theirLine, _theirStarts, _theirLegs[i], view, now, frame);
+                EdgeMark(_theirLine, _theirLegs[^1]);
                 (planeNormal, planeBody) = (_theirLegs[0].Orbit.Normal, found.Body);
                 if (found.Body == view)
                     theirs = _theirLegs[0].Orbit;
@@ -433,6 +476,8 @@ internal sealed class Paths
                 Fill(points, null, plan.Legs[i], view, now, frame);
                 _legs.Add(points);
             }
+        if (_planned)
+            EdgeMark(_legs[^1], plan.Legs[^1]);
         // Each node, by its own index, at the end of the leg its burn is made at, placed as that leg
         // is.
         for (var i = 0; _planned && plan.NodeLeg(i) is { } leg; i++)
@@ -771,6 +816,13 @@ internal sealed class Paths
             // to one), and down where it lands. (An escaping one's far end, which it never
             // reaches, is over the ground as it is when it starts.)
             orbit.Path(_radial);
+            if (leg.LeavesSystem)
+            {
+                // Out along its line to the solar system's edge, where it ends.
+                points.Add(place.Point(frame, _radial[0], startsIn));
+                points.Add(place.Point(frame, orbit.PlaceAfter(leg.End - leg.Start).ToSingle(), leg.End - now));
+                return leg.Start < before ? 1 : 0;
+            }
             var top = orbit.TopSeconds; // then the second point is the top
             for (var i = 0; i < _radial.Count; i++)
             {

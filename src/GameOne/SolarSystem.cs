@@ -136,6 +136,29 @@ internal static class SolarSystem
         (Vector3Double)GroundBody.Planet.Centre + GroundTurn(worldTime).Rotate(-RoundAt(PlanetAlong(worldTime)) * Scene.SunDistance);
 
     /// <summary>
+    /// How far <paramref name="p"/> (a place in <paramref name="body"/>'s frame) is from the sun's
+    /// centre at <paramref name="worldTime"/>, in double: changed into the planet's frame, where
+    /// the sun's place is (<see cref="SunCentreAt"/>). What the solar system's edge
+    /// (<see cref="Scene.SolarSystemEdge"/>) is measured by.
+    /// </summary>
+    public static double FromSun(GroundBody body, Vector3Double p, double worldTime) =>
+        (Bodies.Change(body, GroundBody.Planet, worldTime).Point(p) - SunCentreAt(worldTime)).Length();
+
+    /// <summary>
+    /// The farthest <paramref name="body"/>'s centre can ever be from the sun's: the sun's distance
+    /// from the planet's centre, and each body's from its parent's on the way to it (as at
+    /// <paramref name="worldTime"/>: each goes round on a circle). A place that far from the
+    /// body's centre, give or take its distance from there, is that far from the sun.
+    /// </summary>
+    public static double FarthestFromSun(GroundBody body, double worldTime)
+    {
+        double farthest = Scene.SunDistance;
+        for (var b = body; b.Parent is { } parent; b = parent)
+            farthest += (Bodies.CentreIn(b, parent, worldTime) - (Vector3Double)parent.Centre).Length();
+        return farthest;
+    }
+
+    /// <summary>
     /// The sun's disc as seen from <paramref name="fromSun"/> (the way from a place to the sun's
     /// centre, in double): the way to its centre, and in w its angular radius from there (a right
     /// angle from on or in it).

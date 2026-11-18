@@ -405,12 +405,14 @@ public sealed class PathTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void An_escaping_path_goes_out_to_the_edge_and_stops()
+    public void An_escaping_path_goes_out_to_its_range_and_stops()
     {
+        // The orbit alone, out to its range (past the solar system's edge, which ends a patched
+        // path first: see SolarEdgeTests), to a float's step out there.
         var start = Above(5000f);
         var escape = MathF.Sqrt(2f * Planet.Mu / Distance(start));
         var path = PathOf(start, East * escape * 1.2f);
-        Assert.InRange(Distance(path[^1]), Orbit.MaxRange - 10f, Orbit.MaxRange + 10f);
+        Assert.InRange(Distance(path[^1]), Orbit.MaxRange * (1 - 1e-6f), Orbit.MaxRange * (1 + 1e-6f));
         Assert.True(path.Zip(path.Skip(1)).All(pair => Distance(pair.Second) >= Distance(pair.First) - 0.01f), "it should only ever go outward");
     }
 

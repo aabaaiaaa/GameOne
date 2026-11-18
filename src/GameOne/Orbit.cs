@@ -28,8 +28,12 @@ namespace GameOne;
 /// </remarks>
 internal readonly struct Orbit
 {
-    /// <summary>A path that escapes is followed this far from its body's centre, then stops.</summary>
-    public const float MaxRange = 30f * GroundBody.PlanetRadius;
+    /// <summary>
+    /// A path that escapes is followed this far from its body's centre, then stops: twice the solar
+    /// system's edge, so from any body inside it the edge comes first, and a patched path ends
+    /// there (<see cref="Patched.Legs"/>).
+    /// </summary>
+    public const float MaxRange = (float)(2 * Scene.SolarSystemEdge);
 
     private readonly GroundBody _body;   // what it goes round, in whose frame it is
     private readonly double _p;          // the semi-latus rectum: the distance at a right angle to the periapsis
@@ -210,6 +214,34 @@ internal readonly struct Orbit
         }
         var anomaly = AnomalyAfter(seconds);
         return (At(anomaly), VelocityAt(anomaly));
+    }
+
+    /// <summary>
+    /// Where it will be <paramref name="seconds"/> from now, as <see cref="StateAfter"/> has it but
+    /// in double, its distance from the centre kept whole: what a place billions of metres out
+    /// (the solar system's edge) is measured by.
+    /// </summary>
+    public Vector3Double PlaceAfter(double seconds)
+    {
+        if (_radial)
+            return (Vector3Double)_body.Centre + (Vector3Double)_up * RadialAfter(seconds).Distance;
+        var anomaly = AnomalyAfter(seconds);
+        var distance = Distance(anomaly);
+        var (sin, cos) = Math.SinCos(anomaly);
+        return (Vector3Double)_body.Centre + (Vector3Double)_toPeriapsis * (cos * distance) + (Vector3Double)_ahead * (sin * distance);
+    }
+
+    /// <summary>
+    /// Straight up or down, falling back: how long from now until it is down through
+    /// <paramref name="distance"/> from its body's centre (after its top, if it is still rising to
+    /// one); null if it escapes or never gets that high.
+    /// </summary>
+    public double? FallingTo(double distance)
+    {
+        if (!_radial || _top >= MaxRange || distance >= _top)
+            return null;
+        var r0 = ((Vector3Double)_position - (Vector3Double)_body.Centre).Length();
+        return !_rising && distance > r0 ? null : RadialSeconds(r0, distance);
     }
 
     /// <summary>

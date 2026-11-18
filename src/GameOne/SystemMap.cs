@@ -61,6 +61,8 @@ internal sealed class SystemMap
         // the vessel is now: from the world time it was made at, its points passed since left out.
         public bool Open;
         public double MadeAt;
+        // Whether it ends at the solar system's edge (its last point there, marked), under formula or patched.
+        public bool LeavesSystem;
         // In the physics: its path patched, placed in the view's frame this frame, and where in it
         // each leg after the first starts (the line breaks there, at the crossing).
         public readonly List<Vector3> Placed = [];
@@ -85,6 +87,10 @@ internal sealed class SystemMap
     private readonly List<float2> _screen = [];
     private readonly List<Run> _runs = [];
     private readonly List<(float2 At, (byte R, byte G, byte B) Color, int Body)> _dots = [];
+    private readonly List<float2> _edges = [];
+
+    /// <summary>Where on the screen <see cref="Lay"/> put the end of each vessel's path that ends at the solar system's edge (<see cref="Paths.EdgeIcon"/>).</summary>
+    internal IReadOnlyList<float2> Edges => _edges;
 
     /// <summary>A run of <see cref="Count"/> screen points from <see cref="First"/>, drawn as one line; <see cref="Vessel"/> is its vessel's id, -1 for a body's path (<see cref="Body"/>).</summary>
     internal readonly record struct Run(int First, int Count, (byte R, byte G, byte B) Color, float Alpha, int Vessel, int Body);
@@ -234,7 +240,8 @@ internal sealed class SystemMap
     /// Makes <paramref name="lap"/> for <paramref name="v"/> (under formula) as its orbit is now: a lap
     /// round its body from where it is, or out to where it leaves its body's pull (its sphere's leaving
     /// edge, or <see cref="Orbit.MaxRange"/> round the root), or to where it would first enter a
-    /// child's sphere (looked for only where its farthest point reaches that far out): only its leg
+    /// child's sphere (looked for only where its farthest point reaches that far out), or to the
+    /// solar system's edge (<see cref="Patched.LeavesAt"/>), whichever is first: only its leg
     /// round its own body. Straight up and down, its line. Among its body's stars at world time 0.
     /// </summary>
     private void MakeLap(Lap lap, Vessel v, double now)
@@ -243,11 +250,24 @@ internal sealed class SystemMap
         (lap.Vessel, lap.Body, lap.Patched) = (v, body, false);
         (lap.Momentum, lap.Eccentricity, lap.Energy) = Elements(v, _toStarsAtZero[body.Index]);
         Remakes++;
-        (lap.Count, lap.Reach, lap.Open, lap.MadeAt) = (0, 0f, false, now);
+        (lap.Count, lap.Reach, lap.Open, lap.MadeAt, lap.LeavesSystem) = (0, 0f, false, now, false);
         var orbit = Orbit.OverGround(body, v.CentreOfMass, v.Velocity, findEnd: false);
+        // Where it reaches the solar system's edge, if it can get that far (looked for only then:
+        // along its whole path ahead, which only an orbit made to find its end has).
+        var leaves = orbit.HighestDistance >= Scene.SolarSystemEdge - SolarSystem.FarthestFromSun(body, now)
+            ? Patched.LeavesAt(new PathLeg(body, Orbit.OverGround(body, v.CentreOfMass, v.Velocity), now, double.PositiveInfinity))
+            : null;
         if (orbit.Radial)
         {
             orbit.Path(_radial);
+            if (leaves is { } edgeAt)
+            {
+                // Out along its line to the edge, where it ends.
+                (lap.Open, lap.LeavesSystem) = (true, true);
+                Add(lap, body, _radial[0], 0f);
+                Add(lap, body, orbit.PlaceAfter(edgeAt - now).ToSingle(), (float)(edgeAt - now));
+                return;
+            }
             foreach (var p in _radial)
                 Add(lap, body, p, 0f);
             return;
@@ -272,6 +292,8 @@ internal sealed class SystemMap
             to = Math.Min(to, Unwrapped(orbit.AnomalyAfter(crossing - now), from));
             lap.Open = true;
         }
+        if (leaves is { } edge && Unwrapped(orbit.AnomalyAfter(edge - now), from) is var atEdge && atEdge < to)
+            (to, lap.Open, lap.LeavesSystem) = (atEdge, true, true);
         for (var k = 0; k <= LapSegments; k++)
         {
             var anomaly = from + (to - from) * k / LapSegments;
@@ -335,6 +357,13 @@ internal sealed class SystemMap
             if (leg.Orbit.Radial)
             {
                 leg.Orbit.Path(_radial);
+                if (leg.LeavesSystem)
+                {
+                    // Out along its line to the solar system's edge, where it ends.
+                    lap.Placed.Add(place.Point(_frame, _radial[0], startsIn));
+                    lap.Placed.Add(place.Point(_frame, leg.Orbit.PlaceAfter(leg.End - leg.Start).ToSingle(), leg.End - now));
+                    continue;
+                }
                 foreach (var p in _radial)
                     lap.Placed.Add(place.Point(_frame, p, startsIn));
                 continue;
@@ -343,6 +372,7 @@ internal sealed class SystemMap
             foreach (var (at, seconds) in _samples)
                 lap.Placed.Add(place.Point(_frame, at, startsIn + seconds));
         }
+        lap.LeavesSystem = _legs[^1].LeavesSystem;
     }
 
     /// <summary>
@@ -358,6 +388,7 @@ internal sealed class SystemMap
         _screen.Clear();
         _runs.Clear();
         _dots.Clear();
+        _edges.Clear();
         SunMark = null;
         var pathColor = ((byte)(Scene.PathColor.X * 255), (byte)(Scene.PathColor.Y * 255), (byte)(Scene.PathColor.Z * 255));
         var bodies = Bodies.All;
@@ -374,6 +405,13 @@ internal sealed class SystemMap
                     System.Runtime.InteropServices.CollectionsMarshal.AsSpan(lap.Starts));
             else if (lap.Count > 1)
                 LayLap(lap, viewProjection, camera, display, pathColor);
+            // Its end at the solar system's edge, where it can be seen.
+            if (lap.LeavesSystem && (lap.Patched ? lap.Placed.Count > 0 : lap.Count > 0))
+            {
+                var end = lap.Patched ? lap.Placed[^1] : Vector3.Transform(lap.Stars[lap.Count - 1], _starsToView[lap.Body.Index]);
+                if (!_frames.Behind(camera, end) && Project(end, viewProjection, display, out var at))
+                    _edges.Add(at);
+            }
         }
 
         for (var b = 0; b < bodies.Count; b++)
@@ -614,6 +652,7 @@ internal sealed class SystemMap
         _screen.Clear();
         _runs.Clear();
         _dots.Clear();
+        _edges.Clear();
         SunMark = null;
     }
 
@@ -683,6 +722,11 @@ internal sealed class SystemMap
         }
         foreach (var (at, color, _) in _dots)
             draw.AddCircleFilled(at, Scene.MapBodyMinPixels / 2f, Color(color, fade));
+        foreach (var at in _edges)
+        {
+            Paths.EdgeIcon(draw, at, Scene.MapOtherPathAlpha * fade);
+            labels.Add(Paths.EdgeLabel, at + new float2(10f, -8f), at, Paths.EdgeColor, Scene.MapOtherPathAlpha * fade, 0.8f * Scene.MapOtherPathAlpha * fade);
+        }
         if (SunMark is { } mark)
         {
             draw.AddCircle(mark.At, mark.Ring, Color(Scene.MapSunColor, 0.9f * fade), 0, 1.5f);

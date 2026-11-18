@@ -201,7 +201,12 @@ dotnet run --project src/GameOne
   so it holds across the crossing. A slow touch there is judged by the ground's rules, unwarned,
   as on the planet. Each body's lowest surface (`GroundBody.LowestRadius`: its sea, or with none
   its lowest ground, the moon's plains and craters lying below its datum) is where every path
-  ends at the latest. The map's search (`CollisionSearch`) checks only pairs of vessels, never
+  ends at the latest coming down; going out, every path ends at the solar system's edge
+  (`Scene.SolarSystemEdge`, 10,000,000 km round the sun's centre, found among the stars at the
+  sun's place then, in double: `Patched.LeavesAt`, `SolarSystem.FromSun`), its last leg marked
+  `PathLeg.LeavesSystem` and drawn with its mark ("Leaves the solar system", `Paths.EdgeMarks`;
+  the map's laps too), so nothing walks or searches on past it (an `Orbit` alone runs out to
+  `Orbit.MaxRange`, twice the edge, so the edge comes first). The map's search (`CollisionSearch`) checks only pairs of vessels, never
   the ground. The flown vessel's soonest is its
   `Flight.Warning` (what is coming and in how long, never which way to go: see "Low
   hand-holding"), which drops the warp once for each collision, in time to dodge. As one comes
