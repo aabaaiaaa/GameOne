@@ -433,7 +433,14 @@ public sealed class SlowdownTests(ITestOutputHelper output)
         Assert.True(sim.Run(Nobody, f => f.TimeScale < 0.5f, maxSeconds: 6), "never slowed");
         output.WriteLine($"{Vector3.Distance(far.Position, a.Position):0} m apart; switched away at a scale of {sim.Flight.TimeScale:0.000}");
         Assert.True(Vector3.Distance(far.Position, a.Position) > 5000f);
+        // The vessel switched to is flown a frame after the switch is asked (behind its link-up): until
+        // then the slow-down for the one switched away from holds, and it is let go only once the
+        // other is flown, from when it eases back.
+        sim.ShowLinkUp = true;
         sim.Step(new FlightInput(SwitchTo: far));
+        Assert.Same(a, sim.Flight.Controlled);
+        Assert.NotNull(sim.Flight.Slowed);
+        sim.Step(default);
         Assert.Same(far, sim.Flight.Controlled);
         var frames = 1;
         Assert.True(sim.Run(Nobody, f =>
@@ -443,10 +450,8 @@ public sealed class SlowdownTests(ITestOutputHelper output)
             frames++;
             return false;
         }, maxSeconds: Scene.SlowdownEaseSeconds + 1f), "never eased back");
-        output.WriteLine($"eased back {Real(frames):0.000} s of real time after the switch");
-        // The vessel switched to is flown a frame after the switch is asked (behind its link-up), so the
-        // slow-down for the one switched away from is let go a frame later than the ask: one frame more to ease.
-        Assert.True(Real(frames) <= Scene.SlowdownEaseSeconds + 2 * Simulation.FrameSeconds + 1e-6, $"{Real(frames):0.000} s to ease back");
+        output.WriteLine($"eased back {Real(frames):0.000} s of real time after the vessel was flown");
+        Assert.True(Real(frames) <= Scene.SlowdownEaseSeconds + Simulation.FrameSeconds + 1e-6, $"{Real(frames):0.000} s to ease back");
         Assert.Equal(1f, sim.Flight.TimeScale);
     }
 
