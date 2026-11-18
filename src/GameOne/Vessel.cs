@@ -1122,7 +1122,8 @@ internal sealed class Vessel
     /// come (from when it may be matched with no burn); a vessel coasting on past an unmatched
     /// node works out no path for it, step after step. In the air drag keeps changing how it
     /// moves, and a touch changes it at once, so there it is judged every step, and in the step
-    /// after a touch.
+    /// after a touch; but landed or afloat (settled), it moves only as a touch begins or ends, so it
+    /// is judged then (see <see cref="Rejudged"/>).
     /// </remarks>
     private void FollowNodes(float dt, double now)
     {
@@ -1130,7 +1131,7 @@ internal sealed class Vessel
         if (Chain is { } chain)
         {
             var touching = Physics is { } physics && physics.TouchingAnything(_craft);
-            var touched = touching || _nodeTouching;
+            var wasTouching = _nodeTouching;
             _nodeTouching = touching;
             if (lit && !_wasLit && _burnAim is null)
                 (_burnAim, _burnStart) = (Planned(chain, now), now);
@@ -1144,7 +1145,8 @@ internal sealed class Vessel
                 var held = _wasLit && _matchHeld; // just cut: matched as the guide showed it, the hold as it stood lit
                 _matchHeld = false;
                 var past = now >= chain.TimeOf(0);
-                if (_wasLit || touched || !Body.AboveAir(CentreOfMass) || !ReferenceEquals(chain, _judged.Chain) || past != _judged.Past)
+                var settled = State is FlightState.Landed or FlightState.Floating;
+                if (Rejudged(_wasLit, !ReferenceEquals(chain, _judged.Chain) || past != _judged.Past, touching, wasTouching, settled, !Body.AboveAir(CentreOfMass)))
                 {
                     _judged = (chain, past);
                     if (mayMatch && BurnLeft(now) is { } left && Matched(chain, left, now, held))
@@ -1158,6 +1160,17 @@ internal sealed class Vessel
         }
         _wasLit = lit;
     }
+
+    /// <summary>
+    /// Whether, the engine off, the next node is judged again in this step (see
+    /// <see cref="FollowNodes"/>): the engine <paramref name="justCut"/>, the chain or whether its
+    /// time has come <paramref name="changed"/>, a touch begun or ended (<paramref name="touching"/>
+    /// now, <paramref name="wasTouching"/> as last looked); and but for one landed or afloat
+    /// (<paramref name="settled"/>, still), every step it touches anything and the step after, and
+    /// every step <paramref name="inAir"/>.
+    /// </summary>
+    internal static bool Rejudged(bool justCut, bool changed, bool touching, bool wasTouching, bool settled, bool inAir) =>
+        justCut || changed || touching != wasTouching || !settled && (touching || wasTouching || inAir);
 
     /// <summary>The height of its lowest point above whatever is under it (never below 0).</summary>
     public float Ground { get; private set; }
@@ -1425,7 +1438,8 @@ internal sealed class Vessel
         // The manoeuvre hold lets go once no node is left to steer by.
         if (Hold == HoldMode.Manoeuvre && Chain is null)
             Hold = HoldMode.None;
-        Steer(dt, lean, hold, holdVelocity, holdFloor, Hold == HoldMode.Manoeuvre ? BurnLeft(now) : null);
+        // (Under formula it steers by no node either: the burn left isn't worked out for it.)
+        Steer(dt, lean, hold, holdVelocity, holdFloor, Hold == HoldMode.Manoeuvre && !OnFormula ? BurnLeft(now) : null);
     }
 
     /// <summary>Whether any of it is in the water (as it was after the last physics step).</summary>

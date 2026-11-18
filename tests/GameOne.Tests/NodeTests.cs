@@ -585,6 +585,44 @@ public sealed class NodeTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Under_formula_the_manoeuvre_hold_steers_nothing()
+    {
+        // No node is flown under formula: its hold waits for its pilot, its nose where it was.
+        var far = UnwatchedTests.Satellite(1, 10000f, 0f, 240f);
+        var chain = new ManoeuvreChain(new ChainAnchor(GroundBody.Planet.Name, 0.0, far.Position, GroundBody.Planet.AmongStars(far.Position, far.Velocity)),
+            [new ManoeuvreNode(200, Radial: 30f)]);
+        using var sim = new Simulation(Mission.FreePlay, world: new WorldState
+        {
+            Time = 0.0, NextVesselId = 2, Flights = 1, Vessels = [far with { Chain = chain, Hold = HoldMode.Manoeuvre }],
+        });
+        var satellite = sim.Flight.WorldVessels.Single(v => v.Id == 1);
+        sim.Step(default);
+        Assert.True(satellite.OnFormula);
+        var aim = satellite.Aim;
+        sim.Run((_, _) => default, _ => false, maxSeconds: 3);
+        Assert.True(satellite.OnFormula);
+        Assert.Equal(HoldMode.Manoeuvre, satellite.Hold);
+        var turned = float.RadiansToDegrees(MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(aim), Vector3.Normalize(satellite.Aim)), -1f, 1f)));
+        Assert.True(turned < 1f, $"its nose turned {turned:0.0}° by the hold");
+    }
+
+    [Fact]
+    public void A_settled_vessel_s_node_is_judged_only_as_something_changes()
+    {
+        // In flight, a touch is judged every step it lasts and the step after; landed or afloat
+        // only as it begins or ends; the engine cut, the chain changed, the air, as ever.
+        Assert.True(Vessel.Rejudged(justCut: false, changed: false, touching: true, wasTouching: true, settled: false, inAir: false));
+        Assert.True(Vessel.Rejudged(false, false, touching: false, wasTouching: true, settled: false, inAir: false)); // the step after
+        Assert.False(Vessel.Rejudged(false, false, touching: false, wasTouching: false, settled: false, inAir: false)); // coasting above the air
+        Assert.True(Vessel.Rejudged(false, false, false, false, settled: false, inAir: true));
+        Assert.False(Vessel.Rejudged(false, false, touching: true, wasTouching: true, settled: true, inAir: true)); // landed, still
+        Assert.True(Vessel.Rejudged(false, false, touching: true, wasTouching: false, settled: true, inAir: true)); // a touch begun
+        Assert.True(Vessel.Rejudged(false, false, touching: false, wasTouching: true, settled: true, inAir: true)); // and ended
+        Assert.True(Vessel.Rejudged(justCut: true, false, true, true, settled: true, inAir: true));
+        Assert.True(Vessel.Rejudged(false, changed: true, true, true, settled: true, inAir: true));
+    }
+
+    [Fact]
     public void Anchoring_a_chain_allocates_only_the_chain()
     {
         // As dragging the first node does every frame: the chain made is all it allocates.
