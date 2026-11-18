@@ -633,6 +633,21 @@ internal sealed class Vessel
     }
 
     /// <summary>
+    /// Gone past the solar system's edge (<see cref="Scene.SolarSystemEdge"/>): lost as a crash is
+    /// (its throttle cut, where it was kept as where it was lost, which the camera stays on), but
+    /// with nothing blown up, and its body taken out of its physics at once, as nothing hit it to
+    /// play out. The flight takes it out of the world (the flown one once another is flown).
+    /// </summary>
+    internal void LeaveTheSystem()
+    {
+        Crash(LeftTheSolarSystemReason, explode: false);
+        _physics?.Remove(_craft);
+    }
+
+    /// <summary>Whether it has gone past the solar system's edge (see <see cref="LeaveTheSystem"/>).</summary>
+    public bool LeftTheSystem => State == FlightState.Crashed && CrashReason == LeftTheSolarSystemReason;
+
+    /// <summary>
     /// Whether, a payload bare of its fairing, it would break up at <paramref name="at"/> moving
     /// <paramref name="velocity"/>: flying too fast through thick air (<see cref="Scene.FairingMaxAirPressure"/>).
     /// </summary>
@@ -648,6 +663,8 @@ internal sealed class Vessel
     // The reasons it is wrecked by, the physics' and the formula's alike, so the two read the same.
     internal string TowerReason => IsFairing ? "Hit the service tower." : "Flew into the service tower.";
     internal const string MastReason = "Hit a light mast.";
+    /// <summary>What going past the solar system's edge is told as (see <see cref="LeaveTheSystem"/>).</summary>
+    internal const string LeftTheSolarSystemReason = "Left the solar system.";
     internal static string HitAnotherVessel(float speed) => $"Hit another vessel at {speed:0.0} m/s.";
     /// <summary>What hitting <paramref name="body"/>'s ground at <paramref name="speed"/> is told as, by the ground's name there ("Hit the ground", "Hit the moon").</summary>
     internal static string HitTheGround(float speed, GroundBody body) => $"Hit {body.GroundName} at {speed:0.0} m/s. Touch down slower than {Scene.SafeTouchdownSpeed:0} m/s.";

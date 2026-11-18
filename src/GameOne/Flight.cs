@@ -1810,6 +1810,7 @@ internal sealed class Flight : IDisposable
         // Across a sphere's edge, each handed to the body it is at now (its touches judged first
         // in the world it was in), and the bodies those in the physics will soon be at asked for ahead.
         Cross(WorldTime);
+        LeaveTheSystem(WorldTime); // where each is now, at the body it is at
         AskAhead(WorldTime);
         ResolveTarget(); // where it has moved to, or whether it has been destroyed or removed
         KeepFrame(); // and Auto may have switched
@@ -2037,6 +2038,66 @@ internal sealed class Flight : IDisposable
     /// wrecked and not nearer their body's centre than any edge (the rest need no asking).
     /// </summary>
     internal int CrossAsked { get; private set; }
+
+    /// <summary>
+    /// Takes out of the game every vessel past the solar system's edge (<see cref="Scene.SolarSystemEdge"/>,
+    /// round the sun), each written to the log as lost there (<see cref="WorldLog.LeftTheSolarSystem"/>),
+    /// seen if it was in the physics: checked by its distance, not by a crossing, so one the warp
+    /// carried well past it in a step goes all the same, and one loaded past it goes in the first
+    /// step. Each is lost as a crash is (<see cref="Vessel.LeaveTheSystem"/>): its run, if it
+    /// needed it, fails as for any vessel lost. One not flown goes from the world at once; the
+    /// flown one stays the one flown, a wreck with nothing left of it, its message shown and the
+    /// camera where it was, until another is flown or a flight begun, and goes then. A vessel
+    /// nearer its body's centre than the edge less the farthest that body gets from the sun
+    /// (<see cref="SolarSystem.FarthestFromSun"/>) can't be past it, so is not asked.
+    /// </summary>
+    private void LeaveTheSystem(double now)
+    {
+        var bodies = Bodies.All;
+        Span<double> clear = stackalloc double[bodies.Count];
+        for (var b = 0; b < bodies.Count; b++)
+            clear[b] = Scene.SolarSystemEdge - SolarSystem.FarthestFromSun(bodies[b], now);
+        var (asked, gone) = (0, false);
+        for (var i = _world.Count - 1; i >= 0; i--)
+        {
+            var v = _world[i];
+            if (v.LeftTheSystem)
+            {
+                // The flown one that left, once another is flown.
+                if (v != Controlled)
+                {
+                    TakeOut(i);
+                    gone = true;
+                }
+                continue;
+            }
+            if (v.State == FlightState.Crashed || ((Vector3Double)v.CentreOfMass - v.Body.Centre).Length() < clear[v.Body.Index])
+                continue;
+            asked++;
+            if (SolarSystem.FromSun(v.Body, v.CentreOfMass, MotionTime(v, now)) < Scene.SolarSystemEdge)
+                continue;
+            v.LeaveTheSystem();
+            v.LossLogged = true;
+            if (!v.IsFairing) // a fairing half is debris, not a loss worth the player's log
+            {
+                var entry = new LogEntry(now, WorldLog.Named(v), WorldLog.LeftTheSolarSystem, null, WorldLog.Where(v.Body, v.CrashPosition), v.CrashedWatched);
+                v.LoggedAs = entry;
+                AddToLog(entry);
+            }
+            if (v != Controlled)
+                TakeOut(i);
+            gone = true;
+        }
+        EdgeAsked = asked;
+        if (gone)
+            ForgetCollisions(); // one the map may show is gone
+    }
+
+    /// <summary>
+    /// How many vessels the last step's <see cref="LeaveTheSystem"/> asked whether they were past the
+    /// solar system's edge: those not wrecked and not near enough their body's centre to be sure.
+    /// </summary>
+    internal int EdgeAsked { get; private set; }
 
     /// <summary>The world time <paramref name="v"/>'s motion is at: the flight's under formula, its world's in the physics (<see cref="Worlds.Lag"/> behind).</summary>
     private double MotionTime(Vessel v, double now) => v.Physics is null ? now : now - _worlds.Lag;

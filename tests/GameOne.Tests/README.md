@@ -761,7 +761,15 @@ say) stalls frames and spoils the timing.
   further from a place than `SolarSystem.FarthestSunFrom`, and within tens of metres of it once in
   a year; and the flown vessel's escape path drawn out to the
   edge with one mark, "Leaves the solar system" (`Paths.EdgeMarks`), at the line's end, in no more
-  than a lap's samples a leg, built again allocating nothing.
+  than a lap's samples a leg, built again allocating nothing. A vessel past the edge is taken out
+  and logged "left the solar system" (`WorldLog.LeftTheSolarSystem`, no speed): one under formula
+  1 km inside going out at 2,000 m/s (unseen), one 50 km inside at the highest warp, and one in a
+  world loaded past it, on the first step; the flown one, standing over the ground as the sun's
+  circle carries the edge past it (Jolt, in floats, can't move a craft by a step's travel that far
+  out), lost as a crash ("Left the solar system.", still the one flown, seen, its run failed and
+  in no capture), written once, and gone from the world once Tab flies its run's booster; and
+  `Flight.EdgeAsked` counting only the vessel 1,000 km inside, never the one in orbit or on the
+  pad, at warp too.
 - **`MoonTargetTests`:** a body as a target and the path drawn round each body: the moon targeted
   as a vessel is (its centre in the view's frame within 1 m, flying, its velocity over the
   planet's ground as its centre moves; the planet, the body it is at, refused; the readout's

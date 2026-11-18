@@ -194,4 +194,174 @@ public sealed class SolarEdgeTests(ITestOutputHelper output)
         paths.Build(flight, plan);
         Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
     }
+
+    // ---- Crossing it ----
+
+    private static readonly Pilot Nobody = (_, _) => default;
+
+    /// <summary>
+    /// Reach Orbit's upper stage numbered <paramref name="id"/>, still over the ground about
+    /// <paramref name="inside"/> metres inside the edge at world time <paramref name="now"/>, on the
+    /// side the sun's circle round the planet (in the ground's turning frame, a lap a day) is going
+    /// away from: so the edge passes it within a second or so. (Jolt, in floats, can't move a craft
+    /// this far out by a step's travel, so the flown vessel leaves by the edge going past it.)
+    /// </summary>
+    private static VesselState SweptPast(int id, double inside, double now = Now)
+    {
+        var away = -Vector3Double.Normalize(SolarSystem.SunCentreAt(now + 0.5) - SolarSystem.SunCentreAt(now - 0.5)).ToSingle();
+        var (best, bestMiss) = (Vector3.Zero, double.MaxValue);
+        for (var d = Scene.SolarSystemEdge - inside - 4000; d < Scene.SolarSystemEdge - inside + 4000; d += 100)
+        {
+            var at = Planet.Centre + away * (float)d;
+            var miss = Math.Abs(Scene.SolarSystemEdge - SolarSystem.FromSun(Planet, at, now) - inside);
+            if (miss < bestMiss)
+                (best, bestMiss) = (at, miss);
+        }
+        return InOrbit.At(InOrbit.UpperStage(id, 20000f, 1f), best, Planet.AmongStars(best, Vector3.Zero));
+    }
+
+    /// <summary>
+    /// Reach Orbit's upper stage numbered <paramref name="id"/> out along the planet's north pole
+    /// from its centre (where the ground's turn moves nothing), about <paramref name="inside"/>
+    /// metres inside the edge at world time <paramref name="now"/> (past it, if negative), as near
+    /// as a float's kilometre step there allows, moving straight out at <paramref name="outward"/>.
+    /// </summary>
+    private static VesselState AtTheEdge(int id, double inside, float outward, double now = Now, int flight = 1)
+    {
+        var north = Planet.NorthPole;
+        var (best, bestMiss) = (Vector3.Zero, double.MaxValue);
+        for (var d = Scene.SolarSystemEdge - inside - 4000; d < Scene.SolarSystemEdge - inside + 4000; d += 100)
+        {
+            var at = Planet.Centre + north * (float)d;
+            var miss = Math.Abs(Scene.SolarSystemEdge - SolarSystem.FromSun(Planet, at, now) - inside);
+            if (miss < bestMiss)
+                (best, bestMiss) = (at, miss);
+        }
+        return InOrbit.At(InOrbit.UpperStage(id, 20000f, 1f, flight), best, north * outward);
+    }
+
+    private static WorldState EdgeWorld(params VesselState[] vessels) =>
+        new() { Time = Now, Vessels = vessels, NextVesselId = vessels.Max(v => v.Id) + 1, Flights = 2 };
+
+    private static void LeftAndLogged(Flight flight, int id, int entries = 1)
+    {
+        Assert.DoesNotContain(flight.WorldVessels, v => v.Id == id);
+        var name = $"{Vessel.NameOf(Vehicle.TwoStage, 1, 1)} {id}";
+        var logged = flight.Log.Where(e => e.What == name).ToList();
+        Assert.Equal(entries, logged.Count);
+        Assert.All(logged, e => Assert.Equal(WorldLog.LeftTheSolarSystem, e.How));
+        Assert.Equal("left the solar system", WorldLog.LeftTheSolarSystem);
+    }
+
+    [Fact]
+    public void A_vessel_under_formula_past_the_edge_is_removed_and_logged()
+    {
+        using var sim = new Simulation(Mission.FreePlay, world: EdgeWorld(AtTheEdge(0, 1000, 2000f)));
+        var flight = sim.Flight;
+        var far = flight.WorldVessels.Single(v => v.Id == 0);
+        Assert.True(far.OnFormula, "far from the pad, it should be under formula");
+        var asked = false;
+        Assert.True(sim.Run(Nobody, f =>
+        {
+            asked |= f.EdgeAsked > 0;
+            return !f.WorldVessels.Contains(far);
+        }, maxSeconds: 5), "it should have gone past the edge");
+        Assert.True(asked, "it should have been asked whether it was past the edge");
+        LeftAndLogged(flight, 0);
+        var entry = flight.Log.Single(e => e.How == WorldLog.LeftTheSolarSystem);
+        Assert.False(entry.Witnessed);
+        Assert.Null(entry.Speed);
+        Assert.Equal(FlightState.Ready, flight.Controlled.State); // the flown rocket is untouched
+    }
+
+    [Fact]
+    public void A_vessel_jumping_past_the_edge_in_warp_is_removed()
+    {
+        using var sim = new Simulation(Mission.FreePlay, world: EdgeWorld(AtTheEdge(0, 50_000, 2000f)));
+        var flight = sim.Flight;
+        for (var i = 0; i < Flight.Rates.Length; i++)
+            sim.Step(new FlightInput(Faster: true));
+        Assert.Equal(Flight.Rates[^1], flight.PlayerRate);
+        Assert.True(sim.Run(Nobody, f => !f.WorldVessels.Any(v => v.Id == 0), maxSeconds: 120), "it should have gone past the edge");
+        LeftAndLogged(flight, 0);
+    }
+
+    [Fact]
+    public void A_loaded_world_with_a_vessel_past_the_edge_removes_it_on_the_first_step()
+    {
+        using var sim = new Simulation(Mission.FreePlay, world: EdgeWorld(AtTheEdge(0, -1000, 0f)));
+        var flight = sim.Flight;
+        Assert.Contains(flight.WorldVessels, v => v.Id == 0);
+        sim.Step(default);
+        LeftAndLogged(flight, 0);
+    }
+
+    [Fact]
+    public void The_flown_vessel_leaving_is_treated_as_a_crash()
+    {
+        // The run's upper stage, flown, just inside the edge as it sweeps past, its booster
+        // dropped: the booster is the one to fly after it.
+        var steps = Mission.ReachOrbit.Steps.Length;
+        var run = new RunState
+        {
+            Mission = Mission.ReachOrbit, Site = LaunchSites.Home.Name, Number = 1, LastFlown = 0,
+            Done = [.. Enumerable.Range(0, steps).Select(i => i < 2)], Points = new int[steps],
+        };
+        // (Its booster, in a low orbit, is the run's too, but not what its steps need.)
+        var other = InOrbit.UpperStage(1, 20000f, 1f) with { First = 0, Last = 0, CentreOfMassOffset = RocketGeometry.CentreOfMassOffset(Vehicle.TwoStage, 0, 0) };
+        using var sim = new Simulation(Mission.ReachOrbit);
+        var flight = sim.Flight;
+        flight.Restore(EdgeWorld(SweptPast(0, 1000), other) with { Runs = [run], Flown = 0 });
+        Assert.True(flight.CarryOn(flight.Controlled));
+        var flown = flight.Controlled;
+        Assert.Equal(0, flown.Id);
+        var theRun = flight.Run!;
+        Assert.True(sim.Run(Nobody, _ => flown.State == FlightState.Crashed, maxSeconds: 5), "it should have gone past the edge");
+
+        // Lost as a crash is: shown as its message, the camera where it was (it is still the
+        // one flown, its wreck's place kept), and its run failed as for any lost vessel.
+        Assert.Same(flown, flight.Controlled);
+        Assert.Equal("Left the solar system.", flight.CrashReason);
+        Assert.Equal(RunEnd.Failed, theRun.End);
+        Assert.Contains(flight.Log, e => e.What == WorldLog.Named(theRun) && e.How.StartsWith("failed", StringComparison.Ordinal));
+        Assert.DoesNotContain(flight.Capture().Vessels, v => v.Id == 0);
+        var logged = Assert.Single(flight.Log, e => e.What == WorldLog.Named(flown));
+        Assert.Equal(WorldLog.LeftTheSolarSystem, logged.How);
+        Assert.True(logged.Witnessed);
+        for (var i = 0; i < 30; i++)
+            sim.Step(default); // nothing more is written, nor does it come back
+        Assert.Single(flight.Log, e => e.What == WorldLog.Named(flown));
+
+        // Tab flies another, as after a crash, and the one that left is gone from the world.
+        Assert.True(flight.CanSwitch);
+        sim.Step(new FlightInput(SwitchVessel: true));
+        Assert.Equal(1, flight.Controlled.Id);
+        sim.Step(default);
+        LeftAndLogged(flight, 0);
+        Assert.DoesNotContain(flight.Capture().Vessels, v => v.Id == 0);
+    }
+
+    [Fact]
+    public void A_vessel_near_its_body_is_not_asked()
+    {
+        // In orbit, and the new rocket on its pad: far inside the edge, neither is asked, at warp too.
+        using var sim = new Simulation(Mission.FreePlay, world: EdgeWorld(InOrbit.UpperStage(0, 20000f, 1f), AtTheEdge(1, 1e6, 0f)));
+        var frames = 0;
+        sim.Run(Nobody, f =>
+        {
+            if (frames > 0) // (asked before the first step too)
+                Assert.Equal(1, f.EdgeAsked); // the far one alone, 1,000 km inside
+            return ++frames > 60;
+        }, maxSeconds: 10);
+        for (var i = 0; i < Flight.Rates.Length; i++)
+            sim.Step(new FlightInput(Faster: true));
+        frames = 0;
+        sim.Run(Nobody, f =>
+        {
+            if (frames > 0)
+                Assert.Equal(1, f.EdgeAsked);
+            return ++frames > 30;
+        }, maxSeconds: 600);
+        Assert.Equal(3, sim.Flight.WorldVessels.Count);
+    }
 }

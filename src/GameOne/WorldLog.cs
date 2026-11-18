@@ -9,8 +9,8 @@ namespace GameOne;
 /// </summary>
 /// <param name="Time">The world's time it was lost (<see cref="Flight.WorldTime"/>).</param>
 /// <param name="What">The vessel's name and number: "Booster 2", or "Sat-3 and Booster 2" for two lost to one collision.</param>
-/// <param name="How">What destroyed it, in a few words: its crash reason's first sentence (without its speed); or that it was removed (<see cref="WorldLog.RemovedForRoom"/>, <see cref="WorldLog.ClearedFromPad"/>).</param>
-/// <param name="Speed">How fast it hit what destroyed it, where its reason says (a collision's closing speed, a touch's), else how fast it was going (m/s); none for one removed, which nothing met.</param>
+/// <param name="How">What destroyed it, in a few words: its crash reason's first sentence (without its speed); or that it was removed (<see cref="WorldLog.RemovedForRoom"/>, <see cref="WorldLog.ClearedFromPad"/>) or left (<see cref="WorldLog.LeftTheSolarSystem"/>).</param>
+/// <param name="Speed">How fast it hit what destroyed it, where its reason says (a collision's closing speed, a touch's), else how fast it was going (m/s); none for one removed or gone past the edge, which nothing met.</param>
 /// <param name="Where">The launch site it was near, else its height ("412 km up", "on the ground", "in the sea").</param>
 /// <param name="Witnessed">Whether it was in the physics when it was lost, not moved by formula: for one removed, whether the last step chose it for the physics (<see cref="Unwatched.ShouldBeInPhysics"/>), so none removed as a world is loaded, before any step has chosen, is.</param>
 internal sealed record LogEntry(double Time, string What, string How, float? Speed, string Where, bool Witnessed);
@@ -23,6 +23,9 @@ internal static class WorldLog
 
     /// <summary>Taken off the launch pad, in the way of the new rocket put there.</summary>
     public const string ClearedFromPad = "cleared from the launch pad";
+
+    /// <summary>Gone past the solar system's edge (<see cref="Scene.SolarSystemEdge"/>), out of the game.</summary>
+    public const string LeftTheSolarSystem = "left the solar system";
 
     /// <summary>A mission run as the log names it (<see cref="LogEntry.What"/> of its entries): its mission and its flight number.</summary>
     public static string Named(MissionRun run) => $"{run.Mission.Name} (flight {run.Number})";
