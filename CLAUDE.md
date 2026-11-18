@@ -274,7 +274,8 @@ dotnet run --project src/GameOne
   body: `RocketPhysics.Rebuild`), or ahead of need on the tile worker's idle time (`Worlds.Ahead`,
   never in the step), stepped while a craft is in it, each in turn in `Bodies.All` order, and
   released after `Scene.PhysicsIdleSeconds` with none: a body with nothing in its physics has
-  none, so it costs nothing, and the witnessed (the flown vessel and the small views) are at six
+  none, so it costs nothing, and the witnessed (the flown vessel, the small views' and the one the
+  main camera is on) are at six
   bodies at most (one emptied is kept a while, and one that must stay in its physics, settling
   in the water or parting, keeps one running where nobody watches). Nothing is written for two bodies: a vessel is asked which body it is at, never "the
   other one". At each body, only the witnessed and what could soon hit them are in its
@@ -283,8 +284,9 @@ dotnet run --project src/GameOne
   live Jolt read in `Vessel` guarded by `OnFormula`; made again where the formula has it by
   `ReturnToPhysics`), at a fraction of the cost (the user: "the cost of simulating them is kept as
   low as possible"). `Unwatched` chooses each step, per body (only what is at one body is near
-  anything there; the main view's camera is at the flown vessel's): the witnessed (the flown vessel, the small
-  views', the main view's near its camera), and whatever could come within
+  anything there; the main view's camera is at what it is on): the witnessed (the flown vessel, the small
+  views', the vessel the main camera is on, `FlightInput.Watching`, and the main view's near its
+  camera), and whatever could come within
   `Scene.HandoverDistance` of something in the physics, or of the camera, within
   `Scene.HandoverSeconds` at their closing speed, grown out from the witnessed; always in it, one
   parting, settling in the water, playing out a wreck, touching something but not yet at rest, on
@@ -346,7 +348,9 @@ dotnet run --project src/GameOne
   (its crossing, or a switch to one at another body) raises `Flight.ViewRebased` with the change.
   Every switch, carry-on and rewind shows the communications link-up first, and the view comes
   back as that vessel left it (`Flight.ViewTaken`, raised as it is flown: `GameView` gives the
-  camera `Vessel.View`, or `GameView.DefaultView` for one never flown; `LinkUp`, drawn by `Hud`:
+  camera `Vessel.View`, or `GameView.DefaultView` for one never flown; each frame's
+  `FlightInput.View` is kept as the flown vessel's, but not from a world restored until the vessel
+  carried on is taken, as the camera shows what it did meanwhile; `LinkUp`, drawn by `Hud`:
   the picture breaking into static, clearing as it connects, `Scene.LinkUpSeconds` (1 s) of real
   time in all, the same however soon the physics is made; the vessel is flown, its body's
   physics made if it isn't, the frame after the link-up is first drawn, never the switch's own,
@@ -356,7 +360,20 @@ dotnet run --project src/GameOne
   others, so it is first drawn, with its static, the frame after the click, and the physics is
   made and the vessel brought in the frame after that, behind the static; until then the vessel
   is left under formula and witnessed by nothing, and a view closed meanwhile lets its link-up go
-  (`CloseView`), nothing made; the readout's `Link <vessel>`.
+  (`CloseView`), nothing made; the readout's `Link <vessel>`. The main camera put on a vessel at
+  a body whose physics isn't made has one over the main view likewise (`Flight.WatchLink`; the
+  readout's `Camera link`).
+- **The main camera's subject:** the main camera is on the flown vessel, or, by a right click,
+  on another vessel, a body, a site or a point of interest (`CameraCentre`, `CameraSubject`:
+  `Resolve`, `Seen`, its focus changed into the main view's frame in double). A place is looked at
+  from beside it, a body from the map; M from the map gives the chase view of a vessel or a place,
+  and of the flown vessel from a body; "Reset camera" (the strip's) and a right click on the
+  flown vessel bring it back (`CentreKind.Own`), and so does losing what it was on
+  (`CameraSubject.Kept`). A vessel watched is witnessed as a small view's is, but control never
+  leaves the flown vessel: its warning, coming mark and compass tick stay its own, the rings are
+  not drawn while the camera is elsewhere, and the keys steer as always. The map looks at what the
+  camera is on, its angles from that body's north pole. Each vessel keeps its own view
+  (`Vessel.View`, saved), given back as it is flown again.
 - **Touchdowns:** a landing's touchdown speed (what its softness scores, and the HUD shows) is its
   hardest touch from its first touch to settling: on its feet, bell or body, in the water, or on
   another vessel. A new landing begins only once it has settled, or flown clear of the ground
@@ -407,7 +424,12 @@ dotnet run --project src/GameOne
   saved by its body (`VesselState.Body`, by name), its place, attitude and velocity in that body's
   frame, and comes back into that body's physics, or under formula there. Anything new about a
   vessel that should survive a save goes in `VesselState`, in `Vessel.Capture` and in the
-  `Vessel` constructor that restores one (the store tests check every field round-trips). The
+  `Vessel` constructor that restores one (the store tests check every field round-trips): so
+  far, besides its motion, fuel and inputs, its hold (`VesselState.Hold`, a `HoldMode`, with the
+  rings' angles, `RingHeading` and `RingPitch`), its nodes (`Chain`, a `ManoeuvreChain`: its
+  anchor and each node's gap and amounts, with `MatchHeld`) and its view (`View`, a `CameraView`:
+  map or chase, each one's angles and zoom, and what the camera is centred on, a `CameraCentre`;
+  free look is not kept). The
   missions in progress are saved too (`RunState`, `WorldState.Runs`: each run's mission, site,
   start time, steps done with their points, the vessel flown last of it, and its flight number,
   which is all that ties a vessel to it: its vessels are the world's of that number, `Vessel.Flight`;
@@ -453,7 +475,11 @@ dotnet run --project src/GameOne
   information an experienced player would still use, and never tell the player what to do or
   when: no "burn now" or "stop now" prompts. A transfer window is a shaded stretch of the orbit,
   not a moment; a manoeuvre node's guide shows the delta-v left and the burn time, and the player
-  starts and stops the burn. New cues (the moon, docking, RCS, weather) follow the same rule. A
+  starts and stops the burn. So too the marks where a target's plane crosses the path (AN and DN,
+  with the angle between the planes: where, never when), the chevrons along each orbit line (which
+  way it is flown), the manoeuvre mark in the view (the way the burn still needed points) and the
+  next node turning green as the path flown matches its plan: information only, and nothing
+  burns for the pilot (the manoeuvre hold only points the nose). New cues (the moon, docking, RCS, weather) follow the same rule. A
   mission's points of interest (`Mission.PointsOfInterest`, `PointOfInterest`) are markers and targets: a
   place on a body's ground shown by a marker (and an arrow off the screen) and built nowhere, a
   target as a site is (`TargetKind.Point`, by its index in the flight's mission's list) and never
@@ -539,9 +565,13 @@ dotnet run --project src/GameOne
   will be, not where it is. An `Orbit` is round one body (`Orbit.Body`, in its frame, by its
   pull alone); a path across the spheres of influence is `Patched.Legs`, an orbit round each body
   in turn, patched at each child's sphere from the list (`Bodies.All`), as the plan's legs are
-  (`ManoeuvrePlan`). Prograde and retrograde hold by the velocity in the frame of
+  (`ManoeuvrePlan`). The holds (`HoldMode`, one at a time, chosen on the HUD's buttons through
+  `FlightInput.ChooseHold`: no keys) are prograde and retrograde, by the velocity in the frame of
   reference in use (`Flight.FrameVelocity`; `Frames`: surface, orbital or target), which the
-  travel markers show too; a vessel nobody flies holds by its own `Vessel.AutoFrame`. Anything new
+  travel markers show too; manoeuvre, along the next node's burn still needed (only with a node,
+  letting go once the last is gone); and the rings' (`Rings`: a click on a ring sets its angle,
+  `FlightInput.RingHeading` and `RingPitch`, by the body the vessel is at), each let go by
+  steering with the keys or a ring's drag; a vessel nobody flies holds by its own `Vessel.AutoFrame`. Anything new
   that predicts a path, aims a burn or reaches a place must ask which frame it is in.
 - **Frames of reference:** the player picks one from the HUD's selector (`Flight.FrameChoice`:
   Auto, Surface, Orbit, Target); `Flight.Frame` is the one in use. The frames follow the body the

@@ -62,9 +62,9 @@ speed` (to the target), `Apoapsis` (`escaping`, or `leaves its pull` when its to
 it would leave its body's pull, out of the moon's into the planet's), `Periapsis`, `Period` (a
 lap of the orbit, in seconds, where the HUD shows minutes and seconds; not while it escapes,
 leaves its body's pull or only falls back), `Orbit speed needed` (a round orbit's speed where
-it is, or at the body's orbit floor if lower), `Orbit speed` (among the stars; shown with the orbit), `Throttle`, `Fuel`, `Stage`, `Legs` (a vessel with legs: `stowed`, `deploying`, `deployed` or `stowing`), `Bay doors` (a vessel with a bay, the lander: `closed`, `opening`, `open` or `closing`), the
-two holds, `Site` (the launch site, by name), `State` (the flown vessel's `FlightState`: `Ready`,
-`Flying`, `Landed`, `Floating` or `Crashed`), `Link` (the communications link-up over the main view, shown as any vessel is switched to or carried on: `connecting`, then `connected` as the picture clears, 1 s of real time from the click, `Scene.LinkUpSeconds`, longer only if the physics takes longer; shown only while it is, so `until Link = connected` waits for the vessel to be flown there), `Link <vessel>` (a small view's own link-up, by the log's name, `Link Upper stage 0`: the same, shown as a view is given to a vessel at a body whose physics isn't made, which it is two frames after the click, the view drawn with its static in the one between), `Camera` (what the main camera is on: `Own`, `Vessel 7`, `Body Moon`, `Site Home pad` or `Point <name>`; right click on a site, vessel or marker in the map, or on another vessel in the chase view, puts it there, M from the map gives its chase view, and `Marker Reset camera` (in the strip, only while it is not `Own`) puts it back), `Camera link` (the same over the main view, as its camera is put on a vessel at a body whose physics isn't made), `Warning` (a fast collision coming, in the HUD's
+it is, or at the body's orbit floor if lower), `Orbit speed` (among the stars; shown with the orbit), `Throttle`, `Fuel`, `Stage`, `Legs` (a vessel with legs: `stowed`, `deploying`, `deployed` or `stowing`), `Bay doors` (a vessel with a bay, the lander: `closed`, `opening`, `open` or `closing`), `Hold` (the hold on: `None`, `Prograde`,
+`Retrograde`, `Manoeuvre` or `Rings`, the rings' hold a click on a ring sets), `Site` (the launch site, by name), `State` (the flown vessel's `FlightState`: `Ready`,
+`Flying`, `Landed`, `Floating` or `Crashed`), `Link` (the communications link-up over the main view, shown as any vessel is switched to or carried on: `connecting`, then `connected` as the picture clears, 1 s of real time from the click, `Scene.LinkUpSeconds`, longer only if the physics takes longer; shown only while it is, so `until Link = connected` waits for the vessel to be flown there), `Link <vessel>` (a small view's own link-up, by the log's name, `Link Upper stage 0`: the same, shown as a view is given to a vessel at a body whose physics isn't made, which it is two frames after the click, the view drawn with its static in the one between), `Camera` (what the main camera is on: `Own`, `Vessel 7`, `Body Moon`, `Site Home pad` or `Point <name>`; right click on a site, vessel or marker in the map, or on another vessel in the chase view, puts it there, M from the map gives its chase view, and `Marker Reset camera` (in the strip, only while it is not `Own`) puts it back), `View` (the main view: `map`, zoomed all the way out, or `chase`), `Camera link` (the same over the main view, as its camera is put on a vessel at a body whose physics isn't made), `Warning` (a fast collision coming, in the HUD's
 words: `COLLISION: another vessel in 4.2 s (2,400 m/s)`; shown only while it is), `Near miss` (with "Slow motion for near misses" on, the flown vessel's near miss coming, in the HUD's words: `NEAR MISS: Booster 1 in 3.2 s (1,000 m/s)`; shown from the moment it is foreseen until its closest approach, but not while `Warning` is of the same vessel: a collision by their sizes that misses is one event, its COLLISION line), `Slowed` (the slow-down, for a fast collision or, with the setting on, a near miss: its scale and reason, `0.027x, a collision with Booster 1 (7,915 m/s)` or `0.29x, a near miss with Booster 1`; shown only while it is; the scale is the physics step's, and `Time` the game's clock, the slower of it and the player's own rate), `Coming at <vessel>` (what is coming at each player-controlled vessel, the flown one and each small view's, by the log's names: `Coming at Booster 0` = `Booster 1 in 8.7 s`, or `the ground in 4.9 s`, and a near miss's with `, a near miss` after it; what a small view's border flashes for, red, or amber for a near miss, shown only while it is), `Coming mark` (the main view's mark, red or amber for a near miss, on a vessel coming at the flown one, while it is on the screen: its name and where, `Booster 1 203 23`), `Mission`, each mission step by its label (`[x]`,
 `[ ]` or `[!]`), `Mission failed`, `Best altitude` (over the body the flown vessel is at: begun
 again as it crosses into another), `Score`, `Message` (the big title) and
@@ -73,7 +73,12 @@ zoomed out with some in view; they are looked for a lap of the flown vessel's or
 none with the rocket on the pad: fly something in orbit first, as `Add view` below lets a script);
 and with a manoeuvre node, `Node` (seconds to it, where the HUD shows minutes and
 seconds), `Delta-v left`, `Burn`, `Node matched` (`yes` while the path flown matches the planned
-one, so cutting the engine lets the node go), and `Nodes` (how many); while "Show timings" is on, every number
+one, so cutting the engine lets the node go), `Node times` (each node's world time in seconds,
+in the chain's order, `1234.5 1890.0`: they change only as the chain is edited, so a script
+reads a drag's effect on the nodes after the one dragged), and `Nodes` (how many); `Path marks`
+(the labels of the flown vessel's path's marks on the screen, in the HUD's words, `Ap 4483 m /
+Pe 3442 m / AN 30.0° / DN 30.0°`: the AN and DN, where a target vessel's or body's plane
+crosses the path, with the angle between the planes); while "Show timings" is on, every number
 of the timings panel, whole, as `Timings <part>` (`Timings frame`, `Timings Jolt`, `Timings GPU
 scene`, `Timings awake`..., `Timings under formula` (the vessels out of the physics), and the
 tiles', the contact's and the rules' pieces: `Readout.ReadTimings`), so a
@@ -85,7 +90,16 @@ two with one name), for `click marker`; the red mark is listed among them too, b
 body's marker is among them by the body's name (`Marker Planet`, `Marker Moon`), while it is
 small enough on the screen to be marked; any but the flown vessel's own body's targets that body.
 The flown mission's points of interest are among them by name too, LAND ON THE MOON's `Marker
-Landing spot` (from the planet as well as round the moon), never a target.
+Landing spot` (from the planet as well as round the moon), a target as a site is.
+What is drawn over the view to click or drag that isn't a marker reads out the same way, only
+while it is on the screen (`Hud.PointsDrawn`): the flown vessel's path's marks, `Marker Path Ap`,
+`Path Pe`, `Path AN`, `Path DN`, `Path Air` (the point on the path each marks: a click there,
+zoomed out, places a node); the nodes, `Marker Node 1`, `Node 2`... (dragged with `drag marker
+"Node 1" 40 0`); each body's path on the map, `Marker Moon line` (a point on the line away from
+the body: a click there targets it); and, while the steering rings show, `Marker Heading ring`
+and `Marker Pitch ring` (a point on each, clear of the other: `move marker "Flown vessel"` shows
+them, then `click marker "Heading ring"` sets the rings' hold). The hold buttons are `Marker Hold
+Prograde`, `Marker Hold Retrograde` and `Marker Hold Manoeuvre`.
 The strip's buttons read out the same way, as they move with the instruments' panel: `Marker Add
 view` and `Marker Controls` (the folded list's "Controls (H)" too, though neither it nor the open
 list is drawn while a menu is up), and while the "Add view" list
@@ -236,6 +250,20 @@ centred on the smaller height):
   The moon is targeted by `click marker "Moon"` (from the planet; the planet by `"Planet"` from
   the moon): `Target` then reads `Moon`, `To target` the straight line to its centre, and once
   zoomed out the map shows its window and closest approach, as for a vessel.
+- **The map, the camera and the nodes** (`gameone-map-and-camera.txt`, then
+  `gameone-map-and-camera-carry-on.txt` in the same folder): LAND ON THE MOON flown to a low orbit
+  by readings (a short lean east, the Prograde hold, staging, cut at the apoapsis wanted, burn
+  again from it until the periapsis clears the air); in the map the moon targeted by `click
+  marker "Moon line"` and the AN and DN read from `Path marks`; the camera put on the moon and
+  then the landing spot by right clicks, M for the spot's chase view, and `Marker Reset camera`;
+  two nodes placed by clicking `Path AN` and `Path DN`, the first dragged (`drag marker "Node 1"`)
+  and `Node times` read before and after; the Manoeuvre hold; a click on the heading ring; then
+  quit, and the second script carries the flight on and reads `Camera`, `View`, `Hold`, `Nodes` and
+  `Node times` again. The marks move round the screen as the vessel goes round (the map follows
+  it), and one under a panel or the small view on the left is the panel's: wait for it to be clear
+  (`until "Marker Path AN" > -220`, its x). The landing spot's marker shows only from the moon's
+  side it is on: centred on the moon and zoomed in, turn the map (`rdrag 300 0 350 200`) and wait
+  for it (`until "Marker Landing spot" != none`, which passes once the reading is there at all).
 - **Precise flying:** a script can react to readings (cut the engine once the climb step is
   ticked, catch a fall at a height), but it has no loops, so it can't fly a landing. Test those in
   the flight tests, not through the driver.

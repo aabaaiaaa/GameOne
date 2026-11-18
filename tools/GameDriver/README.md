@@ -52,6 +52,8 @@ test named in its header, clicking its Play by the game's marker for it.
 | `click <x> <y>` | Move there, then press and release the left button, a few frames apart (as a UI button wants), at (x, y) pixels off the middle. |
 | `click marker <label>` | Click a marker the game draws over its view, wherever it is at that moment, by the reading `Marker <label>` (see below; a label with spaces in `"quotes"`): waits up to 5 s for it to be on the screen; if it never is, it lists the markers shown, saves `failed.png`, closes the game and the run fails. |
 | `rclick <x> <y>` / `rclick marker <label>` | The same with the right button: the pointer moved there first, then the right button down and up a few frames apart, not moving (a right-click menu, say). |
+| `move marker <label>` | Move the pointer onto a marker, wherever it is (to hover over it), waiting for it as `click marker` does. |
+| `drag marker <label> <dx> <dy>` | Drag a marker with the left button by (dx, dy) pixels, from wherever it is once the pointer has arrived on it (as `drag`, over about 0.4 s), waiting for it as `click marker` does. |
 | `scroll <notches>` | Turn the mouse wheel: positive away from you, negative towards you. |
 | `until <name> <test> <value> [within <s>]` | Wait until the game's reading `<name>` passes the test (see below), for up to `<s>` seconds (default 60). Not met in time: it says what the reading was, saves `failed.png`, closes the game and the run fails (exit 1). |
 | `shot [name]` | Save a screenshot as `<name>.png` (default `t<seconds>.png`). |

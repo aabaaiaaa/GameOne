@@ -124,6 +124,18 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   steadier, perhaps faster, Jolt steps in small scenes. Costs or risks: a pool too small for a
   big scene (the hundred satellites, the floe band at its cap) is slower; to be measured with the
   short tests in both configurations. To discuss before building.
+- **To try: a point of interest's place cached** (a performance idea, from the camera, map and
+  targets work, 2026-11-17). `PointOfInterest.Place` reads its body's height function (the map
+  and the fine detail) every time it is asked, and a point targeted is asked at least once a step
+  (`Flight.Locate`, for the relative speed, the distance and the holds by the target), and again
+  by the markers, the camera on it and the scoring's distance each frame. Would gain: one terrain
+  lookup per point for good, not a few each step and frame; it would help most with the landing
+  spot targeted (or watched) all the way through a long warp, though it is small and unmeasured
+  (its time is within the rules' and the HUD's parts). Costs or risks: the record's equality
+  (`PointOfInterest` is a record, compared by its fields) must not count the cache, so it would
+  be kept outside the record (keyed by body, latitude and longitude) or made lazily in a field the
+  equality ignores; and a cached place must never outlive a change to the body's map. To discuss
+  before building.
 - **To try: the live contacts indexed by body** (a performance idea, from the final review of
   collisions part 1, 2026-11-07). `RocketPhysics.ForgetContacts` walks every live contact each
   time the game takes a body out (a craft, a tile, a floe's hull) to find that body's own. Would

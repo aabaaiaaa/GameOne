@@ -567,7 +567,12 @@ say) stalls frames and spoils the timing.
 - **`SteeringTests`:** the steering every mission shares: leaning, holding a direction (as the
   direction rings do), the air turning the nose along the direction of travel once let go (a
   gravity turn), the nose holding still above the atmosphere, turning slowly with the engine off;
-  plus dropping the booster early, and picking a mission mid-flight.
+  plus dropping the booster early, and picking a mission mid-flight; the rings' hold (`HoldMode.Rings`):
+  one click on the heading ring turning to that heading and holding it, the pitch left as it
+  was; both rings clicked turning on both together; a pitch clicked while the nose is still
+  turning to a held heading keeping that heading; the keys and a ring's drag ending it; the same
+  round the moon; and a ring press let go without moving (under `Scene.RightClickSlopPixels` all
+  told, however many frames it is held) a click, moved further a drag (`NavigationControl.RingPress`).
 - **`VesselTests`:** several vessels in one flight: staging makes the dropped stage a vessel, one
   without guidance is debris that can't be flown, switching hands the controls over while the other
   keeps its last inputs, losing the flown vessel doesn't end the flight while another flies, and
@@ -631,7 +636,8 @@ say) stalls frames and spoils the timing.
   the first goes, snapping onto the orbit the vessel is on then, at its time with its amounts, the
   chain after it redone; an empty chain clearing the plan; one anchored past
   where the path ends (falling, a hop, escaping) anchored where it ends, and saving; a node moved
-  only once the pointer leaves where it was grabbed; and each vessel keeping its own.
+  only once the pointer leaves where it was grabbed; each vessel keeping its own; and the readout
+  giving each node's world time (`Node times`), none with no nodes.
 - **`WorldLogTests`:** the world's log: a crash on the ground, two vessels colliding (one entry; and two wrecked by one collision steps apart joined into the first's entry; two pairs colliding side by side an entry each, by who hit whom), an unwatched loss under formula (not witnessed, near its site), those removed to make room as a world loads (oldest first, unseen, no speed, printed without one), one cleared from the launch pad (unseen as a world loads; seen, flown, as a flight from its site starts), and the newest 300 kept; the missions' entries (a run begun, a step done with its points, completed with its score, and nothing for free play); and each crash reason worded without its advice (or the break-up's cause after its colon), its speed taken out to be the entry's (a line never says two speeds).
 - **`WorldStoreTests`:** saving and loading, in a folder of the test's own: a world loads back
   exactly (every field of every vessel, a body targeted from the planet and from the moon
@@ -659,7 +665,11 @@ say) stalls frames and spoils the timing.
   swap (or Tab to a vessel with no view) hands each view's held shadow place on with its vessel;
   the strip's place (`Hud.StripPlace`): its buttons below the instruments' panel however tall it
   is, the views under them made smaller to fit; under a panel reaching nearly to the bottom, the
-  views at their least and the buttons just over them, never over the views.
+  views at their least and the buttons just over them, never over the views; and each vessel's own
+  view (`Vessel.View`): Tab, a swap by a small view, a carry-on and a rewind each bringing back the
+  vessel's view after its link-up, the one left keeping its own, one never flown getting the
+  default; and a world picked and carried on, each frame's input carrying the camera's view as it
+  stands, still bringing back the saved view (the camera's taken as the vessel's only once it is).
 - **`PadLightTests`:** where each pad's, zone's and drone ship's lamps and masts stand (the masts
   only where the ground allows, clear of the towers, in a zone's own frame, aimed at the place's
   top, solid); which place's floods cast shadows, held for a few metres; the nearest lights and
@@ -903,7 +913,10 @@ say) stalls frames and spoils the timing.
   as its orbit changes; a lap behind the planet cut there and drawn only where it is seen; an
   open lap drawn from where its vessel is now; a body's marker labelled with the distance to its
   surface (on the moon the lander's height over its datum, from the pad the pad's over the sea);
-  and building and laying out the map allocating nothing. Each of the map's tests was seen
+  and building and laying out the map allocating nothing; a click on the moon's drawn path (or a
+  few pixels off it) the moon's, never the flown vessel's own body's, a click off every line
+  nothing, and the point the readout gives a script on the moon's line (`SystemMap.LinePoint`)
+  on it. Each of the map's tests was seen
   failing with its fix taken out.
 - **`MapLabelTests`:** the labels over the view laid out together (`MapLabels.Lay`): a vessel's
   label under a body's faded to `Scene.MapLabelUnderAlpha`, the body's and the rest in full and
@@ -953,7 +966,10 @@ say) stalls frames and spoils the timing.
   flown one (`CameraSubject.Kept`); one at a body with no physics shown its link-up over the main
   view (`Flight.WatchLink`, the readout's `Camera link`), the physics made behind it the frame
   after, and one taken off it before that lets it go, nothing made; and a place (Home's pad) looked at from `Scene.PlaceViewHeight` over it and
-  `Scene.PlaceViewAside` aside, turned and zoomed round it.
+  `Scene.PlaceViewAside` aside, turned and zoomed round it; and the markers' distances measured
+  from the flown vessel wherever the camera is (`Markers.DistancesFrom`: on the moon, not 0 m to it);
+  and the map centred on a body, the one the flown vessel is at as well as another, looking at its
+  centre from over its pole, nothing in the camera not a number.
 - **`BodiesInPlayTests`:** a physics at each body in use (`Worlds`), every vessel at its own body,
   all played out at once: flying a lander in a moon orbit (the moon's physics), a small view's
   booster flies its landing burn down onto Home's zone by its retrograde hold (the planet's
