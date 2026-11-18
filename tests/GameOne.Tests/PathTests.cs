@@ -66,6 +66,50 @@ public sealed class PathTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Chevrons_go_by_the_whole_line_count_only_on_the_screen_and_follow_its_order()
+    {
+        var into = new (Vector2 At, Vector2 Way)[Paths.MaxChevrons];
+
+        // A line shorter than half the spacing has none.
+        Assert.Equal(0, Paths.Chevrons([new Vector2(0f, 0f), new Vector2(50f, 0f)], 120f, into));
+
+        // The cap is spent only on the screen: a line far longer than the cap's worth, mostly off
+        // the screen to its left, still has its part on the screen filled.
+        var display = new Vector2(1280f, 720f);
+        var along = 0f;
+        var n = Paths.Chevrons([new Vector2(-200_000f, 300f), new Vector2(1200f, 300f)], 120f, into, ref along, display);
+        Assert.True(n >= 10, $"only {n} chevrons on the screen");
+        for (var i = 0; i < n; i++)
+            Assert.InRange(into[i].At.X, 0f, display.X);
+
+        // In two stretches (a body hiding the middle), the second's are where the whole line's are.
+        var whole = new (Vector2 At, Vector2 Way)[16];
+        var all = Paths.Chevrons([new Vector2(0f, 0f), new Vector2(1000f, 0f)], 120f, whole);
+        along = 0f;
+        var first = Paths.Chevrons([new Vector2(0f, 0f), new Vector2(300f, 0f)], 120f, into, ref along);
+        along += 250f; // the gap, by its ends
+        var second = Paths.Chevrons([new Vector2(550f, 0f), new Vector2(1000f, 0f)], 120f, into.AsSpan(first), ref along);
+        var expected = whole.Take(all).Where(c => c.At.X <= 300f || c.At.X >= 550f).Select(c => c.At.X).ToArray();
+        Assert.Equal(expected, into.Take(first + second).Select(c => c.At.X).ToArray(), new FloatComparer(1e-2f));
+
+        // Round a circle flown anticlockwise on the screen, each points the way it is flown.
+        var circle = Enumerable.Range(0, 65).Select(k => new Vector2(640f + 300f * MathF.Cos(k * MathF.Tau / 64), 360f + 300f * MathF.Sin(k * MathF.Tau / 64))).ToArray();
+        n = Paths.Chevrons(circle, 120f, into);
+        Assert.True(n > 10);
+        for (var i = 0; i < n; i++)
+        {
+            var fromMiddle = into[i].At - new Vector2(640f, 360f);
+            Assert.True(Vector2.Dot(into[i].Way, new Vector2(-fromMiddle.Y, fromMiddle.X)) > 0f, $"chevron {i} points against the way");
+        }
+    }
+
+    private sealed class FloatComparer(float within) : IEqualityComparer<float>
+    {
+        public bool Equals(float a, float b) => MathF.Abs(a - b) <= within;
+        public int GetHashCode(float f) => 0;
+    }
+
+    [Fact]
     public void Chevrons_allocate_nothing()
     {
         var line = new[] { new Vector2(0f, 0f), new Vector2(600f, 0f), new Vector2(600f, 600f) };

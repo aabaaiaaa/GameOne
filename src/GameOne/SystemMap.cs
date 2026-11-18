@@ -348,6 +348,7 @@ internal sealed class SystemMap
     /// </summary>
     public void Lay(in Matrix4x4 viewProjection, Vector3 camera, Vector2 display)
     {
+        _display = display;
         _screen.Clear();
         _runs.Clear();
         _dots.Clear();
@@ -643,13 +644,18 @@ internal sealed class SystemMap
     public void Draw(ImDrawListPtr draw, float fade, MapLabels labels)
     {
         var screen = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_screen);
-        foreach (var run in _runs)
+        var along = 0f; // along the whole line a run is a stretch of (see Paths.Chevrons), its hidden gaps by their ends
+        for (var r = 0; r < _runs.Count; r++)
         {
-            draw.AddPolyline(screen.Slice(run.First, run.Count), Color(run.Color, run.Alpha * fade), ImDrawFlags.None, Scene.PathWidth);
-            _stretch.Clear();
-            for (var i = run.First; i < run.First + run.Count; i++)
-                _stretch.Add(new Vector2(screen[i].X, screen[i].Y));
-            Paths.DrawChevrons(draw, _stretch, _chevrons, Color(run.Color, run.Alpha * fade * Scene.ChevronAlpha));
+            var run = _runs[r];
+            var points = screen.Slice(run.First, run.Count);
+            draw.AddPolyline(points, Color(run.Color, run.Alpha * fade), ImDrawFlags.None, Scene.PathWidth);
+            var stretch = System.Runtime.InteropServices.MemoryMarshal.Cast<float2, Vector2>(points); // the same two floats: no copy
+            if (r > 0 && _runs[r - 1] is var before && before.Vessel == run.Vessel && before.Body == run.Body && screen[before.First + before.Count - 1] is var end)
+                along += Vector2.Distance(new Vector2(end.X, end.Y), stretch[0]); // the same line on past a gap
+            else
+                along = 0f;
+            Paths.DrawChevrons(draw, stretch, _chevrons, Color(run.Color, run.Alpha * fade * Scene.ChevronAlpha), ref along, _display);
         }
         foreach (var (at, color, _) in _dots)
             draw.AddCircleFilled(at, Scene.MapBodyMinPixels / 2f, Color(color, fade));
@@ -660,7 +666,7 @@ internal sealed class SystemMap
         }
     }
 
-    private readonly List<Vector2> _stretch = [];
+    private Vector2 _display; // the screen as last laid, so a chevron off it costs none of a line's share
     private readonly (Vector2 At, Vector2 Way)[] _chevrons = new (Vector2, Vector2)[Paths.MaxChevrons];
 
     private static ImColor8 Color((byte R, byte G, byte B) color, float alpha) =>
