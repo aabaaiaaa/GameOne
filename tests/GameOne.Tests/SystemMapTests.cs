@@ -638,6 +638,49 @@ public sealed class SystemMapTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Only_a_body_s_line_drawn_strongly_enough_takes_a_click_and_none_once_the_map_is_forgotten()
+    {
+        var (moon, planet) = (GroundBody.Moon, GroundBody.Planet);
+        SystemMap.Run Line(int body, float alpha, int vessel = -1) => new(0, 2, (0, 0, 0), alpha, vessel, body);
+        Assert.True(SystemMap.Clickable(Line(moon.Index, Scene.MapBodyPathAlpha), planet));
+        Assert.True(SystemMap.Clickable(Line(moon.Index, Scene.MapLineClickAlpha), planet));
+        Assert.False(SystemMap.Clickable(Line(moon.Index, Scene.MapLineClickAlpha * 0.5f), planet), "barely faded in");
+        Assert.False(SystemMap.Clickable(Line(moon.Index, Scene.MapBodyPathAlpha), moon), "the flown vessel's own body");
+        Assert.False(SystemMap.Clickable(Line(moon.Index, Scene.MapBodyPathAlpha, vessel: 3), planet), "a vessel's lap");
+        Assert.False(SystemMap.Clickable(Line(-1, Scene.MapBodyPathAlpha), planet), "no body's");
+
+        // Laid, then forgotten (the map off the screen): nothing to point at.
+        var (sim, map) = LaidOverHome();
+        using var _ = sim;
+        Assert.NotNull(map.LinePoint(moon));
+        var at = map.LinePoint(moon)!.Value;
+        Assert.Same(moon, map.BodyLineAt(new Vector2(at.X, at.Y), 1f));
+        map.Forget();
+        Assert.Null(map.LinePoint(moon));
+        Assert.Null(map.BodyLineAt(new Vector2(at.X, at.Y), 8f));
+        Assert.Null(map.SunMark);
+    }
+
+    [Fact]
+    public void A_sphere_hides_what_is_behind_it_and_nothing_in_front_or_beside()
+    {
+        // As a body's path is hidden where it passes behind a body (each point by SystemMap.Covers).
+        var centre = new Vector3(0f, 0f, -1000f);
+        const float radius = 100f;
+        var nearest = (centre.Length() - radius) * (centre.Length() - radius);
+        Assert.True(SystemMap.Covers(new Vector3(0f, 0f, -2000f), centre, radius, nearest), "straight behind");
+        Assert.True(SystemMap.Covers(new Vector3(50f, 0f, -1500f), centre, radius, nearest), "behind, off its middle");
+        Assert.False(SystemMap.Covers(new Vector3(0f, 0f, -500f), centre, radius, nearest), "in front");
+        Assert.False(SystemMap.Covers(new Vector3(300f, 0f, -2000f), centre, radius, nearest), "beside it, past its edge");
+        Assert.False(SystemMap.Covers(new Vector3(0f, 0f, 2000f), centre, radius, nearest), "behind the camera");
+        // Millions of metres out, a point just past the limb is still told from one just inside it.
+        var far = new Vector3(0f, 0f, -5e6f);
+        var farNearest = (far.Length() - 2500f) * (far.Length() - 2500f);
+        Assert.True(SystemMap.Covers(new Vector3(0f, 2400f, -1e7f), far, 2500f, farNearest));
+        Assert.False(SystemMap.Covers(new Vector3(0f, 5200f, -1e7f), far, 2500f, farNearest));
+    }
+
+    [Fact]
     public void A_click_off_every_line_hits_nothing()
     {
         var (sim, map) = LaidOverHome();

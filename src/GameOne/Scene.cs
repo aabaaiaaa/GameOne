@@ -1163,6 +1163,7 @@ internal static class Scene
     public static readonly (byte R, byte G, byte B) MapBodyColor = (205, 210, 220), MapSunColor = (255, 215, 130);
     public const float MapBodyPathFadeFrom = 0.05f, MapBodyPathFadeTo = 0.2f;
     public const float MapBodyPathAlpha = 0.5f;
+    public const float MapLineClickAlpha = 0.1f;       // a body's path takes a click only once drawn at least this strongly (a fifth of its full strength), not while it has barely faded in
     public const float MapOtherPathAlpha = 0.2f;
     public const float MapLineMinPixels = 2f;
     public const float MapLineSagPixels = 3f;          // how far a vessel's lap on the map may bow from its pieces, at most (it is drawn in fewer, the smaller it is)

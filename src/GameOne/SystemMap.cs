@@ -581,6 +581,14 @@ internal sealed class SystemMap
         return true;
     }
 
+    /// <summary>
+    /// Whether a click can be on <paramref name="run"/>: a body's path, not a vessel's, of a body
+    /// other than the flown vessel's (<paramref name="flown"/>), drawn at least
+    /// <see cref="Scene.MapLineClickAlpha"/> strongly (a line that has barely faded in can't be seen to click).
+    /// </summary>
+    internal static bool Clickable(in Run run, GroundBody? flown) =>
+        run.Body >= 0 && run.Vessel < 0 && Bodies.All[run.Body] != flown && run.Alpha >= Scene.MapLineClickAlpha;
+
     /// <summary>Leaves nothing laid: the map isn't on the screen, so there is nothing to point at.</summary>
     public void Forget()
     {
@@ -601,7 +609,7 @@ internal sealed class SystemMap
         var bestDistance = within;
         foreach (var run in _runs)
         {
-            if (run.Body < 0 || run.Vessel >= 0 || Bodies.All[run.Body] == _flown)
+            if (!Clickable(run, _flown))
                 continue;
             for (var i = run.First + 1; i < run.First + run.Count; i++)
             {
@@ -625,7 +633,8 @@ internal sealed class SystemMap
     {
         var longest = -1;
         for (var i = 0; i < _runs.Count; i++)
-            if (_runs[i].Vessel < 0 && _runs[i].Body == body.Index && _runs[i].Count > 1 && (longest < 0 || _runs[i].Count > _runs[longest].Count))
+            if (_runs[i].Vessel < 0 && _runs[i].Body == body.Index && _runs[i].Count > 1 && _runs[i].Alpha >= Scene.MapLineClickAlpha
+                && (longest < 0 || _runs[i].Count > _runs[longest].Count))
                 longest = i;
         return longest < 0 ? null : _screen[_runs[longest].First + _runs[longest].Count / 2];
     }
