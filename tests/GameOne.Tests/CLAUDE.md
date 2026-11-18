@@ -19,7 +19,7 @@ test covers.
   rate or the step from a test (`Worlds.StepScale` is the flight's to set), but in the
   time-rate tests themselves (`TimeRateTests`), which check the shortened step on its own (a
   run's steps a real second, a fall, the step's leftover after a sharp drop) and so set it directly.
-- **Switches and link-ups:** every switch, carry-on and rewind shows a link-up and flies the vessel the frame after. `Simulation.Step` and `Run` make a switch asked in an input at once (its frame, then the rest of the input in a frame of no time), so a test about something else needn't wait; a test of the link-up itself sets `Simulation.ShowLinkUp`. A test that steps `Flight.RunFrame` or `Update` directly runs one more frame before the new vessel is flown.
+- **Switches and link-ups:** every switch, carry-on and rewind shows a link-up and flies the vessel the frame after. `Simulation.Step` and `Run` make a switch asked in an input at once (its frame, then the frame it is flown in, then the rest of the input, both of no time: the frame a vessel is flown in takes nothing of its input made for the vessel left, its view, plan, holds, rings and target), so a test about something else needn't wait; a test of the link-up itself sets `Simulation.ShowLinkUp`. A test that steps `Flight.RunFrame` or `Update` directly runs one more frame before the new vessel is flown.
 - **Start where the test is about:** a test that needs to start somewhere (a sea, a zone,
   mid-flight) puts its vessel there directly (`Drops`, a world it writes), never flies there from
   the pad: re-flying the launch wastes time and makes the test break with every change to the

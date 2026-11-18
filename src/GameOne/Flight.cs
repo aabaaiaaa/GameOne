@@ -1563,6 +1563,7 @@ internal sealed class Flight : IDisposable
         _realTime += realSeconds;
         // A vessel switched to (or carried on) last frame: its body's physics made now if it isn't
         // (behind the link-up drawn since), and the vessel flown in it.
+        var given = input;
         if (LinkUp.Due(_frames))
         {
             var vessel = LinkUp.Vessel!;
@@ -1572,6 +1573,7 @@ internal sealed class Flight : IDisposable
                     _worlds.Need(vessel.Body);
                 Fly(vessel);
                 LinkUp.Ready(_realTime);
+                given = ForTheVesselLeft(input);
             }
             else
                 LinkUp.Cancel();
@@ -1620,9 +1622,9 @@ internal sealed class Flight : IDisposable
         // slow motion, fewer of them, as slow motion always is.
         var dt = realSeconds * TimeScale;
         if (TimeScale > 1f)
-            dt = Advance(dt, input, budgetSeconds);
+            dt = Advance(dt, given, budgetSeconds);
         else
-            Update(dt, input);
+            Update(dt, given);
         // The lights (the places' and each vessel's landing lights) fade by the frame's real
         // seconds, whatever the warp, and are lit as the frame's own end has the sun.
         Lights.Step(WorldTime, realSeconds);
@@ -1634,6 +1636,23 @@ internal sealed class Flight : IDisposable
         WatchLink.Step(_realTime);
         return dt;
     }
+
+    /// <summary>
+    /// <paramref name="input"/> without what was made for the vessel flown as it was gathered (its
+    /// camera's view, its plan, a hold, a ring's angle or drag, its target): for the frame another
+    /// is flown in, after its link-up, so none of it lands on the new one.
+    /// </summary>
+    private static FlightInput ForTheVesselLeft(in FlightInput input) => input with
+    {
+        View = null,
+        Plan = null,
+        ChooseHold = null,
+        RingHeading = null,
+        RingPitch = null,
+        Hold = null,
+        SetTarget = null,
+        ClearTarget = false,
+    };
 
     /// <summary>The longest step <see cref="Advance"/> takes: a frame's worth, as at normal speed.</summary>
     public const float WarpStepSeconds = 1f / 60f;

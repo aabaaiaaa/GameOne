@@ -355,7 +355,8 @@ dotnet run --project src/GameOne
   the picture breaking into static, clearing as it connects, `Scene.LinkUpSeconds` (1 s) of real
   time in all, the same however soon the physics is made; the vessel is flown, its body's
   physics made if it isn't, the frame after the link-up is first drawn, never the switch's own,
-  and the link-up is longer only if that takes longer), flavour only, telling the player nothing
+  and the link-up is longer only if that takes longer; that frame's input, gathered for the vessel
+  left, gives the new one nothing of its view, plan, holds, rings or target), flavour only, telling the player nothing
   to do; the readout's `Link`. A small view given to a vessel at a body whose physics isn't made has
   its own link-up over it (`Flight.OpenView`, `ViewLink`): the HUD opens a view after drawing the
   others, so it is first drawn, with its static, the frame after the click, and the physics is

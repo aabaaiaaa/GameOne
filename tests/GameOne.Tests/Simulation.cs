@@ -111,11 +111,13 @@ internal sealed class Simulation : IDisposable
             return;
         }
         // The switch alone first, in a frame of its own (the rest of the input is for the vessel
-        // flown once it has been switched to), then the rest, in the frame its link-up ends in and
-        // of no time, so that the pair take the one frame's time.
-        RunOne(new FlightInput(SwitchTo: input.SwitchTo, SwitchVessel: input.SwitchVessel, CarryOn: input.CarryOn, Rewind: input.Rewind,
-            Watched: input.Watched, Camera: input.Camera, NearMisses: input.NearMisses, View: input.View,
-            Watching: input.Watching, CameraBody: input.CameraBody, CameraVelocity: input.CameraVelocity));
+        // flown once it has been switched to), then the frame its link-up ends in, which takes
+        // nothing made for the vessel left (see Flight.RunFrame), then the rest, both of no time, so
+        // that they take the one frame's time.
+        var watching = new FlightInput(Watched: input.Watched, Camera: input.Camera, NearMisses: input.NearMisses,
+            Watching: input.Watching, CameraBody: input.CameraBody, CameraVelocity: input.CameraVelocity);
+        RunOne(watching with { SwitchTo = input.SwitchTo, SwitchVessel = input.SwitchVessel, CarryOn = input.CarryOn, Rewind = input.Rewind, View = input.View });
+        Flight.RunFrame(0f, watching);
         Flight.RunFrame(0f, input with { SwitchTo = null, SwitchVessel = false, CarryOn = null, Rewind = false, View = null });
     }
 

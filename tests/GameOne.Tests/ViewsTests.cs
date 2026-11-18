@@ -368,6 +368,32 @@ public sealed class ViewsTests
     }
 
     [Fact]
+    public void The_frame_a_vessel_is_flown_after_its_link_up_takes_nothing_made_for_the_one_left()
+    {
+        // The frame's input was gathered for the vessel flown until then: its camera's view, its
+        // plan, its holds and target are the old vessel's, so none of them is given to the new one.
+        var (sim, _, _) = ThreeVessels();
+        using (sim)
+        {
+            var flight = sim.Flight;
+            var first = flight.Controlled;
+            var other = flight.Vessels.First(v => v != first && Flight.CanFly(v));
+            flight.RunFrame(Simulation.FrameSeconds, new FlightInput(SwitchTo: other));
+            Assert.True(flight.LinkUp.On);
+            var chain = NodeTests.Chain(first, flight.WorldTime, flight.WorldTime + 60, new ManoeuvreNode(0, Prograde: 5f));
+            var stale = new FlightInput(View: Seen, Plan: chain, ChooseHold: HoldMode.Prograde, RingHeading: 1f, SetTarget: NavTarget.OfBody(GroundBody.Moon));
+            for (var frames = 0; flight.Controlled != other && frames++ < 600;)
+                flight.RunFrame(Simulation.FrameSeconds, stale);
+            Assert.Same(other, flight.Controlled);
+            Assert.Null(other.View);
+            Assert.Null(other.Chain);
+            Assert.NotEqual(HoldMode.Prograde, other.Hold);
+            Assert.NotEqual(HoldMode.Rings, other.Hold);
+            Assert.Null(other.Target);
+        }
+    }
+
+    [Fact]
     public void A_world_restored_puts_the_camera_back_on_the_flown_vessel()
     {
         // Behind the world list the camera shows the restored world: a centre on a vessel, site or
