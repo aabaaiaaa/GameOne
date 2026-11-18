@@ -900,6 +900,9 @@ internal sealed class Hud : IDisposable
             if (t > 0f && t < nearest)
                 (found, nearest) = (new CameraCentre(CentreKind.Body, bodies[i].Index), t);
         }
+        // From the map's furthest zoom, the sun's sphere can be in front of a body's disc.
+        if (found is not null && BodyFrames.Blocks(camera, camera + (Vector3Double)direction * nearest, frames.SunInView, Scene.SunRadius))
+            return null;
         return found;
     }
 

@@ -107,6 +107,33 @@ public sealed class CameraSubjectTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void A_click_on_a_body_s_disc_finds_that_body_and_off_it_or_behind_the_camera_none()
+    {
+        // From beyond the moon, on the line from the planet's centre through the moon's: the moon
+        // fills the middle of the screen, the planet hidden behind it.
+        var frames = new BodyFrames();
+        frames.Begin(0.0, Home);
+        var moon = frames.InView(Moon, Moon.Centre);
+        var outward = Vector3.Normalize(moon - Home.Centre);
+        var eye = moon + outward * 20_000f;
+        var display = new Vector2(1280f, 720f);
+        var up = Vector3.Normalize(Vector3.Cross(outward, Vector3.UnitX));
+        Matrix4x4 Looking(Vector3 at) => Matrix4x4.CreateLookAt(eye, at, up)
+            * ChaseCamera.Projection(float.DegreesToRadians(Scene.CameraVerticalFovDegrees), display.X / display.Y, ChaseCamera.Planes.Near, ChaseCamera.Planes.Far);
+
+        Assert.Equal(new CameraCentre(CentreKind.Body, Moon.Index), Hud.BodyDisc(frames, eye, Looking(moon), display, display / 2f));
+        Assert.Null(Hud.BodyDisc(frames, eye, Looking(moon), display, new Vector2(5f, 5f))); // off every disc
+        Assert.Null(Hud.BodyDisc(frames, eye, Looking(eye + outward), display, display / 2f)); // both behind the camera
+
+        // And from beyond the sun, looking at the moon through it: the sun's sphere is in front.
+        var sun = frames.SunInView.ToSingle();
+        var beyond = sun + Vector3.Normalize(sun - moon) * (Scene.SunRadius * 3f);
+        var throughSun = Matrix4x4.CreateLookAt(beyond, moon, Vector3.Normalize(Vector3.Cross(sun - moon, Vector3.UnitX)))
+            * ChaseCamera.Projection(float.DegreesToRadians(Scene.CameraVerticalFovDegrees), display.X / display.Y, ChaseCamera.Planes.Near, ChaseCamera.Planes.Far);
+        Assert.Null(Hud.BodyDisc(frames, beyond, throughSun, display, display / 2f));
+    }
+
+    [Fact]
     public void A_right_click_finds_a_vessel_seen_at_another_body()
     {
         // Flying at the planet, the camera beside a stage round the moon: the main view is in the

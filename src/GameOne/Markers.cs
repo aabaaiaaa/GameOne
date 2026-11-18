@@ -148,6 +148,19 @@ internal sealed class Markers
     }
 
     /// <summary>
+    /// What a left press does to the target (see <see cref="Click"/>), by what it is on, the first
+    /// of: the coming mark (<paramref name="coming"/>), a marker or its label
+    /// (<paramref name="onMarker"/>, targeting <paramref name="marker"/> if it can be), a body (its
+    /// path in the map or its disc, <paramref name="body"/>); else nothing, letting go of the
+    /// target where <paramref name="emptyLetsGo"/>.
+    /// </summary>
+    internal static (NavTarget? Set, bool Clear) Pressed(NavTarget? coming, bool onMarker, NavTarget? marker, NavTarget? body, NavTarget? current, bool emptyLetsGo) =>
+        coming is { } c ? Click(onMarker: true, c, current, emptyLetsGo: false)
+        : onMarker ? Click(onMarker: true, marker, current, emptyLetsGo: false)
+        : body is { } b ? Click(onMarker: true, b, current, emptyLetsGo: false)
+        : Click(onMarker: false, null, current, emptyLetsGo);
+
+    /// <summary>
     /// What a click does to the flown vessel's target (<paramref name="current"/>): on a marker
     /// (<paramref name="onMarker"/>) for <paramref name="clicked"/>, it is made the target, or let
     /// go if it already is (a marker for nothing to target, the body the flown vessel is at, does nothing); off them
@@ -305,15 +318,16 @@ internal sealed class Markers
         if (menuOpen || io.WantCaptureMouse || !pressed)
             return;
         // A press on none of them, nor on the nodes or the steering rings (ringsInUse), is on a body's
-        // path in the map, if that is what it is on.
-        var onLine = pressedComing is null && pressedOn is null && !ringsInUse && !pressOnPile && map?.BodyLineAt(pressAt, NodeEditor.PathPixels) is { } line
-            ? NavTarget.OfBody(line)
+        // path in the map, or on a body's disc (whether its marker shows or not: one filling the
+        // screen has faded its ring), if that is what it is on; never the flown vessel's own body.
+        var elsewhere = pressedComing is null && pressedOn is null && !ringsInUse && !pressOnPile;
+        var onLine = elsewhere && map?.BodyLineAt(pressAt, NodeEditor.PathPixels) is { } line ? NavTarget.OfBody(line) : (NavTarget?)null;
+        var onDisc = elsewhere && onLine is null && Hud.BodyDisc(frames, camera.Position, camera.ViewProjection(display), display, pressAt) is { } disc
+            && Bodies.All[disc.Id] != flight.Body
+            ? NavTarget.OfBody(Bodies.All[disc.Id])
             : (NavTarget?)null;
-        var (set, clear) = pressedComing is { } comingVessel
-            ? Click(onMarker: true, comingVessel, flight.Target, emptyLetsGo: false)
-            : onLine is { } lineTarget
-                ? Click(onMarker: true, lineTarget, flight.Target, emptyLetsGo: false)
-                : Click(pressedOn is not null, pressedOn?.Target, flight.Target, emptyLetsGo: settings.Markers && !ringsInUse && !pressOnPile);
+        var (set, clear) = Pressed(pressedComing, pressedOn is not null, pressedOn?.Target, onLine ?? onDisc, flight.Target,
+            emptyLetsGo: settings.Markers && !ringsInUse && !pressOnPile);
         if (set is not null)
             _set = set;
         _clear |= clear; // held until TakeClick, never unset by a later frame

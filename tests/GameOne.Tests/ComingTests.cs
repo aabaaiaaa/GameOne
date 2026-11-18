@@ -383,6 +383,19 @@ public sealed class ComingTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void A_press_goes_to_the_red_mark_then_a_marker_then_a_body_s_line_or_disc()
+    {
+        var (coming, marker) = (new NavTarget(TargetKind.Vessel, 1), new NavTarget(TargetKind.Vessel, 2));
+        var moon = NavTarget.OfBody(GroundBody.Moon);
+        Assert.Equal(((NavTarget?)coming, false), Markers.Pressed(coming, onMarker: true, marker, moon, current: null, emptyLetsGo: true));
+        Assert.Equal(((NavTarget?)marker, false), Markers.Pressed(null, onMarker: true, marker, moon, current: null, emptyLetsGo: true));
+        Assert.Equal(((NavTarget?)null, false), Markers.Pressed(null, onMarker: true, marker: null, moon, current: coming, emptyLetsGo: true)); // a marker of nothing to target, over the moon: nothing
+        Assert.Equal(((NavTarget?)moon, false), Markers.Pressed(null, onMarker: false, null, moon, current: coming, emptyLetsGo: true)); // its disc, its ring faded
+        Assert.Equal(((NavTarget?)null, true), Markers.Pressed(null, onMarker: false, null, moon, current: moon, emptyLetsGo: false)); // already the target: let go
+        Assert.Equal(((NavTarget?)null, true), Markers.Pressed(null, onMarker: false, null, body: null, current: moon, emptyLetsGo: true)); // off them all
+    }
+
+    [Fact]
     public void Keeping_what_is_coming_allocates_nothing()
     {
         var beside = 2f * FastCollisionTests.BoosterSize + 1f;
