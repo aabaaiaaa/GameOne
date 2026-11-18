@@ -103,6 +103,33 @@ public sealed class PathTests(ITestOutputHelper output)
         }
     }
 
+    [Fact]
+    public void Chevrons_on_a_line_millions_of_pixels_long_are_placed_at_once_on_its_part_on_the_screen()
+    {
+        // A point projected from just beside the camera or behind it lands millions of pixels out:
+        // the walk along such a piece is the screen's part of it, never a step a spacing at a time.
+        var into = new (Vector2 At, Vector2 Way)[Paths.MaxChevrons];
+        var display = new Vector2(1280f, 720f);
+        var n = 0;
+        var along = 0f;
+        var done = Task.Run(() =>
+        {
+            n = Paths.Chevrons([new Vector2(-2e9f, 300f), new Vector2(1200f, 300f)], 120f, into, ref along, display);
+            var further = 4e9f; // and on, off the screen's foot, and a stretch starting far along a line already
+            Paths.Chevrons([new Vector2(1200f, 300f), new Vector2(1200f, 3e9f)], 120f, into.AsSpan(n), ref along, display);
+            Paths.Chevrons([new Vector2(0f, 100f), new Vector2(1200f, 100f)], 120f, into.AsSpan(n), ref further, display);
+        }).Wait(TimeSpan.FromSeconds(5));
+        Assert.True(done, "the walk along the line never ended");
+        Assert.InRange(n, 9, 11); // 1,200 px of it on the screen, one every 120
+        for (var i = 0; i < n; i++)
+        {
+            Assert.InRange(into[i].At.X, 0f, display.X);
+            Assert.Equal(300f, into[i].At.Y, 1f);
+            if (i > 0)
+                Assert.Equal(120f, into[i].At.X - into[i - 1].At.X, 1f);
+        }
+    }
+
     private sealed class FloatComparer(float within) : IEqualityComparer<float>
     {
         public bool Equals(float a, float b) => MathF.Abs(a - b) <= within;

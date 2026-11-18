@@ -1244,29 +1244,68 @@ internal sealed class Paths
     /// </summary>
     internal static int Chevrons(ReadOnlySpan<Vector2> line, float every, Span<(Vector2 At, Vector2 Way)> into, ref float along, Vector2 display = default)
     {
+        // In double, and each piece's chevrons looked for only on its part on the screen: a point
+        // projected from just beside the camera or behind it lands millions of pixels out, and a
+        // float walked that far no longer moves on by a spacing.
         var placed = 0;
-        var next = every / 2f + MathF.Max(0f, MathF.Ceiling((along - every / 2f) / every)) * every; // the length along the line the next one is at
-        var walked = along;
+        double walked = along;
+        var next = Aligned(walked, every); // the length along the line the next one is at
         for (var i = 1; i < line.Length; i++)
         {
-            var step = line[i] - line[i - 1];
-            var length = step.Length();
-            if (length < 1e-4f)
+            var (from, to) = (line[i - 1], line[i]);
+            var (dx, dy) = ((double)to.X - from.X, (double)to.Y - from.Y);
+            var length = Math.Sqrt(dx * dx + dy * dy);
+            if (length < 1e-4)
                 continue;
-            var way = step / length;
-            for (; next <= walked + length; next += every)
+            var (inFrom, inTo) = display == default ? (0.0, 1.0) : OnScreen(from, dx, dy, display);
+            if (inFrom <= inTo && placed < into.Length)
             {
-                var at = line[i - 1] + way * (next - walked);
-                if (display != default && (at.X < 0f || at.Y < 0f || at.X > display.X || at.Y > display.Y))
-                    continue;
-                if (placed == into.Length)
-                    break;
-                into[placed++] = (at, way);
+                var way = new Vector2((float)(dx / length), (float)(dy / length));
+                for (next = Math.Max(next, Aligned(walked + inFrom * length, every)); next <= walked + inTo * length && placed < into.Length; next += every)
+                {
+                    var t = (next - walked) / length;
+                    into[placed++] = (new Vector2((float)(from.X + dx * t), (float)(from.Y + dy * t)), way);
+                }
             }
             walked += length;
         }
-        along = walked;
+        along = (float)walked;
         return placed;
+    }
+
+    /// <summary>The first length along a line at or past <paramref name="at"/> that a chevron is at: half a spacing in, then every spacing.</summary>
+    private static double Aligned(double at, float every) =>
+        every / 2.0 + Math.Max(0.0, Math.Ceiling((at - every / 2.0) / every)) * every;
+
+    /// <summary>
+    /// The part of the piece from <paramref name="from"/> by (<paramref name="dx"/>, <paramref name="dy"/>)
+    /// that is on a screen of <paramref name="display"/>, as fractions of the way along it (from past
+    /// to when none is).
+    /// </summary>
+    private static (double From, double To) OnScreen(Vector2 from, double dx, double dy, Vector2 display)
+    {
+        var (t0, t1) = (0.0, 1.0);
+        Clip(-dx, from.X, ref t0, ref t1);
+        Clip(dx, display.X - (double)from.X, ref t0, ref t1);
+        Clip(-dy, from.Y, ref t0, ref t1);
+        Clip(dy, display.Y - (double)from.Y, ref t0, ref t1);
+        return (t0, t1);
+
+        // One edge's limit on the fractions inside it (Liang–Barsky): p·t ≤ q.
+        static void Clip(double p, double q, ref double t0, ref double t1)
+        {
+            if (p == 0.0)
+            {
+                if (q < 0.0)
+                    (t0, t1) = (1.0, 0.0);
+                return;
+            }
+            var t = q / p;
+            if (p < 0.0)
+                t0 = Math.Max(t0, t);
+            else
+                t1 = Math.Min(t1, t);
+        }
     }
 
     /// <summary><see cref="Chevrons(ReadOnlySpan{Vector2}, float, Span{ValueTuple{Vector2, Vector2}}, ref float, Vector2)"/> for a line by itself.</summary>
