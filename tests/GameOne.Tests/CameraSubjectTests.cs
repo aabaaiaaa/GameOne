@@ -138,6 +138,49 @@ public sealed class CameraSubjectTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void The_main_view_s_sun_shadows_and_closing_speeds_go_by_what_the_camera_is_on()
+    {
+        using var sim = new Simulation(Mission.FreePlay, world: World(RoundTheMoon(1, 3000f)));
+        var stage = Get(sim, 1);
+        sim.Step(default);
+        var frames = new BodyFrames();
+        frames.Begin(sim.Flight.WorldTime, Home);
+        var camera = new ChaseCamera(null);
+        var flown = Matrix4x4.CreateTranslation(1f, 2f, 3f);
+
+        // On the flown vessel: its own model's, and the flight's own speed (none handed in).
+        Assert.Equal(flown, GameView.MainSunArea(frames, sim.Flight, camera, null, flown));
+        Assert.Null(GameView.CameraVelocityOf(camera.Centre, null));
+
+        // On a vessel at the moon: round it, changed into the scene's frame; and its speed.
+        camera.CentreOn(new CameraCentre(CentreKind.Vessel, stage.Id));
+        var round = GameView.MainSunArea(frames, sim.Flight, camera, stage, flown)!.Value;
+        var expected = frames.InScene(Moon, stage.Model.Translation);
+        Assert.True(((Vector3Double)round.Translation - expected).Length() < 0.05, $"{(Vector3Double)round.Translation - expected} off the stage");
+        Assert.Equal(stage.Velocity, GameView.CameraVelocityOf(camera.Centre, stage));
+
+        // On a place: round the camera's focus there, which doesn't move.
+        camera.CentreOn(new CameraCentre(CentreKind.Site, 0));
+        GameView.Aim(camera, sim.Flight, Dt, Dt);
+        var place = GameView.MainSunArea(frames, sim.Flight, camera, null, flown)!.Value;
+        Assert.True(((Vector3Double)place.Translation - frames.InScene(Home, camera.Focus)).Length() < 0.05);
+        Assert.Equal(Vector3.Zero, GameView.CameraVelocityOf(camera.Centre, null));
+    }
+
+    [Fact]
+    public void A_camera_on_a_vessel_no_longer_in_the_world_watches_nothing()
+    {
+        // Left over from before a rewind or a carry-on: the input names a vessel of another world.
+        using var other = new Simulation(Mission.FreePlay, world: World(RoundTheMoon(1, 3000f)));
+        var stale = Get(other, 1);
+        using var sim = new Simulation(Mission.FreePlay);
+        sim.Step(new FlightInput(Watching: stale, Camera: stale.Position, CameraBody: stale.Body));
+        sim.Step(new FlightInput(Watching: stale, Camera: stale.Position, CameraBody: stale.Body));
+        Assert.False(sim.Flight.WatchLink.On);
+        Assert.DoesNotContain(stale, sim.Flight.WorldVessels);
+    }
+
+    [Fact]
     public void A_right_click_finds_a_vessel_seen_at_another_body()
     {
         // Flying at the planet, the camera beside a stage round the moon: the main view is in the
