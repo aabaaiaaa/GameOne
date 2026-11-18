@@ -15,6 +15,20 @@ public sealed class CameraTests
     private const float Dt = 1f / 60f;
 
     [Fact]
+    public void Reset_camera_after_a_place_brings_back_the_chase_view_as_it_was_left()
+    {
+        var camera = new ChaseCamera(null);
+        camera.Place(0.7f, 0.4f, 120f);
+        var before = camera.View;
+        camera.CentreOn(new CameraCentre(CentreKind.Site, 0));
+        Assert.NotEqual(before.Distance, camera.View.Distance); // looked at as a place is
+        camera.CentreOn(new CameraCentre(CentreKind.Site, 1));  // and on to another place
+        camera.CentreOn(CameraCentre.Own);
+        var after = camera.View;
+        Assert.Equal((before.Yaw, before.Pitch, before.Distance), (after.Yaw, after.Pitch, after.Distance));
+    }
+
+    [Fact]
     public void A_view_read_from_the_camera_applies_back_the_same()
     {
         var camera = new ChaseCamera(null);

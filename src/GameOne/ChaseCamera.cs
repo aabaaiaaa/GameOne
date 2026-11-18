@@ -408,17 +408,27 @@ internal sealed class ChaseCamera
     /// </summary>
     public CameraCentre Centre { get; private set; } = CameraCentre.Own;
 
+    private (float Yaw, float Pitch, float Distance)? _beforePlace; // the chase view's angles and distance as it was before it was put on a place (see CentreOn)
+
     /// <summary>
     /// Puts it on <paramref name="centre"/> in the same mode (the map or the chase view), jumping
     /// there rather than flying across. A place (<see cref="CameraSubject.IsPlace"/>) is looked at
     /// from <see cref="Scene.PlaceViewHeight"/> over it and <see cref="Scene.PlaceViewAside"/> to the
-    /// side it is looked at from now, to be turned and zoomed round as the chase view is.
+    /// side it is looked at from now, to be turned and zoomed round as the chase view is; put back on
+    /// its own vessel after that, it looks at it from where it did before the first place.
     /// </summary>
     internal void CentreOn(CameraCentre centre)
     {
         Centre = centre;
         if (CameraSubject.IsPlace(centre.Kind))
+        {
+            _beforePlace ??= (_yaw, _pitch, _distance);
             Place(_yaw, MathF.Atan2(Scene.PlaceViewHeight, Scene.PlaceViewAside), MathF.Sqrt(Scene.PlaceViewHeight * Scene.PlaceViewHeight + Scene.PlaceViewAside * Scene.PlaceViewAside));
+        }
+        else if (centre.Kind == CentreKind.Own && _beforePlace is { } chase)
+            Place(chase.Yaw, chase.Pitch, chase.Distance); // the flown vessel looked at as it was left, not as the place was
+        if (centre.Kind == CentreKind.Own)
+            _beforePlace = null;
         _free = false;
         Snap(); // (any rebase's ease under way ended: there is nothing to keep)
     }
@@ -434,6 +444,7 @@ internal sealed class ChaseCamera
             Math.Clamp(view.MapDistance, Scene.ZoomOutMinDistance, Scene.ZoomOutMaxDistance));
         _mapSet = view.MapSet;
         Centre = view.Centre;
+        _beforePlace = null; // the view brought back is its own
         _zoomedOut = view.Map;
         _out = _zoomedOut ? 1f : 0f;
     }
