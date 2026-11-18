@@ -716,34 +716,42 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   (laid in age order, each bowl and rim blended over what is under it), so overlapping craters
   read as one on top of the other.
 
-## Known limits
-
-Things found, understood and accepted for now (the user's call), kept here with why, so they
-can be picked up again if they start to matter.
-
-- **Orbits creep a little, from float rounding** (found by the merged orbit test in `WorldTests`,
-  2026-11-04; explained and accepted, the user, 2026-11-06). The Satellites preset's 60°
-  satellite loses about 0.27 m of semi-major axis a lap (0.81 m over three laps, 19,565 m), the
-  90° one gains about 0.07 m a lap, and the two in the equator's plane hold to about 0.01 m.
-  - **Why:** a vessel's position is a float (Jolt is built in single precision, and the game
-    reads it into `Vector3`), and about 20 km from the world's origin a float holds it to about
-    2 mm. Each step's rounding is tiny, but in the ground's turning frame it doesn't average out:
-    for a given orbit it leans one way, lap after lap. Which way, and how much, depends on the
-    orbit's tilt, so it is no decay bringing everything down, rather an error of about one part
-    in 100,000 a lap.
-  - **How it was split** (scratch runs, not kept, three laps each): the game's step
-    (`Planet.FallStep`, kick then drift) in doubles holds every orbit to 0.000 m, so the turning
-    frame's pulls and the Boris step are exact; the same step in floats with no Jolt creeps
-    -0.807 m on the 60° orbit, as the game through Jolt does (-0.808 m), so Jolt adds nothing;
-    rounding only the position to float gives -0.65 m, only the velocity +0.27 m, both -0.86 m.
-    Drag plays no part: the air ends at 3 km (`Scene.AtmosphereHeight`), the orbits are 9 to
-    10 km up. A planet that doesn't turn, in floats, wanders by about 0.1 m with no lean.
-  - **Why accepted:** at that rate the 60° satellite would take about 24,000 laps (over 100
-    hours of play at the 32x warp) to sink into the air.
-  - **When to come back to it:** if long missions need orbits held for longer (a station kept
-    for days of game time, say), the farther a body is from the origin (a moon 40 km out would
-    be held to about 4 mm, so creep more), or if the test's bound (0.4 m a lap on the 60°
-    orbit) starts to fail. The fix would be positions in double: Jolt built in double precision
-    (`JPH_DOUBLE_PRECISION`, which is BRUTAL's build, not the game's), with the game's own
-    positions in double beside it. Moving the world's origin wouldn't help, as orbits are about
-    20 km across wherever it sits.
+- **Double precision in Jolt, as a trial** (a future feature and a performance question, from the
+  double copy of each craft's place and velocity, 2026-11-18; the user wants to know whether it
+  affects performance before deciding; to discuss before building). Build BRUTAL's Jolt with
+  `JPH_DOUBLE_PRECISION` (a BRUTAL build change: its natives built ourselves rather than taken
+  from NuGet), and measure the frame rate and the step's time against today's float build.
+  - **What it would gain:** the game keeps each craft's place and velocity in double beside
+    Jolt (so an orbit no longer creeps), but Jolt's own contacts, bodies and queries are still
+    float, and so is the attitude. Double positions in Jolt would make contacts exact far from
+    any body's origin, and let the double copy go.
+  - **What it would cost or risk:** a native build of our own to keep up with every BRUTAL
+    upgrade, maybe slower steps and more memory (the bindings' structs change size, so every
+    place the game or BRUTAL reads Jolt's positions would need checking).
+  - **Which case it would help:** vessels and contacts far from any body's origin (a body's frame
+    has its origin on its ground, so the moon's and further bodies' vessels), and any long
+    flight resting on contacts rather than free flight.
+- **Precision for bodies further out** (a future feature, from the solar system's edge, 2026-11-18;
+  to discuss before building). Once systems sit millions of km out, anything kept or drawn in
+  floats there loses precision: a float's step is about 64 m at 1 million km, about 1 km at 10
+  million km (where paths now end).
+  - **What it would gain:** a body far from the sun flown and drawn as the planet is. What must
+    be in double or relative to a nearby body: a vessel's place in its body's frame (helped by
+    each body having its own frame, and by the double copy), the map's and paths' points, and any
+    float walk along a line (as the glows' walk was made safe).
+  - **What it would cost or risk:** conversions at the boundaries, checked one by one; links to
+    the double copy and to Jolt in double (above), which it may make unnecessary or needed.
+  - **Which case it would help:** a body millions of km out, and the map's furthest zoom.
+- **Local physics, as an experiment** (a performance idea, from the user, 2026-11-18; the user:
+  "this experiment to move all physics to a local spatial version as I agree that collisions can
+  only happen locally and if the rest of the unwitnessed world can run on formula cheaply then
+  maybe that will allow for better perf"; to discuss before building). Physics only where
+  something is witnessed, each world with its own local origin near what it holds, rather than
+  one world a body with its origin on the body's ground. Collisions can only happen locally, and
+  the unwitnessed world already runs cheaply on formula (`Unwatched`, `Formula`).
+  - **What it would gain:** perhaps better frame rate and step time, and better precision too
+  (floats near their own origin), measured against today's.
+  - **What it would cost or risk:** several worlds at one body, handing vessels between them,
+    the ground's tiles per world, and the turning frame's pulls about a moved origin.
+  - **Which case it would help:** vessels far from their body's origin, and many vessels spread
+    over a body.
