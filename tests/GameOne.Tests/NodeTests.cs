@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Numerics;
 using Xunit;
 using Xunit.Abstractions;
@@ -580,6 +581,23 @@ public sealed class NodeTests(ITestOutputHelper output)
         {
             for (var i = 0; i < 10; i++)
                 _ = satellite.Guide(now + i);
+        }));
+    }
+
+    [Fact]
+    public void Anchoring_a_chain_allocates_only_the_chain()
+    {
+        // As dragging the first node does every frame: the chain made is all it allocates.
+        using var sim = Satellite(out var satellite);
+        var now = sim.Flight.WorldTime;
+        ImmutableArray<ManoeuvreNode> nodes = [new ManoeuvreNode(0, Prograde: 10f)];
+        for (var i = 0; i < 3; i++)
+            _ = ManoeuvreChain.AnchoredOn(satellite, now + 100 + i, nodes, now);
+        var one = PatchedPathTests.Allocated(() => _ = new ManoeuvreChain(default, nodes));
+        Assert.Equal(10 * one, PatchedPathTests.Allocated(() =>
+        {
+            for (var i = 0; i < 10; i++)
+                _ = ManoeuvreChain.AnchoredOn(satellite, now + 100 + i, nodes, now);
         }));
     }
 

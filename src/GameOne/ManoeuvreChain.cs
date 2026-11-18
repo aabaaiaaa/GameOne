@@ -63,7 +63,8 @@ internal sealed record ManoeuvreChain(ChainAnchor Anchor, ImmutableArray<Manoeuv
     /// </summary>
     public static ManoeuvreChain AnchoredOn(GroundBody body, Vector3 position, Vector3 starsVelocity, double time, ImmutableArray<ManoeuvreNode> nodes, double now)
     {
-        var legs = new List<PathLeg>(Scene.PatchedLegs);
+        var legs = _legs ??= new List<PathLeg>(Scene.PatchedLegs); // (kept: dragging the first node anchors a chain every frame)
+        legs.Clear();
         Patched.Legs(body, position, starsVelocity, now, legs, horizon: time);
         var last = legs[^1];
         // No later than its path goes (down to the ground, or out to the range escaping, or the
@@ -81,6 +82,9 @@ internal sealed record ManoeuvreChain(ChainAnchor Anchor, ImmutableArray<Manoeuv
 
         static bool Finite(Vector3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
     }
+
+    [ThreadStatic]
+    private static List<PathLeg>? _legs; // AnchoredOn's path, one a thread (the game's is its main thread; the tests run several)
 
     /// <summary>The body the anchor is round (worked out from its name, so not saved: the name is).</summary>
     [JsonIgnore]
