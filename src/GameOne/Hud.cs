@@ -901,8 +901,12 @@ internal sealed class Hud : IDisposable
         return found;
     }
 
-    /// <summary>The vessel in the main view under <paramref name="click"/> (the nearest to the camera of those at the flown vessel's body, in one piece, and not hidden behind a body), if any.</summary>
-    private static Vessel? VesselClicked(Flight flight, ChaseCamera camera, Matrix4x4 viewProjection, Vector2 display, Vector2 click, BodyFrames frames)
+    /// <summary>
+    /// The vessel in the main view under <paramref name="click"/> (the nearest to the camera at
+    /// <paramref name="eye"/> of those in one piece, at any body, each changed into the view's
+    /// frame, and not hidden behind a body), if any.
+    /// </summary>
+    internal static Vessel? VesselClicked(Flight flight, Vector3 eye, Matrix4x4 viewProjection, Vector2 display, Vector2 click, BodyFrames frames)
     {
         Vessel? found = null;
         var nearest = float.MaxValue;
@@ -910,14 +914,16 @@ internal sealed class Hud : IDisposable
         for (var i = 0; i < world.Count; i++) // by index: a foreach over the interface would box its enumerator every frame
         {
             var vessel = world[i];
-            if (vessel.Body != flight.Body || vessel.State == FlightState.Crashed)
+            if (vessel.State == FlightState.Crashed)
                 continue;
             var (bottom, top) = vessel.AxisOffsets(vessel.Rotation);
-            if (!VesselActions.OnVessel(vessel.CentreOfMass + bottom, vessel.CentreOfMass + top, vessel.Width, viewProjection, display, click))
+            var (body, centre) = (vessel.Body, vessel.CentreOfMass);
+            if (!VesselActions.OnVessel(frames.InView(body, centre + bottom), frames.InView(body, centre + top), vessel.Width, viewProjection, display, click))
                 continue;
-            if (frames.Behind(camera.Position, vessel.CentreOfMass))
+            var seen = frames.InView(body, centre);
+            if (frames.Behind(eye, seen))
                 continue;
-            var distance = Vector3.DistanceSquared(camera.Position, vessel.CentreOfMass);
+            var distance = Vector3.DistanceSquared(eye, seen);
             if (distance < nearest)
                 (found, nearest) = (vessel, distance);
         }
@@ -945,7 +951,7 @@ internal sealed class Hud : IDisposable
         if (camera.TakeRightClick() is { } click && !MenuOpen)
         {
             var viewProjection = camera.ViewProjection(display);
-            var onVessel = VesselClicked(flight, camera, viewProjection, display, click, frames);
+            var onVessel = VesselClicked(flight, camera.Position, viewProjection, display, click, frames);
             var onMarker = camera.ZoomedOut ? _markers.At(click) ?? BodyDisc(frames, camera.Position, viewProjection, display, click) : null;
             if (RightClickCentre(camera.ZoomedOut, camera.Centre, onMarker, onVessel, vessel) is { } centre)
             {

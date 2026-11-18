@@ -96,6 +96,28 @@ public sealed class CameraSubjectTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void A_right_click_finds_a_vessel_seen_at_another_body()
+    {
+        // Flying at the planet, the camera beside a stage round the moon: the main view is in the
+        // planet's frame, so the stage is found by where it is changed into it.
+        using var sim = new Simulation(Mission.FreePlay, world: World(RoundTheMoon(1, 3000f)));
+        var stage = Get(sim, 1);
+        sim.Step(default);
+        Assert.Same(Home, sim.Flight.Body);
+        var frames = new BodyFrames();
+        frames.Begin(sim.Flight.WorldTime, Home);
+        var seen = frames.InView(Moon, stage.CentreOfMass);
+        var outward = Vector3.Normalize(seen - frames.InView(Moon, Moon.Centre));
+        var eye = seen + outward * 60f; // looking down at it, the moon behind it
+        var display = new Vector2(1280f, 720f);
+        var viewProjection = Matrix4x4.CreateLookAt(eye, seen, Vector3.Normalize(Vector3.Cross(outward, Vector3.UnitX)))
+            * ChaseCamera.Projection(float.DegreesToRadians(Scene.CameraVerticalFovDegrees), display.X / display.Y, ChaseCamera.Planes.Near, ChaseCamera.Planes.Far);
+
+        Assert.Same(stage, Hud.VesselClicked(sim.Flight, eye, viewProjection, display, display / 2f, frames));
+        Assert.Null(Hud.VesselClicked(sim.Flight, eye, viewProjection, display, new Vector2(10f, 10f), frames));
+    }
+
+    [Fact]
     public void A_camera_on_a_vessel_at_the_moon_follows_it_without_jitter()
     {
         // Flying at the planet (the rocket on the pad), the camera on a stage round the moon: the
