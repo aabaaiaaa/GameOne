@@ -39,6 +39,21 @@ public sealed class NodeEditorTests
     }
 
     [Fact]
+    public void A_chain_changed_by_the_flight_not_the_editor_is_told_apart()
+    {
+        // A grab is let go when the vessel's chain changes from outside the editor (a node gone as
+        // it matched, say), so the edit held isn't sent back over it, bringing the node back.
+        var two = new ManoeuvreChain(default, [new ManoeuvreNode(0, Prograde: 5f), new ManoeuvreNode(100, Prograde: 2f)]);
+        var edited = two.WithNode(1, new ManoeuvreNode(100, Prograde: 3f));
+        var gone = new ManoeuvreChain(default, [new ManoeuvreNode(100, Prograde: 2f)]);
+        Assert.False(NodeEditor.ChangedElsewhere(two, known: two, sent: null), "as it was");
+        Assert.False(NodeEditor.ChangedElsewhere(edited, known: two, sent: edited), "the editor's own change, taken");
+        Assert.False(NodeEditor.ChangedElsewhere(null, known: two, sent: ManoeuvreChain.Empty), "the editor's own clearing");
+        Assert.True(NodeEditor.ChangedElsewhere(gone, known: two, sent: edited), "a node gone meanwhile");
+        Assert.True(NodeEditor.ChangedElsewhere(null, known: two, sent: null), "the last node gone");
+    }
+
+    [Fact]
     public void Only_the_next_node_and_the_legs_it_plans_are_green_once_matched()
     {
         var green = Scene.NodeMatchedColor;

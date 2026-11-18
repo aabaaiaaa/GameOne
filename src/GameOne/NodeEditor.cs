@@ -120,14 +120,35 @@ internal sealed class NodeEditor
         if (!_changed)
             return null;
         _changed = false;
-        return _pending ?? ManoeuvreChain.Empty;
+        return _sent = _pending ?? ManoeuvreChain.Empty;
     }
 
-    /// <summary>Before the plan is worked out each frame: the flown vessel's nodes, unless they are being changed here.</summary>
+    private ManoeuvreChain? _known, _sent; // the vessel's chain as last followed, and the last plan sent for it
+
+    /// <summary>
+    /// Whether the vessel's chain (<paramref name="now"/>) has been changed by something other than
+    /// the editor since it was last followed (<paramref name="known"/>): not to it, nor to the plan
+    /// the editor last sent (<paramref name="sent"/>, none if it has sent none). A node goes by
+    /// itself as it is matched at its cut, or its fuel runs out.
+    /// </summary>
+    internal static bool ChangedElsewhere(ManoeuvreChain? now, ManoeuvreChain? known, ManoeuvreChain? sent) =>
+        !Same(now, known) && (sent is null || !Same(now, sent));
+
+    private static bool Same(ManoeuvreChain? a, ManoeuvreChain? b) =>
+        a is not { Nodes.IsEmpty: false } ? b is not { Nodes.IsEmpty: false } : Equals(a, b);
+
+    /// <summary>
+    /// Before the plan is worked out each frame: the flown vessel's nodes, unless they are being
+    /// changed here; a grab is let go if the vessel's chain changed meanwhile from elsewhere, so
+    /// the edit held, made on the chain as it was, isn't sent back over it.
+    /// </summary>
     public void Follow(Vessel vessel)
     {
         if (vessel != _vessel)
-            (_vessel, _selected, _grab, _changed) = (vessel, -1, Grab.None, false);
+            (_vessel, _selected, _grab, _changed, _known, _sent) = (vessel, -1, Grab.None, false, vessel.Chain, null);
+        if (ChangedElsewhere(vessel.Chain, _known, _sent))
+            (_grab, _dragging, _changed) = (Grab.None, false, false);
+        _known = vessel.Chain;
         if (_grab == Grab.None && !_changed && !Equals(_pending, vessel.Chain))
             _pending = vessel.Chain;
         if (_selected >= Count)
