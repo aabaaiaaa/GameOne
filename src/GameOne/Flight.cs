@@ -1945,6 +1945,8 @@ internal sealed class Flight : IDisposable
     {
         if (vessel == Controlled || !CanFly(vessel) || !_world.Contains(vessel))
             return false;
+        if (LinkUp.Waiting && LinkUp.Vessel == vessel)
+            return true; // already being linked to: its link-up goes on as it began, no longer for a second click
         if (_worlds.At(vessel.Body) is not null)
             BringIn(vessel); // out of the formula now, so the frame behind the link-up has it as it was
         LinkUp.Begin(vessel, _realTime, _frames);
@@ -2279,6 +2281,7 @@ internal sealed class Flight : IDisposable
     /// whose link-up still waits for its body's physics: <see cref="Unwatched"/> and the look ahead
     /// leave that one where it is, under formula, until its link-up's frame brings it in
     /// (<see cref="OpenView"/>, <see cref="Watch"/>), so its body's physics is never made in a step meanwhile.
+    /// None and an empty list are alike to everything that reads it (<see cref="IsWatched"/>): nothing watched.
     /// </summary>
     private IReadOnlyList<Vessel>? Witnessed(IReadOnlyList<Vessel>? watched, Vessel? watching)
     {

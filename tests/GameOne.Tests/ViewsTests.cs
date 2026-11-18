@@ -394,6 +394,24 @@ public sealed class ViewsTests
     }
 
     [Fact]
+    public void A_second_click_on_the_vessel_being_linked_to_doesn_t_make_its_link_up_longer()
+    {
+        var (sim, _, _) = ThreeVessels();
+        using (sim)
+        {
+            var flight = sim.Flight;
+            sim.ShowLinkUp = true;
+            var other = flight.Vessels.First(v => v != flight.Controlled && Flight.CanFly(v));
+            sim.Step(new FlightInput(SwitchTo: other));
+            var frames = 1;
+            for (; flight.LinkUp.On && frames < 600; frames++)
+                sim.Step(new FlightInput(SwitchTo: frames < 5 ? other : null)); // clicked again, and again
+            Assert.Same(other, flight.Controlled);
+            Assert.InRange(frames * Simulation.FrameSeconds, Scene.LinkUpSeconds - 1e-3, Scene.LinkUpSeconds + 2 * Simulation.FrameSeconds);
+        }
+    }
+
+    [Fact]
     public void A_world_restored_puts_the_camera_back_on_the_flown_vessel()
     {
         // Behind the world list the camera shows the restored world: a centre on a vessel, site or
