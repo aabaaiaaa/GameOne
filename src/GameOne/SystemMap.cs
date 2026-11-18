@@ -253,7 +253,9 @@ internal sealed class SystemMap
         (lap.Count, lap.Reach, lap.Open, lap.MadeAt, lap.LeavesSystem) = (0, 0f, false, now, false);
         var orbit = Orbit.OverGround(body, v.CentreOfMass, v.Velocity, findEnd: false);
         // Where it reaches the solar system's edge, if it can get that far (looked for only then:
-        // along its whole path ahead, which only an orbit made to find its end has).
+        // along its whole path ahead, which only an orbit made to find its end has). Its points are
+        // placed among the stars at world time 0, not at the edge's own time, so its far end lies
+        // about 0.04% off the edge, which doesn't show at the map's scale.
         var leaves = orbit.HighestDistance >= Scene.SolarSystemEdge - SolarSystem.FarthestFromSun(body, now)
             ? Patched.LeavesAt(new PathLeg(body, Orbit.OverGround(body, v.CentreOfMass, v.Velocity), now, double.PositiveInfinity))
             : null;

@@ -216,25 +216,32 @@ internal static class Patched
     private static double? Falling(in Orbit orbit, double distance) =>
         orbit.Radial ? orbit.FallingTo(distance) : orbit.Descending(distance) is { } down ? orbit.TimeTo(down) : null;
 
-    /// <summary>How many places along the stretch where a leg could be at the edge are asked, before the crossing found between two is bisected.</summary>
-    private const int EdgeSamples = 32;
+    /// <summary>The most places a leg is asked at on its way to the edge (<see cref="LeavesAt"/>): a bound on the cost of a path that hangs about just short of it (an apoapsis a km past it takes about 1,850; an escape a few dozen), past which it is taken as not reaching it.</summary>
+    private const int EdgeSteps = 4_000;
 
     /// <summary>
     /// When (in world time) <paramref name="leg"/> first reaches the solar system's edge
     /// (<see cref="Scene.SolarSystemEdge"/> from the sun's centre, as it is then), between its start
     /// and its end (and no further than its orbit's path goes: down to the ground, or a lap with
-    /// no end); null if it doesn't. Its body's centre is never further from the sun than
-    /// <see cref="SolarSystem.FarthestFromSun"/>, so it can be at the edge only between that much
-    /// short of the edge's radius from its body's centre and that much past it: that stretch is
-    /// sampled, the place there turned back to its body's ground then and changed to the sun's
-    /// frame, in double, and the crossing between two samples bisected to a millisecond. Costs a
-    /// few comparisons for a leg that never gets that far.
+    /// no end), to within a millisecond's travel; null if it doesn't. Its body's centre is never
+    /// further from the sun than <see cref="SolarSystem.FarthestFromSun"/>, so it can be at the edge
+    /// only between that much short of the edge's radius from its body's centre and that much past
+    /// it: a leg that never gets that far costs a few comparisons. Over that stretch it is walked
+    /// ahead by steps that can't pass the edge: the place each time turned back to its body's
+    /// ground then and changed to the sun's frame, in double, and each step as long as the gap to
+    /// the edge takes at the fastest the two could close (its own speed out there, its body's
+    /// round the planet's, the sun's round the planet's). While even the farthest the sun's circle
+    /// gets from it (<see cref="SolarSystem.FarthestSunFrom"/>) is short of the edge, the sun's
+    /// going round can't bring it there, so the steps go by its own speed alone: a slow orbit
+    /// whose apoapsis is out by the edge, there for a moment a year as the sun comes round
+    /// opposite, takes years in a step until it is near, and is never stepped over.
     /// </summary>
     public static double? LeavesAt(in PathLeg leg)
     {
         var orbit = leg.Orbit;
+        var body = leg.Body;
         var edge = Scene.SolarSystemEdge;
-        var sun = SolarSystem.FarthestFromSun(leg.Body, leg.Start);
+        var sun = SolarSystem.FarthestFromSun(body, leg.Start);
         var (low, high) = (edge - sun, edge + sun);
         if (orbit.HighestDistance < low)
             return null;
@@ -243,7 +250,7 @@ internal static class Patched
             end = Math.Min(end, leg.Start + orbit.SecondsToEnd);
         else if (orbit.Closed)
             end = Math.Min(end, leg.Start + orbit.Period);
-        var r0 = (orbit.PlaceAfter(0) - (Vector3Double)leg.Body.Centre).Length();
+        var r0 = (orbit.PlaceAfter(0) - (Vector3Double)body.Centre).Length();
         if (r0 >= high)
             return leg.Start; // past it already
         double from;
@@ -264,41 +271,43 @@ internal static class Patched
         if (!double.IsFinite(to))
             return null;
 
-        var before = from;
-        if (FromSun(leg, before) >= edge)
-            return before;
-        for (var i = 1; i <= EdgeSamples; i++)
+        // The fastest it moves among the planet's stars on that stretch (never nearer its body's
+        // centre than low, where its own speed is greatest, its body going round on its circles),
+        // and with the sun's going round the planet too.
+        var own = orbit.SpeedAt(Math.Max(low, 1));
+        for (var b = body; b.Parent is { } parent; b = parent)
         {
-            var t = from + (to - from) * i / EdgeSamples;
-            if (FromSun(leg, t) < edge)
-            {
-                before = t;
-                continue;
-            }
-            var after = t;
-            while (after - before > 1e-3)
-            {
-                var mid = (before + after) / 2;
-                if (mid <= before || mid >= after)
-                    break; // as fine as a double's time there goes
-                if (FromSun(leg, mid) >= edge)
-                    after = mid;
-                else
-                    before = mid;
-            }
-            return after;
+            var change = FrameChange.ToParent(b, leg.Start);
+            var centre = change.Point(b.Centre);
+            own += (change.Velocity(b.Centre, default) + Vector3Double.Cross(parent.Spin, centre - parent.Centre)).Length();
+        }
+        var closing = own + SolarSystem.SunSpeed;
+        var t = from;
+        for (var step = 0; step < EdgeSteps && t <= to; step++)
+        {
+            var (fromSun, farthest) = Distances(leg, t);
+            var gap = edge - fromSun;
+            if (gap <= closing * 1e-3)
+                return t;
+            t += farthest < edge ? Math.Max((edge - farthest) / own, gap / closing) : gap / closing;
         }
         return null;
     }
 
-    /// <summary>How far <paramref name="leg"/> is from the sun's centre at world time <paramref name="t"/>: its place then turned back from among its body's stars to its ground then, in double.</summary>
-    private static double FromSun(in PathLeg leg, double t)
+    /// <summary>
+    /// How far <paramref name="leg"/> is from the sun's centre at world time <paramref name="t"/>, and
+    /// the farthest the sun's circle gets from it there (<see cref="SolarSystem.FarthestSunFrom"/>):
+    /// its place then turned back from among its body's stars to its ground then and changed into
+    /// the planet's frame, in double.
+    /// </summary>
+    private static (double FromSun, double Farthest) Distances(in PathLeg leg, double t)
     {
         var body = leg.Body;
         var reference = leg.Start - leg.Orbit.From; // when the leg's frame matches its body's ground
         var back = QuaternionDouble.FromAxisAngle(body.NorthPole, body.TurnRadians(-(t - reference)));
         var ground = body.Centre + back.Rotate(leg.Orbit.PlaceAfter(t - leg.Start) - body.Centre);
-        return SolarSystem.FromSun(body, ground, t);
+        var there = Bodies.Change(body, GroundBody.Planet, t).Point(ground);
+        return ((there - SolarSystem.SunCentreAt(t)).Length(), SolarSystem.FarthestSunFrom(there, t));
     }
 
     /// <summary>The first moment between <paramref name="outside"/> and <paramref name="inside"/> (to a millisecond) that the leg is within <paramref name="radius"/> of the child's centre.</summary>

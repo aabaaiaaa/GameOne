@@ -754,8 +754,12 @@ say) stalls frames and spoils the timing.
   escaping the planet at 1,500 m/s from 20 km up, sideways and straight up, and a bound ellipse
   whose apoapsis is 2e10 m out, each ending at the edge (`PathLeg.LeavesSystem`), its end within
   100 km of the edge's radius from the sun (closer than the sun is to the planet, so the edge is
-  the sun's); a 10 km orbit with no such end; the planet's centre the sun's distance from the sun
-  through the year (`SolarSystem.FromSun`); and the flown vessel's escape path drawn out to the
+  the sun's); bound orbits whose farthest from the sun is 1,000 km and 1 km past the edge (out
+  there for a moment a year as the sun comes round opposite, tuned by a small outward speed)
+  ending there too, and one 1 km short of it not; a 10 km orbit with no such end; the planet's
+  centre the sun's distance from the sun through the year (`SolarSystem.FromSun`); the sun never
+  further from a place than `SolarSystem.FarthestSunFrom`, and within tens of metres of it once in
+  a year; and the flown vessel's escape path drawn out to the
   edge with one mark, "Leaves the solar system" (`Paths.EdgeMarks`), at the line's end, in no more
   than a lap's samples a leg, built again allocating nothing.
 - **`MoonTargetTests`:** a body as a target and the path drawn round each body: the moon targeted
@@ -940,7 +944,7 @@ say) stalls frames and spoils the timing.
   does, its last leg a stretch of its own, and laid on the screen in runs none of which goes across a leg's start; and one under formula only to where it would cross into the moon's sphere (within 2% of
   the sphere's radius from where the moon will be then); a stage going straight up drawn as its
   line; one under formula escaping, sideways and straight up, drawn only out to the solar
-  system's edge (within 1% of its radius from the sun), in no more than a lap's points; a stage with its engine off keeping its lap for 120 frames and a burning one's made again
+  system's edge (within 1% of its radius from the sun), in no more than a lap's points, built again allocating nothing; a stage with its engine off keeping its lap for 120 frames and a burning one's made again
   as its orbit changes; a lap behind the planet cut there and drawn only where it is seen; an
   open lap drawn from where its vessel is now; a body's marker labelled with the distance to its
   surface (on the moon the lander's height over its datum, from the pad the pad's over the sea);

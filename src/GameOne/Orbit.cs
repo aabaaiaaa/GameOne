@@ -232,6 +232,27 @@ internal readonly struct Orbit
     }
 
     /// <summary>
+    /// How fast it moves among the stars where it is <paramref name="distance"/> from its body's
+    /// centre (vis-viva, from its energy in double: an orbit whose far end is billions of metres
+    /// out crawls there at millimetres a second, which its speed near the ground in floats would
+    /// lose); 0 where it never gets that far.
+    /// </summary>
+    public double SpeedAt(double distance)
+    {
+        double mu = _body.Mu;
+        double twiceEnergy;
+        if (_radial)
+        {
+            var r0 = ((Vector3Double)_position - (Vector3Double)_body.Centre).Length();
+            var v0 = Vector3Double.Dot(_velocity, _up);
+            twiceEnergy = v0 * v0 - 2 * mu / r0;
+        }
+        else
+            twiceEnergy = -mu * (1 - _e * _e) / _p; // -μ/a, from the shape alone
+        return Math.Sqrt(Math.Max(0, 2 * mu / distance + twiceEnergy));
+    }
+
+    /// <summary>
     /// Straight up or down, falling back: how long from now until it is down through
     /// <paramref name="distance"/> from its body's centre (after its top, if it is still rising to
     /// one); null if it escapes or never gets that high.

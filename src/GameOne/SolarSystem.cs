@@ -145,6 +145,25 @@ internal static class SolarSystem
         (Bodies.Change(body, GroundBody.Planet, worldTime).Point(p) - SunCentreAt(worldTime)).Length();
 
     /// <summary>
+    /// The farthest the sun's centre ever gets from <paramref name="p"/> (a place in the planet's
+    /// frame at <paramref name="worldTime"/>), as it goes round the planet's centre on its circle of
+    /// <see cref="Scene.SunDistance"/>: from the far side of the circle, by the place's height over
+    /// the circle's plane and its distance out from its axis. Never less than its distance from the
+    /// sun now (<see cref="FromSun"/>), and reached once a year by a place that stays put.
+    /// </summary>
+    public static double FarthestSunFrom(Vector3Double p, double worldTime)
+    {
+        var axis = GroundTurn(worldTime).Rotate(Vector3Double.Normalize(Vector3Double.Cross(StarsX, StarsY)));
+        var offset = p - (Vector3Double)GroundBody.Planet.Centre;
+        var up = Vector3Double.Dot(offset, axis);
+        var across = (offset - axis * up).Length() + Scene.SunDistance;
+        return Math.Sqrt(up * up + across * across);
+    }
+
+    /// <summary>How fast the sun's centre goes round the planet's among the stars (m/s): its circle once a year.</summary>
+    public static readonly double SunSpeed = Math.Tau * Scene.SunDistance / YearSeconds;
+
+    /// <summary>
     /// The farthest <paramref name="body"/>'s centre can ever be from the sun's: the sun's distance
     /// from the planet's centre, and each body's from its parent's on the way to it (as at
     /// <paramref name="worldTime"/>: each goes round on a circle). A place that far from the

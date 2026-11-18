@@ -72,6 +72,89 @@ public sealed class SolarEdgeTests(ITestOutputHelper output)
         EndsAtTheEdge(legs);
     }
 
+    /// <summary>
+    /// A bound orbit from 20 km up whose farthest from the sun is <paramref name="metres"/> past the
+    /// edge (before, if negative): near its apoapsis it hardly moves over a year, while the sun goes
+    /// round the planet once, so the farthest it gets from the sun is its apoapsis's farthest from
+    /// the sun's circle (<see cref="SolarSystem.FarthestSunFrom"/>). Tuned by a small outward speed
+    /// beside its sideways one (the sideways speed alone, a float, places the apoapsis only to a few
+    /// per cent); and how far past the edge it really gets.
+    /// </summary>
+    private static (Vector3 Start, Vector3 Velocity, double Past) Grazing(double metres)
+    {
+        var start = Above(20000f);
+        double periapsis = Vector3.Distance(start, Planet.Centre), apoapsis = 0.9 * Scene.SolarSystemEdge;
+        var sideways = (float)Math.Sqrt(Planet.Mu * 2 * apoapsis / (periapsis * (periapsis + apoapsis)));
+        double Past(float outward)
+        {
+            var orbit = new Orbit(Planet, start, East * sideways + Up * outward);
+            if (orbit.NextApoapsis is not { } top)
+                return double.PositiveInfinity;
+            var seconds = orbit.TimeTo(top);
+            var leg = new PathLeg(Planet, orbit, Now, double.PositiveInfinity);
+            return SolarSystem.FarthestSunFrom(GroundAt(leg, Now + seconds), Now + seconds) - Scene.SolarSystemEdge;
+        }
+        var (lo, hi) = (0f, 1f);
+        for (var i = 0; i < 60; i++)
+        {
+            var mid = (lo + hi) / 2;
+            if (mid <= lo || mid >= hi)
+                break;
+            if (Past(mid) < metres)
+                lo = mid;
+            else
+                hi = mid;
+        }
+        return (start, East * sideways + Up * hi, Past(hi));
+    }
+
+    [Theory]
+    [InlineData(1_000_000.0)]
+    [InlineData(1_000.0)]
+    public void An_orbit_just_reaching_past_the_edge_ends_there(double metres)
+    {
+        // Past the edge for a moment a year near its apoapsis: a sliver of its slow way out there.
+        var (start, velocity, past) = Grazing(metres);
+        output.WriteLine($"its farthest from the sun {past / 1e3:0.000} km past the edge");
+        Assert.InRange(past, 0.5 * metres, 2 * metres);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var legs = LegsOf(start, velocity);
+        output.WriteLine($"found in {watch.Elapsed.TotalMilliseconds:0.00} ms");
+        EndsAtTheEdge(legs);
+    }
+
+    [Fact]
+    public void An_orbit_just_short_of_the_edge_has_no_edge_end()
+    {
+        var (start, velocity, past) = Grazing(-1_000.0);
+        output.WriteLine($"its farthest from the sun {-past / 1e3:0.000} km short of the edge");
+        Assert.InRange(past, -2_000.0, -500.0);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var legs = LegsOf(start, velocity);
+        output.WriteLine($"looked for in {watch.Elapsed.TotalMilliseconds:0.00} ms");
+        Assert.All(legs, leg => Assert.False(leg.LeavesSystem));
+    }
+
+    [Fact]
+    public void The_farthest_the_sun_gets_from_a_place_bounds_it_and_is_reached_within_a_year()
+    {
+        // Places off the sun's plane and in it, near and far: the sun is never further than the
+        // bound, and comes within tens of metres of it at some time in a year (its circle swept once).
+        var year = Scene.YearDays * Scene.DaySeconds * 1.01;
+        foreach (var p in new[] { new Vector3Double(4e9, 1e9, -7e9), new Vector3Double(0, 0, 2e6), (Vector3Double)Above(20000f) })
+        {
+            var bound = SolarSystem.FarthestSunFrom(p, Now);
+            var farthest = 0.0;
+            for (var t = Now; t < Now + year; t += 1.0)
+            {
+                var d = SolarSystem.FromSun(Planet, p, t);
+                Assert.True(d <= SolarSystem.FarthestSunFrom(p, t) + 1e-3, "the sun past its bound");
+                farthest = Math.Max(farthest, d);
+            }
+            Assert.InRange(bound - farthest, -1e-3, 50.0); // the samples a second apart: within tens of metres of its top
+        }
+    }
+
     [Fact]
     public void An_orbit_inside_the_edge_has_no_edge_end()
     {

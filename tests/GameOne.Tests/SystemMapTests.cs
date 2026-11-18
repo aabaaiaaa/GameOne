@@ -501,6 +501,14 @@ public sealed class SystemMapTests(ITestOutputHelper output)
         output.WriteLine($"{points.Count} points, ending {end / 1e3:#,0} km from the sun");
         Assert.InRange(end, 0.99 * Scene.SolarSystemEdge, 1.01 * Scene.SolarSystemEdge);
         Assert.True(points.Count <= SystemMap.LapSegments + 2);
+
+        // Built again, frame after frame, it allocates nothing.
+        var camera = planet.Centre + new Vector3(0f, 0f, -1f) * 100_000f;
+        map.Build(flight, frames, camera);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 10; i++)
+            map.Build(flight, frames, camera);
+        Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 
     [Fact]
