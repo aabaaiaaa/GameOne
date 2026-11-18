@@ -158,6 +158,15 @@ internal sealed class Paths
     /// <summary>Where in <see cref="Line"/> each leg after the first starts: the line breaks there, at the crossing, with no segment across it.</summary>
     internal IReadOnlyList<int> LineStarts => _lineStarts;
 
+    /// <summary>
+    /// The first point of <see cref="Line"/> its glows are drawn from: with a plan, the first past
+    /// its first node, as <see cref="ToFirst"/> lies over it up to there and carries the glows
+    /// itself (one set of them, not two over each other); without, its first.
+    /// </summary>
+    internal int LineGlowsFrom => _lineGlowsFrom;
+
+    private int _lineGlowsFrom;
+
     /// <summary>The legs of the path the vessel is on now (each patched leg round its own body), from the last <see cref="Build"/>: what <see cref="Line"/> is drawn from.</summary>
     internal IReadOnlyList<PathLeg> Present => _present;
 
@@ -220,7 +229,7 @@ internal sealed class Paths
         {
             Map.Build(flight, frames, camera.Position);
             Map.Lay(_view, camera.Position, display);
-            Map.Draw(draw, _fade, Labels);
+            Map.Draw(draw, _fade, Labels, _glowEvery, _glowPhase);
         }
         else
             Map.Forget();
@@ -238,7 +247,8 @@ internal sealed class Paths
             DrawLine(draw, _theirLine, _theirStarts, TargetColor, 0.55f, Scene.PathWidth);
         var pathColor = ((byte)(Scene.PathColor.X * 255), (byte)(Scene.PathColor.Y * 255), (byte)(Scene.PathColor.Z * 255));
         // With a plan: the orbit as it is, faintly; over it, the path to the first node, then the plan.
-        DrawLine(draw, _line, _lineStarts, pathColor, _planned ? 0.3f : 0.9f, Scene.PathWidth);
+        var line = new GlowWalk { QuietUntil = _lineGlowsFrom };
+        DrawLine(draw, _line, _lineStarts, pathColor, _planned ? 0.3f : 0.9f, Scene.PathWidth, ref line);
         DrawLine(draw, _toFirst, _toFirstStarts, pathColor, 0.9f, Scene.PathWidth);
         // The next node matched: the legs it plans, up to the second node's burn, are green.
         var matched = flight.Guide is { Matched: true };
@@ -349,18 +359,18 @@ internal sealed class Paths
         var mine = current[0].Orbit; // the orbit it is on now, round the body it is at
         _line.Clear();
         _lineStarts.Clear();
+        // With a plan, the path to the first node is drawn over the line as far as the node, and
+        // carries the glows there: the line's own start only from the first point past it.
+        var firstNodeAt = _planned ? plan.Legs[_firstNodeLeg].End : double.NegativeInfinity;
+        _lineGlowsFrom = 0;
         for (var i = 0; i < current.Count; i++)
-            Fill(_line, _lineStarts, current[i], view, now, frame);
+            _lineGlowsFrom += Fill(_line, _lineStarts, current[i], view, now, frame, firstNodeAt);
         // And its own path to the first node, drawn over the line as it is (the chain's own legs up to
         // the node are from its anchor, which is the node itself for one set where it is).
         _toFirst.Clear();
         _toFirstStarts.Clear();
-        if (_planned)
-        {
-            var firstAt = plan.Legs[_firstNodeLeg].End;
-            for (var i = 0; i < current.Count && current[i].Start < firstAt; i++)
-                Fill(_toFirst, _toFirstStarts, current[i] with { End = Math.Min(current[i].End, firstAt) }, view, now, frame);
-        }
+        for (var i = 0; i < current.Count && current[i].Start < firstNodeAt; i++)
+            Fill(_toFirst, _toFirstStarts, current[i] with { End = Math.Min(current[i].End, firstNodeAt) }, view, now, frame);
 
         // The target: on a path of its own (a body round its parent, a vessel flying round the
         // body it is at), or staying put (a place, or a vessel on the ground), as the body it is at
@@ -743,10 +753,12 @@ internal sealed class Paths
     /// in <paramref name="view"/>'s frame at <paramref name="now"/>: round its own body, as that
     /// body is now (<see cref="LegPlace"/>). With <paramref name="starts"/>, where it starts in
     /// <paramref name="points"/> if a leg is there before it, so the line breaks at the crossing
-    /// between them (each leg of a patched path ends at one).
+    /// between them (each leg of a patched path ends at one). How many of the points it adds are
+    /// for world times before <paramref name="before"/>.
     /// </summary>
-    private void Fill(List<Vector3> points, List<int>? starts, in PathLeg leg, GroundBody view, double now, Frame frame)
+    private int Fill(List<Vector3> points, List<int>? starts, in PathLeg leg, GroundBody view, double now, Frame frame, double before = double.NegativeInfinity)
     {
+        var earlier = 0;
         var orbit = leg.Orbit;
         var place = new LegPlace(leg, view, now);
         if (starts is not null && points.Count > 0)
@@ -766,12 +778,20 @@ internal sealed class Paths
                 points.Add(frame == Frame.Surface && orbit.EndsOnGround && i == _radial.Count - 1
                     ? place.Ground(orbit.Landing)
                     : place.Point(frame, _radial[i], seconds));
+                var reached = i == _radial.Count - 1 && i > 0 ? orbit.SecondsToEnd : seconds - startsIn; // when it is there, on from the leg's start
+                if (leg.Start + reached < before)
+                    earlier++;
             }
-            return;
+            return earlier;
         }
         orbit.Samples(_samples, 0, leg.End - leg.Start);
         foreach (var (at, seconds) in _samples)
+        {
             points.Add(place.Point(frame, at, startsIn + seconds));
+            if (leg.Start + seconds < before)
+                earlier++;
+        }
+        return earlier;
     }
 
     /// <summary>
@@ -1232,12 +1252,22 @@ internal sealed class Paths
         var nextStart = 0; // the next of starts
         for (var i = 0; i < points.Count; i++)
         {
+            walk.Index = i; // the stretch so far is of the points before this one
             if (starts is not null && nextStart < starts.Count && starts[nextStart] == i)
             {
                 // A break at a crossing, as a hidden gap is: the glows go on past it by its ends.
                 nextStart++;
                 hasLast = false;
                 DrawGlows(draw, _stretch, _glows, color, glow, ref walk, _glowEvery, _glowPhase, _display);
+            }
+            if (i == walk.QuietUntil && i > 0 && _stretch.Count > 0)
+            {
+                // The glows from here on: the stretch so far walked for its length only, and on
+                // from its last point if the line goes on unbroken.
+                var end = _stretch[^1];
+                DrawGlows(draw, _stretch, _glows, color, glow, ref walk, _glowEvery, _glowPhase, _display);
+                if (hasLast)
+                    _stretch.Add(end);
             }
             var shown = InView(points[i], out var at);
             if (shown && hasLast)
@@ -1254,7 +1284,9 @@ internal sealed class Paths
                 DrawGlows(draw, _stretch, _glows, color, glow, ref walk, _glowEvery, _glowPhase, _display);
             (hasLast, last) = (shown, at);
         }
+        walk.Index = points.Count;
         DrawGlows(draw, _stretch, _glows, color, glow, ref walk, _glowEvery, _glowPhase, _display);
+        walk.QuietUntil = 0; // a piece after this one has its glows
     }
 
     private readonly List<Vector2> _stretch = [];
@@ -1266,13 +1298,16 @@ internal sealed class Paths
     /// How far one line's glows have got as it is drawn, stretch by stretch: the length along the
     /// whole line (the hidden gaps and the breaks by their ends on the screen, so the glows keep
     /// their places past a gap), the last point of it on the screen, and how many glows it has
-    /// been given on the screen so far (no more than <see cref="MaxGlows"/>).
+    /// been given on the screen so far (no more than <see cref="MaxGlows"/>); and, drawing a line of
+    /// points, how many of its points the stretch being drawn covers and the first whose glows are drawn (none before it if 0) (before that, each stretch is
+    /// walked for its length only: <see cref="LineGlowsFrom"/>).
     /// </summary>
     internal struct GlowWalk
     {
         public double Along;
         public Vector2? LastShown;
         public int Placed;
+        public int Index, QuietUntil;
     }
 
     /// <summary>The most glows a line is given on its part on the screen (<see cref="Glows(ReadOnlySpan{Vector2}, float, double, Span{ValueTuple{Vector2, double}}, ref double, Vector2, float)"/>): one many screens long, or winding across it, gets no more.</summary>
@@ -1401,6 +1436,12 @@ internal sealed class Paths
     {
         if (stretch.Length < 2)
             return;
+        if (walk.QuietUntil > 0 && walk.Index <= walk.QuietUntil)
+        {
+            // Not this stretch's: walked on for its length only, nothing placed.
+            Glows(stretch, every, phase, [], ref walk.Along);
+            return;
+        }
         var start = walk.Along;
         var n = Glows(stretch, every, phase, into.AsSpan(walk.Placed), ref walk.Along, display, Scene.PathGlowPixels / 2f);
         var bright = ((byte)(color.R + (255 - color.R) * Scene.PathGlowWhiten), (byte)(color.G + (255 - color.G) * Scene.PathGlowWhiten),

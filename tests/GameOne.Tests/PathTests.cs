@@ -170,6 +170,47 @@ public sealed class PathTests(ITestOutputHelper output)
         public int GetHashCode(float f) => 0;
     }
 
+    [Fact]
+    public void With_a_plan_the_lines_glows_start_past_the_first_node_where_the_path_to_it_lies_over_it()
+    {
+        // The path to the first node is drawn over the line up to the node and carries the glows
+        // there: the line's own are drawn only from its first point past the node.
+        const double Start = 5000.0;
+        var (sim, _) = MoonFlights.Flying(Start, MoonFlights.OnPlanet(0, MoonFlights.InTheMoonsPlane(Start, 1.0, 1.0)));
+        using (sim)
+        {
+            var flight = sim.Flight;
+            var (paths, _) = MoonFlights.Built(flight);
+            Assert.Equal(0, paths.LineGlowsFrom); // no plan: the whole line has them
+
+            var now = flight.WorldTime;
+            var lap = paths.Present[0].Orbit.PathSeconds; // the line's lap: the node part way round it
+            sim.Step(new FlightInput(Plan: NodeTests.Chain(flight.Controlled, now, now + 0.4 * lap, new ManoeuvreNode(0, Prograde: 2f))));
+            (paths, var plan) = MoonFlights.Built(flight);
+            var nodeAt = plan.Legs[plan.NodeLeg(0)!.Value].End;
+            var from = paths.LineGlowsFrom;
+            var worst = paths.Line.Take(from).Select((p, i) => (Off: OnPolyline(p, paths.ToFirst), i)).MaxBy(x => x.Off);
+            output.WriteLine($"{paths.Line.Count} line points, {paths.ToFirst.Count} to the node; the line's glows from point {from}; the furthest before it {worst.Off:0.00} m off the path to the node (point {worst.i}); frame {flight.LineFrame}");
+            Assert.InRange(from, 1, paths.Line.Count - 1);
+            // Every point before it lies on the path to the node (both chords of the same orbit, so
+            // within their sag), and the one at it is past the node's end of it.
+            Assert.InRange(worst.Off, 0f, 5f);
+            Assert.True(OnPolyline(paths.Line[from], paths.ToFirst) > 5f, "the first point with the line's glows is past the node");
+            Assert.True(nodeAt > now);
+        }
+    }
+
+    private static float OnPolyline(Vector3 p, IReadOnlyList<Vector3> line)
+    {
+        var best = float.MaxValue;
+        for (var i = 1; i < line.Count; i++)
+        {
+            var (a, b) = (line[i - 1], line[i]);
+            var t = (b - a).LengthSquared() > 1e-6f ? Math.Clamp(Vector3.Dot(p - a, b - a) / (b - a).LengthSquared(), 0f, 1f) : 0f;
+            best = MathF.Min(best, Vector3.Distance(p, a + (b - a) * t));
+        }
+        return best;
+    }
 
     [Fact]
     public void Glows_allocate_nothing()

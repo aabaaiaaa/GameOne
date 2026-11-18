@@ -658,11 +658,16 @@ internal sealed class SystemMap
         return longest < 0 ? null : _screen[_runs[longest].First + _runs[longest].Count / 2];
     }
 
-    /// <summary>Draws what <see cref="Lay"/> left, as strongly as <paramref name="fade"/>: each run one polyline, the dots, the sun's ring, and its name into <paramref name="labels"/> (a body's: the others give way to it).</summary>
-    public void Draw(ImDrawListPtr draw, float fade, MapLabels labels)
+    /// <summary>
+    /// Draws what <see cref="Lay"/> left, as strongly as <paramref name="fade"/>: each run one
+    /// polyline with its glows (spaced <paramref name="every"/> and as far on as
+    /// <paramref name="phase"/>, the path's this frame, so the two go by one reading of the clock),
+    /// the dots, the sun's ring, and its name into <paramref name="labels"/> (a body's: the others
+    /// give way to it).
+    /// </summary>
+    public void Draw(ImDrawListPtr draw, float fade, MapLabels labels, float every, double phase)
     {
         var screen = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_screen);
-        var (every, phase) = (Paths.GlowEvery(_display), Paths.GlowPhase(Paths.RealSeconds));
         var walk = new Paths.GlowWalk(); // along the whole line a run is a stretch of (see Paths.Glows), its hidden gaps and breaks by their ends
         for (var r = 0; r < _runs.Count; r++)
         {

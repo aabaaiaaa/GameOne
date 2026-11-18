@@ -323,8 +323,8 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
                 worstRadius = Math.Max(worstRadius, Math.Abs((drawn - centre).Length() - Vector3.Distance(samples[i].At, Planet.Centre)));
             }
             output.WriteLine($"{samples.Count} planet-leg points, all within {worst * 1000:0.0} mm of the planet's frame placed now, {worstRadius:0.00} m of the orbit's own distance from its centre");
-            Assert.True(worst < 0.5, $"{worst:0.00} m off");
-            Assert.True(worstRadius < 0.5, $"{worstRadius:0.00} m off its distance from the planet's centre");
+            Assert.True(worst < 0.05, $"{worst:0.000} m off its orbit round the planet now");
+            Assert.True(worstRadius < 0.05, $"{worstRadius:0.000} m off its orbit's distance from the planet's centre now");
         }
     }
 

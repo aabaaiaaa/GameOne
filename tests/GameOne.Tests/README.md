@@ -762,7 +762,7 @@ say) stalls frames and spoils the timing.
   moon leg its orbit's own round the moon as it is now (within 5 cm, as far from its centre as on
   the orbit), its ends far from the planet legs' either side (the moon moves on meanwhile), the
   planet leg after it unchanged, and the leg in the moon's sphere round it; flown at the moon on
-  a way out of its sphere, the leg round the planet round the planet as it is now (within 50 cm);
+  a way out of its sphere, the leg round the planet round the planet as it is now (within 5 cm);
   the closest approach the moon leg's periapsis (within 1 m, drawn on its Pe
   mark, over its datum) and, with no encounter, `Encounters.Closest`'s against the moon's orbit;
   an orbit round the moon a closed loop, flown there and seen from the planet as a target's path;
@@ -929,7 +929,7 @@ say) stalls frames and spoils the timing.
   to it); flying the pad's rocket, a stage on a round orbit of the moon drawn round the moon and one
   of the planet round the planet, closed laps from where each is; of three stages into the moon's
   sphere, the one beside the flown one (in the physics) patched, ending as its path round the moon
-  does, its last leg a stretch of its own, and one under formula only to where it would cross into the moon's sphere (within 2% of
+  does, its last leg a stretch of its own, and laid on the screen in runs none of which goes across a leg's start; and one under formula only to where it would cross into the moon's sphere (within 2% of
   the sphere's radius from where the moon will be then); a stage going straight up drawn as its
   line; a stage with its engine off keeping its lap for 120 frames and a burning one's made again
   as its orbit changes; a lap behind the planet cut there and drawn only where it is seen; an
@@ -988,7 +988,9 @@ say) stalls frames and spoils the timing.
   moving each on the way a circle is flown, a line across the screen showing one or two whatever
   the phase (spaced about its width, two at most however it winds), the phase going by real
   seconds at the glows' pace, a line millions of pixels long placed at once on its part on the
-  screen, allocating nothing; and a label at the half-way point
+  screen, allocating nothing; with a plan, the line's own glows only from its first point past
+  the first node (`Paths.LineGlowsFrom`: the path to the node lies over it before that and carries
+  them), every point before it on that path; and a label at the half-way point
   between two steps not flipping (`Paths.StillShows`).
 - **`CameraSubjectTests`:** the main camera on something other than the flown vessel
   (`CameraSubject`, `GameView.Aim`): each kind of subject found at its body (a vessel's middle, a

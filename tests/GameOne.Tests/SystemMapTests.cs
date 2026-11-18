@@ -434,6 +434,27 @@ public sealed class SystemMapTests(ITestOutputHelper output)
         Assert.Equal(legs.Count - 1, starts.Count);
         var start = last.Point(flight.LineFrame, samples[0].At, legs[^1].Start - t + samples[0].Seconds);
         Assert.True(Vector3.Distance(points[starts[^1]], start) < 1f, "its last leg starts a stretch of its own");
+        // And as laid on the screen: no run of it goes across a leg's start (each of its runs is
+        // its points in a row, by where each point is on the screen, all within one leg).
+        var eye = planet.Centre + new Vector3(0f, 0f, -1f) * 100_000f;
+        var viewProjection = Looking(eye, planet.Centre);
+        map.Lay(viewProjection, eye, Screen);
+        var onScreen = points.Select(p => Vector4.Transform(new Vector4(p, 1f), viewProjection))
+            .Select(c => c.W > 1e-4f ? new Vector2((c.X / c.W + 1f) * Screen.X * 0.5f, (1f - c.Y / c.W) * Screen.Y * 0.5f) : new Vector2(float.NaN)).ToList();
+        var runs = map.Runs.Where(r => r.Vessel == beside.Id).ToList();
+        Assert.NotEmpty(runs);
+        var laidAcross = 0;
+        foreach (var run in runs)
+        {
+            var screen = map.Screen[run.First];
+            var k = onScreen.FindIndex(p => Vector2.Distance(p, new Vector2(screen.X, screen.Y)) < 0.01f);
+            Assert.True(k >= 0, "a run's first point is one of its path's");
+            for (var j = 1; j < run.Count; j++)
+                Assert.True(Vector2.Distance(onScreen[k + j], new Vector2(map.Screen[run.First + j].X, map.Screen[run.First + j].Y)) < 0.01f, "a run's points are its path's in a row");
+            laidAcross += starts.Count(s => k < s && s < k + run.Count);
+        }
+        output.WriteLine($"laid in {runs.Count} run(s), {laidAcross} across any of its {starts.Count} leg start(s)");
+        Assert.Equal(0, laidAcross);
 
         Assert.True(map.PathOf(far, points));
         Assert.False(map.IsPatched(far));
