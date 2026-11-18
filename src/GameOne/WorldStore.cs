@@ -99,8 +99,15 @@ internal sealed class WorldStore(string directory)
         if (file.Version < FormatVersion)
             throw new InvalidDataException($"Saved by an older version of the game (format {file.Version}).");
         foreach (var vessel in file.World.Vessels)
+        {
             if (!Bodies.Has(vessel.Body))
                 throw new InvalidDataException($"A vessel is at an unknown body, \"{vessel.Body}\".");
+            // Its planned burns are planned round their anchor's body, and have nodes (none is saved as no chain).
+            if (vessel.Chain is { } chain && !Bodies.Has(chain.Anchor.Body))
+                throw new InvalidDataException($"A vessel's planned burns are anchored at an unknown body, \"{chain.Anchor.Body}\".");
+            if (vessel.Chain is { Nodes.IsDefaultOrEmpty: true })
+                throw new InvalidDataException("A vessel's planned burns were saved with no nodes.");
+        }
         foreach (var run in file.World.Runs)
             if (run.Done.Length != run.Mission.Steps.Length || run.Points.Length != run.Mission.Steps.Length)
                 throw new InvalidDataException($"A run of {run.Mission.Name} was saved with another number of steps.");

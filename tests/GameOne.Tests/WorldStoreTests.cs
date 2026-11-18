@@ -185,6 +185,35 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
         Assert.True(back.Vessels[0].MatchHeld); // a hold under way, too
     }
 
+    [Fact]
+    public void A_chain_anchored_at_an_unknown_body_or_with_no_nodes_is_refused()
+    {
+        var chain = new ManoeuvreChain(new ChainAnchor(GroundBody.Moon.Name, 123.25, new Vector3(1.5f, -2f, 3f), new Vector3(400f, 5f, -6f)),
+            [new ManoeuvreNode(0, 5f)]);
+        WorldState world;
+        using (var sim = new Simulation(Mission.FreePlay, world: new WorldState
+        {
+            Time = 100.0, NextVesselId = 1, Flights = 1, Vessels = [InOrbit.Round(GroundBody.Moon, 0, 400f)],
+        }))
+            world = sim.Flight.Capture();
+        world = world with { Vessels = [world.Vessels[0] with { Chain = chain }] };
+        Store.Save(world with { Id = "nowhere", Name = "Nowhere" });
+        Store.Save(world with { Id = "nonodes", Name = "No nodes" });
+        Rewrite("nowhere", file => file["World"]!["Vessels"]![0]!["Chain"]!["Anchor"]!["Body"] = "Nowhere");
+        Rewrite("nonodes", file => file["World"]!["Vessels"]![0]!["Chain"]!.AsObject().Remove("Nodes")); // (a null is refused by the reader itself)
+        Assert.Contains("Nowhere", Assert.Throws<InvalidDataException>(() => Store.Load("nowhere")).Message);
+        Assert.Throws<InvalidDataException>(() => Store.Load("nonodes"));
+        Assert.All(Store.List().Where(w => w.Id is "nowhere" or "nonodes"), w => Assert.NotNull(w.Error)); // listed as unreadable, to delete
+
+        void Rewrite(string id, Action<System.Text.Json.Nodes.JsonNode> change)
+        {
+            var path = Path.Combine(Store.Directory, id + ".json");
+            var file = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!;
+            change(file);
+            File.WriteAllText(path, file.ToJsonString());
+        }
+    }
+
     /// <summary>Every field of every vessel in <paramref name="back"/> is as it was in <paramref name="world"/>.</summary>
     private static void AssertSameVessels(WorldState world, WorldState back)
     {
