@@ -88,9 +88,9 @@ internal sealed class NodeEditor
     /// <summary>Whether a node's handles are drawn (see <see cref="ShowsHandles"/>): a click on the steering rings' place is then for them, not the rings.</summary>
     public bool Selected { get; private set; }
 
-    /// <summary>Whether a node's handles are drawn: one is selected, the editor is showing and that node is on the screen.</summary>
-    internal static bool ShowsHandles(bool editing, int selected, ReadOnlySpan<bool> shown) =>
-        editing && selected >= 0 && selected < shown.Length && shown[selected];
+    /// <summary>Whether a node's handles are drawn: one is <paramref name="selected"/>, that node is on the screen (<paramref name="shown"/>) and so is one of its handles at least (<paramref name="handles"/>).</summary>
+    internal static bool ShowsHandles(int selected, ReadOnlySpan<bool> shown, ReadOnlySpan<bool> handles) =>
+        selected >= 0 && selected < shown.Length && shown[selected] && handles.Contains(true);
 
     /// <summary>
     /// How fast a handle adds to its speed (m/s each second, negative to take away) with the
@@ -338,7 +338,7 @@ internal sealed class NodeEditor
             }
         }
 
-        Selected = ShowsHandles(true, _selected == selectedAtStart ? _selected : -1, shown);
+        Selected = ShowsHandles(_selected == selectedAtStart ? _selected : -1, shown, handleShown);
 
         // Drawing: the nodes, the selected one's handles and delete button, and the ghost.
         var matched = flight.Guide is { Matched: true };

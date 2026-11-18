@@ -28,14 +28,15 @@ public sealed class NodeEditorTests
     }
 
     [Fact]
-    public void Handles_are_shown_only_while_the_editor_shows_and_the_selected_node_is_on_the_screen()
+    public void Handles_are_shown_only_while_the_selected_node_and_a_handle_of_it_are_on_the_screen()
     {
         bool[] shown = [true, false, true];
-        Assert.True(NodeEditor.ShowsHandles(true, 2, shown));
-        Assert.False(NodeEditor.ShowsHandles(false, 2, shown));
-        Assert.False(NodeEditor.ShowsHandles(true, 1, shown));
-        Assert.False(NodeEditor.ShowsHandles(true, -1, shown));
-        Assert.False(NodeEditor.ShowsHandles(true, 3, shown));
+        bool[] handles = [false, false, true, false, false, false], none = new bool[6];
+        Assert.True(NodeEditor.ShowsHandles(2, shown, handles));
+        Assert.False(NodeEditor.ShowsHandles(2, shown, none)); // its every handle off the screen, or under the node
+        Assert.False(NodeEditor.ShowsHandles(1, shown, handles));
+        Assert.False(NodeEditor.ShowsHandles(-1, shown, handles));
+        Assert.False(NodeEditor.ShowsHandles(3, shown, handles));
     }
 
     [Fact]
