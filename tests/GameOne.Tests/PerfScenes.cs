@@ -332,10 +332,10 @@ internal static class PerfScenes
     /// the ground for long; the top speed's pass, rising away from it as it goes, is the costliest
     /// low pass there is, and hits nothing, so it is never slowed for.
     /// </summary>
-    public static readonly float[] SweepLevelSpeeds = [50f, 100f, 200f, 300f, Scene.TopSpeed];
+    public static readonly float[] SweepLevelSpeeds = [50f, 100f, 200f, 300f, Scene.GroundTopSpeed];
 
     /// <summary>The speeds (m/s) and angles below level the sweep crashes at, as the crash theory in <see cref="TerrainTileTests"/>, up to the top speed (each over a fast collision's speed slowed for as it comes).</summary>
-    public static readonly float[] SweepCrashSpeeds = [100f, 300f, 1000f, 3000f, Scene.TopSpeed];
+    public static readonly float[] SweepCrashSpeeds = [100f, 300f, 1000f, 3000f, Scene.GroundTopSpeed];
     public static readonly float[] SweepCrashAngles = [90f, 45f, 10f];
 
     /// <summary>
@@ -441,7 +441,7 @@ internal static class PerfScenes
     /// </summary>
     public static List<PacedCollision> FastCollisions()
     {
-        var closing = 2f * Scene.TopSpeed;
+        var closing = 2f * Scene.GroundTopSpeed;
         var cases = new List<PacedCollision>();
         using (FastCores.Hold())
         {
@@ -450,8 +450,8 @@ internal static class PerfScenes
                 Fly("warm-up", FastCollisionTests.Pair(closing, 5000f, 3f, sideways: 10f));
                 cases.Add(Fly($"a pass head on, {closing:#,0} m/s closing at 5 km, 10 m apart", FastCollisionTests.Pair(closing, 5000f, 3f, sideways: 10f)));
                 cases.Add(Fly($"a collision head on, {closing:#,0} m/s closing at 5 km", FastCollisionTests.Pair(closing, 5000f, 3f)));
-                cases.Add(Fly($"into the rough slope at {Scene.TopSpeed:#,0} m/s, 10° below level", new WorldState { Vessels = [Drops.Crashing(Scene.TopSpeed, 10f).State], NextVesselId = 1 }));
-                cases.Add(Fly($"into the rough slope at {Scene.TopSpeed:#,0} m/s, 45° below level", new WorldState { Vessels = [Drops.Crashing(Scene.TopSpeed, 45f).State], NextVesselId = 1 }));
+                cases.Add(Fly($"into the rough slope at {Scene.GroundTopSpeed:#,0} m/s, 10° below level", new WorldState { Vessels = [Drops.Crashing(Scene.GroundTopSpeed, 10f).State], NextVesselId = 1 }));
+                cases.Add(Fly($"into the rough slope at {Scene.GroundTopSpeed:#,0} m/s, 45° below level", new WorldState { Vessels = [Drops.Crashing(Scene.GroundTopSpeed, 45f).State], NextVesselId = 1 }));
                 // A dive at the top speed into the field of 49 boosters frozen on the zone
                 // (TerrainTileTests' field), at the one nearest its centre: the wake reaches the
                 // field along the dive's way and wakes the lot together, mid-slow-down, so what
@@ -461,15 +461,15 @@ internal static class PerfScenes
                 var centre = field.MinBy(b => Vector3.Distance(b.Position.ToSingle(), zone))!;
                 var middle = FastCollisionTests.Middle(centre.Position.ToSingle(), centre.Rotation);
                 var dive = Vector3.Normalize(Planet.East(middle) - Planet.Up(middle));
-                cases.Add(Fly($"a dive at {Scene.TopSpeed:#,0} m/s, 45° below level, into a field of {field.Count} frozen boosters",
-                    new WorldState { Vessels = [FastCollisionTests.Flying(middle, dive, Scene.TopSpeed, 3f, 0), .. field], NextVesselId = field.Count + 1 }));
+                cases.Add(Fly($"a dive at {Scene.GroundTopSpeed:#,0} m/s, 45° below level, into a field of {field.Count} frozen boosters",
+                    new WorldState { Vessels = [FastCollisionTests.Flying(middle, dive, Scene.GroundTopSpeed, 3f, 0), .. field], NextVesselId = field.Count + 1 }));
                 // And a pass that hits nothing, never slowed for: level at the top speed 30 m over
                 // the floe band, the seabed's tiles and the floes laid as fast as they ever are, at
                 // full speed. Its frames are all "before" ones, printed for the record.
                 var band = Planet.Centre + IceTests.FloeBand("Boreal Sea") * Planet.SeaRadius;
                 var east = Planet.East(band);
-                cases.Add(Fly($"level 30 m over the floe band at {Scene.TopSpeed:#,0} m/s (hits nothing)",
-                    new WorldState { Vessels = [Drops.Placed(band, east, 0f, legsOut: false, sideways: east * Scene.TopSpeed, clearance: 30f)], NextVesselId = 1 }, collides: false, most: 180));
+                cases.Add(Fly($"level 30 m over the floe band at {Scene.GroundTopSpeed:#,0} m/s (hits nothing)",
+                    new WorldState { Vessels = [Drops.Placed(band, east, 0f, legsOut: false, sideways: east * Scene.GroundTopSpeed, clearance: 30f)], NextVesselId = 1 }, collides: false, most: 180));
                 // And a near miss slowed by the setting (Flight.Slowed for a NearMiss, flown with it
                 // on): Pair's two passing beside each other at 1,000 m/s, within a length but never
                 // touching, its slow-down eased in and out by its own time, the predictor's chorded

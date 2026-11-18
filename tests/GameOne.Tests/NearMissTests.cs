@@ -254,13 +254,13 @@ public sealed class NearMissTests(ITestOutputHelper output)
     public void A_near_miss_to_watch() => SlowedNearMiss();
 
     /// <summary>
-    /// The same near miss at the most two crafts can close at (each at <see cref="Scene.TopSpeed"/>,
-    /// head on), for the user to watch how short its slowed way in is from
+    /// The same near miss with each at the ground's top speed (<see cref="Scene.GroundTopSpeed"/>,
+    /// head on: the most two can close at low over the ground), for the user to watch how short its slowed way in is from
     /// <see cref="Scene.SlowdownFrom"/>: they start 2 s apart, not 5, so neither starts halfway
     /// round the planet.
     /// </summary>
     [Fact]
-    public void A_top_speed_near_miss_to_watch() => SlowedNearMiss(2f * Scene.TopSpeed, 2f);
+    public void A_top_speed_near_miss_to_watch() => SlowedNearMiss(2f * Scene.GroundTopSpeed, 2f);
 
     /// <summary>
     /// The 1,000 m/s pass beside the flown booster, the setting on, flown to the end of its

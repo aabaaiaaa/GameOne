@@ -313,18 +313,19 @@ internal static class Floes
             var (i0, i1) = (cells.Min(c => c.I), cells.Max(c => c.I));
             var (j0, j1) = (cells.Min(c => c.J), cells.Max(c => c.J));
             // Far from the face's edges, so that nothing near a floe is on another face (see the
-            // remarks): nothing within a craft's reach at the top speed (RocketPhysics.UpdateFloes).
-            // A design limit, not a broken map: a higher Scene.TopSpeed reaches further, so it says
-            // which speed asked for how much room, and how much there is.
-            var reach = Scene.FloeReach + Scene.TopSpeed * Scene.FloeReachSeconds;
+            // remarks): nothing within a craft's reach at the ground's top speed (RocketPhysics.UpdateFloes:
+            // the floes are low over the ground, where no craft goes faster, and a faster one above is
+            // taken at that speed). A design limit, not a broken map: a higher Scene.GroundTopSpeed
+            // reaches further, so it says which speed asked for how much room, and how much there is.
+            var reach = Scene.FloeReach + Scene.GroundTopSpeed * Scene.FloeReachSeconds;
             var room = (int)MathF.Ceiling((reach + 2f * Scene.FloeSpacing) / Scene.FloeSpacing / 0.7f);
             var last = (int)MathF.Floor(2f / CellSize) - 1;
             var margin = Math.Min(Math.Min(i0, j0), Math.Min(last - i1, last - j1));
             if (margin < room)
                 throw new InvalidDataException(
-                    $"a floe band is {margin} cells (about {margin * Scene.FloeSpacing:0} m) from cube face {face}'s edge, but a craft at the top speed "
-                    + $"(Scene.TopSpeed, {Scene.TopSpeed:0} m/s) takes up floes {reach:0} m round it (Scene.FloeReach + the top speed × Scene.FloeReachSeconds), "
-                    + $"which needs {room} cells (about {room * Scene.FloeSpacing:0} m): lower the top speed or FloeReachSeconds, or lay the bands further from the edge");
+                    $"a floe band is {margin} cells (about {margin * Scene.FloeSpacing:0} m) from cube face {face}'s edge, but a craft at the ground's top speed "
+                    + $"(Scene.GroundTopSpeed, {Scene.GroundTopSpeed:0} m/s) takes up floes {reach:0} m round it (Scene.FloeReach + that speed × Scene.FloeReachSeconds), "
+                    + $"which needs {room} cells (about {room * Scene.FloeSpacing:0} m): lower the ground's top speed or FloeReachSeconds, or lay the bands further from the edge");
 
             // The bands' texels, and two more all round: the sheets inside them, and open water past them.
             var across = new Across(map, face, Math.Max(s0 - 2, 0), Math.Max(t0 - 2, 0), Math.Min(s1 + 2, resolution + 1), Math.Min(t1 + 2, resolution + 1));

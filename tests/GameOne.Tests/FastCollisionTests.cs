@@ -54,7 +54,8 @@ public sealed class FastCollisionTests(ITestOutputHelper output)
     /// turning frame's sideways pull on something at 4,000 m/s is about 40 m/s², so each start is
     /// found by flying the physics' own fall backwards and forwards (<see cref="Shot"/>) until it
     /// arrives where and when it should. Crossing, each goes at closing/√2, so over
-    /// 2√2 × <see cref="Scene.TopSpeed"/> Jolt caps them, and they collide later and slower than asked.
+    /// 2√2 × <see cref="Scene.GroundTopSpeed"/> low over the ground (<see cref="GroundBody.LowOverTheGround"/>)
+    /// the game holds them to it, and they collide later and slower than asked; higher up, nothing holds them.
     /// </remarks>
     internal static WorldState Pair(float closing, float altitude, float seconds, bool crossing = false, float sideways = 0f,
         bool flownFirst = true, float fuel = 0.3f, float lieAcross = 0f, Vector3? over = null)
@@ -274,8 +275,8 @@ public sealed class FastCollisionTests(ITestOutputHelper output)
     /// Where to start something, and at what velocity, so that, set off at <paramref name="speed"/>,
     /// it arrives at <paramref name="to"/> along <paramref name="way"/> after
     /// <paramref name="seconds"/>: flown as the physics falls (<see cref="Planet.FallStep"/>, with
-    /// gravity, the turning frame and the air, capped at <see cref="Scene.TopSpeed"/> as Jolt caps
-    /// it), and set off again from where and how it missed, until it arrives.
+    /// gravity, the turning frame and the air, held to <see cref="Scene.GroundTopSpeed"/> low over
+    /// the ground as the game holds it), and set off again from where and how it missed, until it arrives.
     /// </summary>
     private static (Vector3 From, Vector3 Velocity) Shot(Vector3 to, Vector3 way, float speed, float seconds)
     {
@@ -310,8 +311,8 @@ public sealed class FastCollisionTests(ITestOutputHelper output)
                 break;
             var drag = Scene.DragRate * Planet.AirDensity(Planet.Altitude(p));
             v += Planet.FallStep(v, Planet.Gravity(p) + Planet.OutwardPull(p), drag, dt);
-            if (v.Length() > Scene.TopSpeed)
-                v = Vector3.Normalize(v) * Scene.TopSpeed;
+            if (v.Length() > Scene.GroundTopSpeed && GroundBody.Planet.LowOverTheGround(p))
+                v = Vector3.Normalize(v) * Scene.GroundTopSpeed;
             p += v * dt;
             visit?.Invoke(p);
         }
@@ -351,7 +352,7 @@ public sealed class FastCollisionTests(ITestOutputHelper output)
     [Theory]
     [InlineData(500f, 5000f)]
     [InlineData(2000f, 5000f)]
-    [InlineData(8000f, 5000f)] // flown closing at 5,657 m/s, not 8,000: each would go at 5,657, and is capped at Scene.TopSpeed (4,000). Unslowed, it passed through (24 m apart at the nearest step)
+    [InlineData(8000f, 5000f)] // each at 5,657 m/s, over the ground's top speed but above where it holds (GroundBody.LowOverTheGround). Unslowed, a step's 67 m of closing would pass one through the other
     [InlineData(2000f, 1000f)]
     public void Two_crafts_crossing_collide(float closing, float altitude) => PairCollides(Pair(closing, altitude, HitsAt, crossing: true));
 
@@ -388,9 +389,9 @@ public sealed class FastCollisionTests(ITestOutputHelper output)
     [Fact]
     public void A_fast_collision_to_watch() => WatchedCollision(1000f, 5f);
 
-    /// <summary>The same at the most two crafts can close at (each at <see cref="Scene.TopSpeed"/>), starting 2 s apart so neither starts halfway round the planet.</summary>
+    /// <summary>The same with each at the ground's top speed (<see cref="Scene.GroundTopSpeed"/>: the most two can close at low over the ground, though here, 5 km up, nothing holds them), starting 2 s apart so neither starts halfway round the planet.</summary>
     [Fact]
-    public void A_top_speed_fast_collision_to_watch() => WatchedCollision(2f * Scene.TopSpeed, 2f);
+    public void A_top_speed_fast_collision_to_watch() => WatchedCollision(2f * Scene.GroundTopSpeed, 2f);
 
     private void WatchedCollision(float closing, float seconds)
     {

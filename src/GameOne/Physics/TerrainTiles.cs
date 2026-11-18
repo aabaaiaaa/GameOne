@@ -315,7 +315,7 @@ internal sealed class TerrainTiles : IDisposable
             // Nor does a wreck, left in the world only for its hit on another craft to play out
             // (unseen, unjudged, gone in Scene.WreckSeconds): the tiles already laid stay for it,
             // but a new way it is thrown along by the hit would want a whole new urgent stretch
-            // at once (at the top speed, a kilometre's: 27 tiles made in one step, 15 ms).
+            // at once (at the ground's top speed, a kilometre's: 27 tiles made in one step, 15 ms).
             if (craft.WreckedFor is not null)
                 continue;
             var (position, velocity, half) = motion(craft);

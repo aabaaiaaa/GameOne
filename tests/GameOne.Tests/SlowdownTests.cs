@@ -501,10 +501,10 @@ public sealed class SlowdownTests(ITestOutputHelper output)
         // A craft at the top speed, 10 km off a booster frozen on the zone: woken by the time the
         // craft is its wake's reach away (its speed's Scene.WakeSeconds), so it is awake well
         // before it is hit.
-        var (sim, flier, standing) = FastCollisionTests.Fly(FastCollisionTests.Into("frozen", Scene.TopSpeed, 10000f / Scene.TopSpeed));
+        var (sim, flier, standing) = FastCollisionTests.Fly(FastCollisionTests.Into("frozen", Scene.GroundTopSpeed, 10000f / Scene.GroundTopSpeed));
         using var _ = sim;
         Assert.True(standing!.Craft.Frozen, "the standing one isn't frozen: this shows nothing");
-        var reach = Scene.TopSpeed * Scene.WakeSeconds;
+        var reach = Scene.GroundTopSpeed * Scene.WakeSeconds;
         var (wokenAt, frozenBefore) = ((float?)null, false);
         sim.Run(Nobody, _ =>
         {
@@ -529,7 +529,7 @@ public sealed class SlowdownTests(ITestOutputHelper output)
         // and behind it after, within the 1 km a sphere round it would reach (its speed's
         // Scene.WakeSeconds), but never within Scene.WakeMargin of its body's way ahead. It
         // wakes only what it is coming at, so the frozen one sleeps through.
-        var (sim, flier, standing) = FastCollisionTests.Fly(FastCollisionTests.Over(Scene.TopSpeed, 1f, 1000f));
+        var (sim, flier, standing) = FastCollisionTests.Fly(FastCollisionTests.Over(Scene.GroundTopSpeed, 1f, 1000f));
         using var _ = sim;
         Assert.True(standing!.Craft.Frozen, "the standing one isn't frozen: this shows nothing");
         var (nearest, woken) = (float.MaxValue, false);
@@ -544,7 +544,7 @@ public sealed class SlowdownTests(ITestOutputHelper output)
             return false;
         }, maxSeconds: 1.5);
         var apart = Vector3.Distance(flier.CentreOfMass, standing.CentreOfMass);
-        output.WriteLine($"passed {nearest:0} m from it, {apart:0} m off at the end (a sphere's reach {Scene.TopSpeed * Scene.WakeSeconds:0} m); woken {woken}; {flier.State}");
+        output.WriteLine($"passed {nearest:0} m from it, {apart:0} m off at the end (a sphere's reach {Scene.GroundTopSpeed * Scene.WakeSeconds:0} m); woken {woken}; {flier.State}");
         Assert.InRange(nearest, 900f, 1100f);
         Assert.Equal(FlightState.Flying, flier.State);
         Assert.False(woken, "woken by a craft passing beside or behind it");
@@ -557,7 +557,7 @@ public sealed class SlowdownTests(ITestOutputHelper output)
         // new way, and while it is left in the world (Scene.WreckSeconds, slowed: seconds of real
         // time) the tiles there are kept, but none is made for that new way (a kilometre's urgent
         // stretch at once, which cost a frame 12 ms).
-        var (sim, flown, _) = FastCollisionTests.Fly(new WorldState { Vessels = [Drops.Crashing(Scene.TopSpeed, 10f).State], NextVesselId = 1 });
+        var (sim, flown, _) = FastCollisionTests.Fly(new WorldState { Vessels = [Drops.Crashing(Scene.GroundTopSpeed, 10f).State], NextVesselId = 1 });
         using var _ = sim;
         Assert.True(sim.Run(Nobody, _ => flown.State == FlightState.Crashed, maxSeconds: 4), "it never crashed");
         var (made, fromWorker, tiles) = (sim.Physics.Tiles.MadeInStep, sim.Physics.Tiles.FromWorker, sim.Physics.TileCount);

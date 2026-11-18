@@ -445,8 +445,8 @@ say) stalls frames and spoils the timing.
   main view held, dropped from its few by rank, kept within the hold and let go past it.
 - **`FastCollisionTests`:** fast collisions flown as the game flies them, each hit half a step
   after 3 s (the hardest moment for the physics' steps): two boosters head on or crossing, in the
-  vacuum and the air, at up to 8,000 m/s closing head on (crossing, at 5,657 m/s: each at the
-  4,000 m/s cap, `Scene.TopSpeed`), and one at up to 4,000 m/s
+  vacuum and the air, at up to 8,000 m/s closing head on and crossing (crossing, each at 5,657 m/s:
+  5 km up, above the band where the game holds a craft to `Scene.GroundTopSpeed`), and one at up to 4,000 m/s
   into level ground, a frozen booster, a floe and a light mast, each hit and judged for what it
   hit, never passed through (three did, before the forced slow-down: see `SlowdownTests`). Its
   world builders (`Pair`, `Into`, `PastTwoMasts`) set such collisions up for the other fast collision tests.
@@ -782,6 +782,13 @@ say) stalls frames and spoils the timing.
   in no capture), written once, and gone from the world once Tab flies its run's booster; and
   `Flight.EdgeAsked` counting only the vessel 1,000 km inside, never the one in orbit or on the
   pad, at warp too.
+- **`TopSpeedTests`:** no speed cap in open space, one low over the ground: the upper stage
+  1,000 km from the planet's axis, escaping at about 5,800 m/s over the ground, flown in the physics
+  for 20 s on the path drawn at its start (`Patched.Legs`), within half as much again as the
+  physics' own step lead there (measured 2.9 m; held to Jolt's old 4,000 m/s cap, 1,145 m off);
+  boosters at 6,000 m/s 1 km over the ground held to `Scene.GroundTopSpeed` from their first step,
+  the flown one in the physics and one on the far side of the planet under formula; and the upper
+  stage burning 20 km up past 4,000 and 16,000 m/s over the ground.
 - **`MoonTargetTests`:** a body as a target and the path drawn round each body: the moon targeted
   as a vessel is (its centre in the view's frame within 1 m, flying, its velocity over the
   planet's ground as its centre moves; the planet, the body it is at, refused; the readout's
@@ -1127,7 +1134,7 @@ say) stalls frames and spoils the timing.
   the moon, closing at 300 m/s, warned of as "the moon" (hitting over the fast collisions' speed),
   crashed "Hit the moon at", and logged as hit on the moon. Long: the whole trip from the low
   orbit to the moon's ground, landed as the landing is, the fuel at each leg's end reported (short
-  of it, it fails), and the speed over the ground under `Scene.TopSpeed` every frame of it; and a
+  of it, it fails), and the speed over the ground low over it under `Scene.GroundTopSpeed` every frame of it (the game's hold never taking hold); and a
   playthrough of the satellite mission's ascent, its upper stage left (the satellite let go) with
   `AscentFuel` within 5%.
 - **`MoonTrip`:** not a test: the trip's starts (`LowOrbit`, `Arriving`, `MoonOrbit`), the upper
@@ -1176,7 +1183,7 @@ say) stalls frames and spoils the timing.
   left flying (some 570 s of flight: the quick one beside it starts the lander already let go);
   the whole trip
   from the low orbit to the spot, the bay opened, both margins kept, every leg's fuel reported and
-  the speed under `Scene.TopSpeed`; and a playthrough of the mission from Home's pad
+  the speed low over the ground under `Scene.GroundTopSpeed`; and a playthrough of the mission from Home's pad
   (`Playthrough_land_on_the_moon`): succeeded, the score and each step's points printed, both
   margins kept, the booster's landing reported.
 - **`LowPassTests`:** a very low orbit of the moon, found from its height map (`LowPass`, not a
@@ -1281,10 +1288,10 @@ machine's other work, too.
   frame before the next step, so the worker has the time it would have in play; nothing in the game
   paces it). Each case is flown once: coasting low over the rough slope at 50, 100, 200 and
   300 m/s (low orbit is about 313 m/s), each in a low ballistic arc that stays inside the band
-  where its tiles are urgent (`Drops.Level`), measured until it comes down, and at the top speed
-  (`Scene.TopSpeed`), rising away from it; and crashing into it
+  where its tiles are urgent (`Drops.Level`), measured until it comes down, and at the ground's top speed
+  (`Scene.GroundTopSpeed`), rising away from it; and crashing into it
   (`Drops.Crashing`, as the crash theory in `TerrainTileTests`) at 100, 300, 1000 and 3000 m/s and
-  the top speed, straight down, at 45 degrees and at 10 (those over `Scene.FastCollisionSpeed`
+  the ground's top speed, straight down, at 45 degrees and at 10 (those over `Scene.FastCollisionSpeed`
   slowed for as they come, as in play). It reports each case's median and 95th percentile
   frame, the tiles by the worker and in the step, and whether it fell through (more than a metre
   into the ground, or near it in some frame with no tile under its lowest point:
@@ -1298,11 +1305,11 @@ machine's other work, too.
   is neither compared with the baseline nor written to it.
 - **The paced fast collisions** (`A_fast_pass_holds_60_fps`, `PerfScenes.FastCollisions`): the frame
   rate held through a forced slow-down, paced at real time as the sweep is. Two boosters head on
-  at twice the top speed closing in the vacuum at 5 km, passing 10 m apart and colliding, and one
-  into the rough slope at the top speed at 10 and 45 degrees below level, and one diving at the
+  at twice the ground's top speed closing in the vacuum at 5 km, passing 10 m apart and colliding, and one
+  into the rough slope at the ground's top speed at 10 and 45 degrees below level, and one diving at the ground's
   top speed into the field of 49 boosters frozen on the zone (`TerrainTileTests.FrozenField`),
   whose boosters on and beside its way in wake as it comes, mid-slow-down, each flown from a little before its slow-down to
-  its end; for the record, a pass level at the top speed 30 m over
+  its end; for the record, a pass level at the ground's top speed 30 m over
   the Boreal Sea's floe band, which hits nothing and is never slowed; and a near miss slowed by
   the setting ("near miss 1000": `NearMissTests.NearMissPass`, flown with
   `FlightInput.NearMisses` on), held by the same rule. It prints each one's frames

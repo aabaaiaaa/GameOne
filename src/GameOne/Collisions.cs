@@ -84,7 +84,7 @@ internal readonly record struct NearMiss(Vessel Watched, Vessel Other, double Se
 /// alone (two that can't close fast enough can't collide fast), the rest by their straight-line
 /// miss less the most their pulls could bend it. Pairs are worked out
 /// among the stars, where each is bent only by gravity and the air (in the ground's frame the
-/// turn's sideways pull, 45 m/s² at the top speed, bends both), from their size-spheres' centres
+/// turn's sideways pull, 45 m/s² at 4,000 m/s, bends both), from their size-spheres' centres
 /// (<see cref="Size"/>): both paths flown ahead together in chords (<see cref="Closest"/>, from
 /// <see cref="LongestChordSeconds"/> down to <see cref="PathStepSeconds"/> as they near), as no
 /// one pull between them holds the horizon long on this small a planet.</para>
@@ -109,7 +109,7 @@ internal readonly record struct NearMiss(Vessel Watched, Vessel Other, double Se
 internal sealed class Collisions
 {
     /// <summary>
-    /// The chords the path to a tower or mast is flown in: at the top speed each is 1 km, and the
+    /// The chords the path to a tower or mast is flown in: at the ground's top speed (the most anything low enough to hit one goes, Scene.GroundTopSpeed) each is 1 km, and the
     /// turn's sideways pull bows it from its chord by a·dt²/8, a third of a metre: well inside a
     /// mast's and a vessel's sizes. Also <see cref="Closest"/>'s shortest chord (within it, one pull
     /// between the pair is solved for their closest), and its bound on the chords it flies (the
@@ -882,7 +882,10 @@ internal sealed class Collisions
         if (!watched.Body.HasSites)
             return; // the towers and masts are the planet's alone (in its frame)
         var h = (float)horizon;
-        var pull = (watched.Body.Gravity(middle) + watched.Body.OutwardPull(middle)).Length() + 2f * watched.Body.SpinRate * Scene.TopSpeed;
+        // The turn's sideways pull at the fastest it can be by the horizon: that pull does no work, so
+        // only the others can speed it up meanwhile.
+        var fall = (watched.Body.Gravity(middle) + watched.Body.OutwardPull(middle)).Length();
+        var pull = fall + 2f * watched.Body.SpinRate * (velocity.Length() + fall * h);
         var reach = velocity.Length() * h + pull * h * h / 2f + size + TowerRadius;
         var places = PadLights.All;
         var furthest = -1f;

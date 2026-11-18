@@ -11,8 +11,9 @@ namespace GameOne.Tests;
 /// planet across into the moon's sphere (<see cref="TransferPilot"/>); arriving, captured into an
 /// orbit round it (<see cref="CapturePilot"/>); from that orbit, down to a landing on its landing
 /// spot (<see cref="MoonLandingPilot"/>); a dive into it, warned of and judged a crash; and (long)
-/// the whole trip from the low orbit to the moon's ground. The speed over the ground stays under
-/// <see cref="Scene.TopSpeed"/>, checked after every frame of the way.
+/// the whole trip from the low orbit to the moon's ground. Low over the ground, the speed over it
+/// stays under <see cref="Scene.GroundTopSpeed"/>, so the game's hold never changes the way,
+/// checked after every frame of it.
 /// </summary>
 public sealed class MoonTripTests(ITestOutputHelper output)
 {
@@ -33,11 +34,26 @@ public sealed class MoonTripTests(ITestOutputHelper output)
     /// <summary>The fuel (kg) in <paramref name="vessel"/>'s stage now burning (its lowest).</summary>
     internal static float FuelKg(Vessel vessel) => vessel.Fuel * vessel.CurrentStage.FuelMass;
 
-    /// <summary>The fastest the flown vessel has gone over its body's ground, checked every frame.</summary>
+    /// <summary>
+    /// The fastest the flown vessel has gone over its body's ground, checked every frame; and the
+    /// fastest while low over it (<see cref="GroundBody.LowOverTheGround"/>), where the game holds it
+    /// to <see cref="Scene.GroundTopSpeed"/>.
+    /// </summary>
     internal sealed class Fastest
     {
         public float Speed { get; private set; }
-        public void Check(Flight flight) => Speed = MathF.Max(Speed, flight.Controlled.Velocity.Length());
+        public float Low { get; private set; }
+
+        public void Check(Flight flight)
+        {
+            var (v, speed) = (flight.Controlled, flight.Controlled.Velocity.Length());
+            Speed = MathF.Max(Speed, speed);
+            if (v.Body.LowOverTheGround(v.CentreOfMass))
+                Low = MathF.Max(Low, speed);
+        }
+
+        /// <summary>Fails if it was ever as fast as the ground's top speed low over the ground: the hold would have changed its way.</summary>
+        public void NeverHeld() => Assert.True(Low < Scene.GroundTopSpeed, $"{Low:0} m/s low over the ground");
     }
 
     /// <summary>
@@ -106,7 +122,8 @@ public sealed class MoonTripTests(ITestOutputHelper output)
         Assert.Same(Moon, flown.Body);
         Assert.True(sim.Time - start <= 1200);
         Assert.True(FuelKg(flown) > 0f, "no fuel left");
-        Assert.True(fastest.Speed < 1000f && fastest.Speed < Scene.TopSpeed, $"{fastest.Speed:0} m/s over the ground");
+        Assert.True(fastest.Speed < 1000f, $"{fastest.Speed:0} m/s over the ground");
+        fastest.NeverHeld();
     }
 
     /// <summary>The capture into an orbit round the moon, flown in <paramref name="sim"/> from in its sphere.</summary>
@@ -139,7 +156,7 @@ public sealed class MoonTripTests(ITestOutputHelper output)
         Assert.True(f.Periapsis > Moon.MaxHeight + 100f, $"periapsis {f.Periapsis:0} m");
         Assert.Equal(FrameChoice.Auto, f.FrameChoice);
         Assert.Equal(Frame.Orbital, f.Frame);
-        Assert.True(fastest.Speed < Scene.TopSpeed);
+        fastest.NeverHeld();
     }
 
     /// <summary>The landing from an orbit round the moon, flown in <paramref name="sim"/>.</summary>
@@ -180,7 +197,7 @@ public sealed class MoonTripTests(ITestOutputHelper output)
         Land(sim, fastest);
         output.WriteLine($"fuel: {fuel:0} kg in orbit, {FuelKg(flown):0} kg landed ({fuel - FuelKg(flown):0} kg to land)");
         Landed(sim, flown);
-        Assert.True(fastest.Speed < Scene.TopSpeed);
+        fastest.NeverHeld();
     }
 
     [Fact]
@@ -236,7 +253,7 @@ public sealed class MoonTripTests(ITestOutputHelper output)
         output.WriteLine("fuel: " + string.Join(", ", fuel.Select(x => $"{x.Stage} {x.Kg:0} kg")) + $"; the fastest over the ground {fastest.Speed:0} m/s; {sim.Time:0} s of game time");
         Assert.True(FuelKg(flown) > 0f, "ran out of fuel: " + string.Join(", ", fuel.Select(x => $"{x.Stage} {x.Kg:0} kg")));
         Landed(sim, flown);
-        Assert.True(fastest.Speed < Scene.TopSpeed, $"{fastest.Speed:0} m/s over the ground");
+        fastest.NeverHeld();
     }
 
     [PlaythroughFact(Long = true)]

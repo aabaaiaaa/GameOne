@@ -91,6 +91,8 @@ internal struct FormulaMotion
 /// <see cref="Vessel.Aim"/>, which its holds turn as they do in the physics (the fuel burns in
 /// <see cref="Vessel.Run"/>, as for every vessel). Its attitude follows its aim at once (no turning
 /// time: a simplification allowed under formula); one that can't be steered keeps turning as it was.
+/// Low over the ground its speed over it is held to <see cref="Scene.GroundTopSpeed"/> each step, as the
+/// physics holds it, and so it is stepped there while faster, never on its orbit.
 /// Landed or afloat it doesn't move: each body's physics is in its ground's frame.</para>
 /// <para>Each step is checked for its touch (<see cref="Touch"/>): the service towers and light
 /// masts (<see cref="TowersAndMasts"/>, the predictions' own check, so the two can't drift), and its
@@ -175,7 +177,7 @@ internal static class Formula
             if (!v.EngineLit)
             {
                 var (at, velocity) = Along(m.OnOrbit, worldTime);
-                if (OnItsOrbitAt(v, at.ToSingle()))
+                if (OnItsOrbitAt(v, at.ToSingle(), velocity.ToSingle()))
                 {
                     ShowOnOrbit(v, ref m, at, velocity, worldTime);
                     return;
@@ -194,7 +196,7 @@ internal static class Formula
                 return; // it touched: landed, afloat or wrecked, there
             stepped = true;
             // Above the air with its engine off (and not about to come down into it), it goes on its orbit from here.
-            if (!v.EngineLit && OnItsOrbitAt(v, m.At.ToSingle()) && OnItsOrbitAt(v, (m.At + m.Velocity * StepSeconds).ToSingle()))
+            if (!v.EngineLit && OnItsOrbitAt(v, m.At.ToSingle(), m.Velocity.ToSingle()) && OnItsOrbitAt(v, (m.At + m.Velocity * StepSeconds).ToSingle(), m.Velocity.ToSingle()))
             {
                 (m.Stepping, m.OnOrbit) = (false, Start(v.Body, m.At, m.Velocity, v.FormulaRotation, v.FormulaSpin, m.Time));
                 var (at, velocity) = Along(m.OnOrbit, worldTime);
@@ -245,8 +247,20 @@ internal static class Formula
     /// planet the air's top is far over its ground; at a body with no air (the moon) only height
     /// over its ground keeps it clear: lower, it is stepped, and its touch judged.
     /// </summary>
-    internal static bool OnItsOrbitAt(Vessel v, Vector3 at) =>
-        v.Body.AboveAir(at) && v.Body.Altitude(at) - v.Reach > v.Body.MaxHeight + Scene.FineDetailMargin;
+    /// <remarks>
+    /// Nor while moving at <paramref name="velocity"/> it is held to the ground's top speed there
+    /// (<see cref="Held"/>: low over a body with no air, the moon's), which its orbit knows nothing of.
+    /// </remarks>
+    internal static bool OnItsOrbitAt(Vessel v, Vector3 at, Vector3 velocity) =>
+        v.Body.AboveAir(at) && v.Body.Altitude(at) - v.Reach > v.Body.MaxHeight + Scene.FineDetailMargin && !Held(v.Body, at, velocity);
+
+    /// <summary>
+    /// Whether something at <paramref name="at"/> moving at <paramref name="velocity"/> (over the
+    /// ground) is faster than the ground's top speed low over the ground (<see cref="Scene.GroundTopSpeed"/>,
+    /// <see cref="GroundBody.LowOverTheGround"/>), so a step holds it to that, as the physics does.
+    /// </summary>
+    private static bool Held(GroundBody body, Vector3 at, Vector3Double velocity) =>
+        velocity.LengthSquared() > (double)Scene.GroundTopSpeed * Scene.GroundTopSpeed && body.LowOverTheGround(at);
 
     /// <summary>Where <paramref name="orbit"/> has its centre of mass and velocity at world time <paramref name="time"/>, in its body's ground's frame then.</summary>
     private static (Vector3Double At, Vector3Double Velocity) Along(in FormulaOrbit orbit, double time)
@@ -347,6 +361,8 @@ internal static class Formula
         var read = p + u * Lead;
         var drag = Scene.DragRate * v.Body.AirDensity(v.Body.Altitude(read.ToSingle()));
         next += v.Body.FallStep(next, v.Body.Pull(read), drag, StepSeconds);
+        if (Held(v.Body, p.ToSingle(), next))
+            next *= Scene.GroundTopSpeed / next.Length(); // low over the ground, as the physics holds it (see RocketPhysics' Fall)
         var change = next - u;
         var end = p + (u + next) * (StepSeconds / 2.0) + change * (RocketPhysics.StepSeconds / 2.0);
         if (Touch(v, ref m, p.ToSingle(), u.ToSingle(), end.ToSingle(), next.ToSingle()))

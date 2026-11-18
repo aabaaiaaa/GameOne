@@ -360,7 +360,22 @@ internal static class Scene
     // lowest and highest points in this band), which its own engine has to raise it to.
     public const float SatelliteOrbitLow = 9000f, SatelliteOrbitHigh = 11000f;
     public const float DragRate = 0.08f;              // per second, in surface air: a booster falling through it tops out ~120 m/s
-    public const float TopSpeed = 4000f; // m/s: a craft's top speed, and the game's speed range (two closing at up to twice it): every system is tested to it, none tuned far past it
+    // Low over the ground, a craft's speed over it is held to this (m/s), by the game, in the
+    // physics and under formula alike (GroundBody.LowOverTheGround): the ground's speed range (two
+    // closing at up to twice it). What the ground's systems reach ahead by is each a speed times a
+    // quarter second (the urgent tiles, the frozen crafts' wake, the floes taken up as bodies), and
+    // each is tested to it, none tuned far past it. In open space there is no cap: a vessel goes as
+    // fast as its engine and the pulls take it.
+    public const float GroundTopSpeed = 4000f;
+    // ... "low" being this far (metres) above a body's highest ground, its fine detail included:
+    // the furthest any of those reaches from a craft at GroundTopSpeed (the floes': FloeReach, the
+    // let-go and the widest floe, then GroundTopSpeed × FloeReachSeconds; 1,144 m, the tiles'
+    // 1,030 m and the wake's 1,005 m inside it). A faster craft above it is held as it comes in,
+    // and from there goes no further in those seconds than one at the cap, so nothing of the
+    // ground's is within their reach of it before it is held.
+    public static readonly float GroundTopSpeedHeight = MathF.Max(
+        TerrainTileUrgent + GroundTopSpeed * TerrainTileUrgentSeconds,
+        MathF.Max(WakeMargin + GroundTopSpeed * WakeSeconds, FloeReach + Physics.RocketPhysics.FloeLetGo + FloeMaxRadius + GroundTopSpeed * FloeReachSeconds));
 
     // Fast collisions, predicted ahead (see Collisions): one closing faster, as it hits, than a
     // satellite's width a physics step can pass between two steps unseen, so it is warned of and
@@ -632,7 +647,7 @@ internal static class Scene
     /// <summary>
     /// ... its body swept along the way it goes in this long (seconds), not only where it is, so a fast
     /// one wakes what it is coming at in time to hit it (as the tiles' urgency reaches ahead,
-    /// <see cref="TerrainTileUrgentSeconds"/>): at the top speed, a kilometre ahead; and nothing
+    /// <see cref="TerrainTileUrgentSeconds"/>): at the ground's top speed, a kilometre ahead; and nothing
     /// further beside or behind it.
     /// </summary>
     public const float WakeSeconds = 0.25f;
@@ -1155,6 +1170,11 @@ internal static class Scene
     public const float ZoomOutPitchDegrees = 62f;      // above the orbits' plane, to start with
     public const float ZoomOutMargin = 1.3f;           // the orbit fills the height of the screen less this
     public const float ZoomOutMinDistance = 16000f;    // from what it looks at (the vessel)
+    // The furthest above its body's sea the zoom-out key fits a path in (an escape's, or an orbit
+    // reaching that far), within the body's sphere of influence too: thirty of the planet's radii,
+    // the moon's way round it and well past, rather than the whole solar system, which the player
+    // zooms out to by hand.
+    public const float ZoomOutReach = 30f * PlanetRadius;
     public static readonly float ZoomOutMaxDistance =
         (2f * SunDistance + SunRadius) * ZoomOutMargin / MathF.Tan(float.DegreesToRadians(CameraVerticalFovDegrees) / 2);
     public const float ZoomOutSunClearance = 2f;

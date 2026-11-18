@@ -151,7 +151,8 @@ internal sealed class GameView : IDisposable
 
     /// <summary>
     /// Zooms the camera all the way out, far enough to see the whole of the flown vessel's orbit
-    /// (or as far as it goes, if it is escaping) round the body it is at, or back to the chase view,
+    /// round the body it is at (or, one reaching further, as far as <see cref="Scene.ZoomOutReach"/>
+    /// or the body's sphere of influence, whichever is nearer), or back to the chase view,
     /// of what the camera is on (<see cref="Toggled"/>).
     /// </summary>
     public void ToggleZoomOut(Flight flight)
@@ -160,7 +161,7 @@ internal sealed class GameView : IDisposable
         var body = vessel.Body;
         var reach = MathF.Max(1.5f * body.Radius, Vector3.Distance(vessel.Position, body.Centre));
         if (vessel.State == FlightState.Flying)
-            reach = MathF.Max(reach, body.SeaRadius + MathF.Min(vessel.Apoapsis, Orbit.MaxRange));
+            reach = MathF.Max(reach, MathF.Min(body.SeaRadius + MathF.Min(vessel.Apoapsis, Scene.ZoomOutReach), body.SphereRadius));
         var (centre, _) = Toggled(Camera.Centre, Camera.ZoomedOut);
         if (centre != Camera.Centre)
             Camera.CentreOn(centre); // from a body's map, to the flown vessel's chase view

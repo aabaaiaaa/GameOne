@@ -177,10 +177,18 @@ dotnet run --project src/GameOne
   sizes (so a fast one wakes what it is coming at in time, and nothing it only passes: not the rest
   of a field it dives into), or as another touches it. A raft's heave wakes nothing on it (what is
   frozen there is carried with it).
-- **Fast collisions:** one speed range for the whole game, `Scene.TopSpeed` (4,000 m/s, a craft's
-  cap, so two close at up to 8,000 m/s), written in that one place: every limit that follows from
-  it (the slow-down's least scale, the wake's and floes' reaches, the predictions' horizons) is
-  worked out from it or the speeds hit at, never tuned to it by hand. A fast collision is one closing
+- **Fast collisions:** open space has no speed cap (Jolt's own is set far past anything flown,
+  `RocketPhysics.JoltTopSpeed`, so it never takes hold: the ground's turning frame itself moves
+  faster than 4,000 m/s some 700 km from the planet's axis). Low over the ground
+  (`GroundBody.LowOverTheGround`: within `Scene.GroundTopSpeedHeight`, 1,144 m, of a body's
+  highest ground, the furthest the ground's systems reach ahead at the cap) the game holds a
+  craft's speed over the ground to `Scene.GroundTopSpeed` (4,000 m/s, so two close at up to
+  8,000 m/s there), in the physics (`Fall`, Jolt's velocity and its double copy together) and under
+  formula (its steps; never on its orbit while held) alike. That figure is written in that one
+  place: every limit that follows from it (the urgent tiles', the wake's and the floes' reaches, the
+  floes' room from a face's edge) is worked out from it, and every other bound (the slow-down's
+  least scale, the predictions' horizons, the reach to the towers) from the speeds hit at or the
+  vessel's own speed, never tuned to it by hand. A fast collision is one closing
   faster than `Scene.FastCollisionSpeed` (a satellite's width a Jolt step, 216 m/s) as it hits,
   predicted with the vessels' present thrust (so a landing burn is none). `Collisions` (one per
   `Flight`) predicts each witnessed vessel's collisions (the flown one's, each small view's, and

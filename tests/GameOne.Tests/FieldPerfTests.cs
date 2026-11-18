@@ -54,7 +54,7 @@ public sealed class FieldPerfTests(ITestOutputHelper output)
         var centre = field.MinBy(b => Vector3.Distance(b.Position.ToSingle(), zone))!;
         var middle = FastCollisionTests.Middle(centre.Position.ToSingle(), centre.Rotation);
         var dive = Vector3.Normalize(Planet.East(middle) - Planet.Up(middle));
-        var world = new WorldState { Vessels = [FastCollisionTests.Flying(middle, dive, Scene.TopSpeed, 3f, 0), .. field], NextVesselId = field.Count + 1 };
+        var world = new WorldState { Vessels = [FastCollisionTests.Flying(middle, dive, Scene.GroundTopSpeed, 3f, 0), .. field], NextVesselId = field.Count + 1 };
         var (sim, _, _) = FastCollisionTests.Fly(world);
         using var _ = sim;
         var frame = TimeSpan.FromSeconds(Simulation.FrameSeconds);

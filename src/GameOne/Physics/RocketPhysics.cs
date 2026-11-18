@@ -409,6 +409,13 @@ internal sealed class RocketPhysics : IDisposable
     internal const float StepSeconds = 1f / 120f;
 
     /// <summary>
+    /// Jolt's own cap on a body's speed (m/s), set far past anything flown so that it never takes
+    /// hold: the ground's frame itself moves at its turn times the distance, some 1e8 m/s at the
+    /// furthest a path reaches (<see cref="Orbit.MaxRange"/>); and its square still a float.
+    /// </summary>
+    private const float JoltTopSpeed = 1e12f;
+
+    /// <summary>
     /// How much shorter than <see cref="StepSeconds"/> each step is, in (0, 1]: 1 but in a
     /// slow-down, which shortens the step and slows the game's clock by the same factor, so the
     /// steps a real second stay the same and a fast collision is stepped finely enough to be seen.
@@ -869,7 +876,7 @@ internal sealed class RocketPhysics : IDisposable
     /// How much further than <see cref="Scene.FloeReach"/> an awake craft can be from a floe before
     /// its body goes, so one hovering at the edge of reach doesn't add and remove it over and over.
     /// </summary>
-    private const float FloeLetGo = 10f;
+    internal const float FloeLetGo = 10f;
 
     /// <summary>
     /// The square of how far <paramref name="q"/> is from the way from <paramref name="p"/> to
@@ -918,8 +925,14 @@ internal sealed class RocketPhysics : IDisposable
             // Its reach: FloeReach round the way it goes in FloeReachSeconds (as the tiles' urgency
             // reaches along its way), so a fast one has the floes ahead as bodies before it gets
             // there, but not those beside and behind it a circle that far round would take up (at
-            // the top speed, the cap's 256 floe bodies at once, where the way ahead holds a few dozen).
-            var ahead = Velocity(craft) * Scene.FloeReachSeconds;
+            // the ground's top speed, the cap's 256 floe bodies at once, where the way ahead holds a
+            // few dozen). Its speed is taken as no more than the ground's top speed: one faster is
+            // above Scene.GroundTopSpeedHeight, where that reach finds no floe, and is held to it
+            // as it comes lower (see Fall), so no reach is ever further than Floes made room for.
+            var moving = Velocity(craft);
+            if (moving.LengthSquared() > Scene.GroundTopSpeed * Scene.GroundTopSpeed)
+                moving *= Scene.GroundTopSpeed / moving.Length();
+            var ahead = moving * Scene.FloeReachSeconds;
             var reach = Scene.FloeReach + ahead.Length(); // the furthest from it that is within reach of its way
             if (_body.Altitude(p) > reach + FloeLetGo + Scene.FloeMaxRadius)
                 continue; // far above the sea, and so far above every floe
@@ -1373,10 +1386,11 @@ internal sealed class RocketPhysics : IDisposable
         settings.SetRestitution(0.05f);
         settings.SetLinearDamping(0f);  // drag is applied per step, by how thick the air is
         settings.SetAngularDamping(AngularDamping);
-        // The game's speed range, written in one place: the crash, speed and fast collision tests
-        // fly up to it (Jolt clamping a faster body would change the speed it touches things at),
-        // while a runaway body's speed is still bounded.
-        settings.SetMaxLinearVelocity(Scene.TopSpeed);
+        // Never reached, so Jolt never clamps: the world is its ground's turning frame, which itself
+        // moves at the turn times the distance from the axis (past Scene.GroundTopSpeed some 700 km
+        // out from the planet's), so a cap of Jolt's would take hold of anything far out among the
+        // stars and pull it off its path. The game holds the speed low over the ground itself (see Fall).
+        settings.SetMaxLinearVelocity(JoltTopSpeed);
         settings.SetAllowSleeping(false); // gravity, the engine and steering act on it every step
         settings.SetMotionQuality(MotionQuality.LinearCast); // a fast fall mustn't pass through the pad
         settings.SetLinearVelocity(ToFloat3(velocity));
@@ -2154,12 +2168,7 @@ internal sealed class RocketPhysics : IDisposable
                     var push = up * (control.ThrustAcceleration * StepLength);
                     _bodies.AddLinearVelocity(control.Craft.Id, ToFloat3(push));
                     if (control.Craft.StepRead)
-                    {
-                        // As Jolt adds it (in floats), so the fall's read is Jolt's; past the top
-                        // speed Jolt clamps it, so the fall reads it again.
-                        control.Craft.ReadVelocity += push;
-                        control.Craft.StepRead = control.Craft.ReadVelocity.LengthSquared() <= Scene.TopSpeed * Scene.TopSpeed;
-                    }
+                        control.Craft.ReadVelocity += push; // as Jolt adds it (in floats), so the fall's read is Jolt's (Jolt never clamps it: see JoltTopSpeed)
                     if (control.Craft.Kept)
                         control.Craft.KeptVelocity += (Vector3Double)up * (control.ThrustAcceleration * (double)StepLength);
                 }
@@ -2541,7 +2550,7 @@ internal sealed class RocketPhysics : IDisposable
                 // Within twice the reach (the way ahead twice as long, and twice as wide), it will
                 // wake soon: its ground is made ahead of need, so a field of them woken together
                 // lays shapes made already rather than making them all in that step (a dive at
-                // the top speed into 49 boosters frozen on the zone made 8 to 11 a step, 10 ms).
+                // the ground's top speed into 49 boosters frozen on the zone made 8 to 11 a step, 10 ms).
                 craft.WakingSoon = NearAMover(craft, craft.FrozenAt, reach: 2f);
         }
     }
@@ -2929,7 +2938,14 @@ internal sealed class RocketPhysics : IDisposable
         var altitude = _body.Altitude(position);
         var drag = Scene.DragRate * _body.AirDensity(altitude);
         var change = _body.FallStep(velocity, Weight(craft, position), drag, StepLength, noHalfKick: craft.Grounded); // see the remarks for why not on the ground
-        _bodies.AddLinearVelocity(craft.Id, ToFloat3(change));
+        // Low over the ground, its speed over it is held to the ground's top speed (Scene.GroundTopSpeed):
+        // set here, after the thrust and the fall, so Jolt steps it at no more than that.
+        var after = velocity + change;
+        var held = after.LengthSquared() > Scene.GroundTopSpeed * Scene.GroundTopSpeed && _body.LowOverTheGround(position);
+        if (held)
+            _bodies.SetLinearVelocity(craft.Id, ToFloat3(after * (Scene.GroundTopSpeed / after.Length())));
+        else
+            _bodies.AddLinearVelocity(craft.Id, ToFloat3(change));
         if (craft.Kept)
         {
             // The same kick, of its double copy, while it may be flying free (see HandOver);
@@ -2941,6 +2957,8 @@ internal sealed class RocketPhysics : IDisposable
                 var at = craft.KeptCentre;
                 var thick = Scene.DragRate * _body.AirDensity(_body.Altitude(at.ToSingle()));
                 craft.KeptVelocity += _body.FallStep(craft.KeptVelocity, _body.Pull(at), thick, StepLength);
+                if (held)
+                    craft.KeptVelocity *= Scene.GroundTopSpeed / craft.KeptVelocity.Length(); // as Jolt's, so the two go on together
             }
         }
         if (_body.AboveAir(position))
@@ -3030,7 +3048,10 @@ internal sealed class RocketPhysics : IDisposable
     /// steps of <paramref name="kept"/>, at the size of <paramref name="kept"/>. A set that moves it
     /// by less than that is taken into the copy, deliberately: it can't be told from rounding, and
     /// does nothing a float could show. A touch never relies on this: touching anything lets the
-    /// copy go by itself (see Fall and HandOver).
+    /// copy go by itself (see Fall and HandOver). The steps are at the copy's own size, so a slow
+    /// craft flying free keeps its copy step after step as a fast one does (a booster falling from
+    /// rest, or drifting at 5 m/s, is never taken from Jolt again), though only at speed, or far
+    /// out, is there rounding for it to keep out.
     /// </summary>
     private static bool Within(Vector3 jolt, Vector3Double kept, double steps)
     {

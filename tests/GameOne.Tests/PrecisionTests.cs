@@ -318,8 +318,10 @@ public sealed class PrecisionTests(ITestOutputHelper output)
     [Fact]
     public void A_landing_is_unchanged()
     {
-        // The autopilot's whole mission onto the landing zone: once it touches, the copy is Jolt's,
-        // so its touchdown is the one Jolt's floats alone give (2.444340 m/s; with the copy, 2.446265).
+        // The autopilot's whole mission onto the landing zone: once it touches, the copy plays no
+        // part (it is let go, and Jolt's floats are its motion), so its touchdown is held within
+        // 0.01 m/s of the one Jolt's floats alone gave (2.444340 m/s); the copy's flight down to it
+        // moves it by a few mm/s.
         using var sim = new Simulation();
         Assert.True(sim.RunToEnd(new Autopilot().Fly), "the flight never ended");
         output.WriteLine($"{sim.Flight.State}, touchdown {sim.Flight.TouchdownSpeed:0.000000} m/s");

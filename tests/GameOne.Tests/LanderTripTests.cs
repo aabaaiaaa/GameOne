@@ -327,7 +327,7 @@ public sealed class LanderTripTests(ITestOutputHelper output)
         // This start has the fuel the ascent leaves (the transfer's not yet spent), so the margin is
         // only touched on here: the long trip and the playthrough hold it as flown.
         Assert.True(stack.Fuel >= UpperStageMargin, $"the upper stage has {stack.Fuel:P1} of its tank");
-        Assert.True(fastest.Speed < Scene.TopSpeed);
+        fastest.NeverHeld();
     }
 
     [Fact]
@@ -400,7 +400,7 @@ public sealed class LanderTripTests(ITestOutputHelper output)
         Assert.NotNull(pilot.UpperStage);
         Assert.Equal(FlightState.Flying, pilot.UpperStage!.State); // left on its orbit above
         LandedNearTheSpot(sim, lander);
-        Assert.True(fastest.Speed < Scene.TopSpeed);
+        fastest.NeverHeld();
     }
 
     /// <summary>The lander flown down by <paramref name="pilot"/> in <paramref name="sim"/>, reported: whether it came down.</summary>
@@ -440,7 +440,7 @@ public sealed class LanderTripTests(ITestOutputHelper output)
         Assert.True(Land(sim, pilot, fastest), $"never came down ({pilot.Now}, {pilot.Landing.Now})");
         output.WriteLine($"fuel: {MoonTrip.LanderFuel:0} kg in orbit, {Kg(lander):0} kg landed ({MoonTrip.LanderFuel - Kg(lander):0} kg to land)");
         LandedNearTheSpot(sim, lander);
-        Assert.True(fastest.Speed < Scene.TopSpeed);
+        fastest.NeverHeld();
     }
 
     [Fact]
@@ -486,7 +486,8 @@ public sealed class LanderTripTests(ITestOutputHelper output)
         Assert.Same(Moon, stack.Body);
         Assert.Equal(2, stack.TopStage);
         Assert.True(Kg(stack) > 0f, "no fuel left");
-        Assert.True(fastest.Speed < 1000f && fastest.Speed < Scene.TopSpeed, $"{fastest.Speed:0} m/s over the ground");
+        Assert.True(fastest.Speed < 1000f, $"{fastest.Speed:0} m/s over the ground");
+        fastest.NeverHeld();
     }
 
     /// <summary>Prints <paramref name="pilot"/>'s legs' ends, with the fuel then.</summary>
@@ -524,7 +525,7 @@ public sealed class LanderTripTests(ITestOutputHelper output)
         Assert.True(sim.Flight.Controlled.BayDoors >= 1f);
         LandedNearTheSpot(sim, sim.Flight.Controlled);
         Margins(pilot);
-        Assert.True(fastest.Speed < Scene.TopSpeed, $"{fastest.Speed:0} m/s over the ground");
+        fastest.NeverHeld();
     }
 
     [PlaythroughFact(Long = true)]
@@ -574,7 +575,7 @@ public sealed class LanderTripTests(ITestOutputHelper output)
         Assert.Equal(flight.Run!.Progress.Points, flight.Run!.Score);
         LandedNearTheSpot(sim, pilot.Lander!);
         Margins(pilot);
-        Assert.True(fastest.Speed < Scene.TopSpeed, $"{fastest.Speed:0} m/s over the ground");
+        fastest.NeverHeld();
     }
 
     /// <summary>The bearing of <paramref name="p"/> from <paramref name="pad"/>, degrees off due east, north positive.</summary>

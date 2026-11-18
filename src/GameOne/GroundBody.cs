@@ -126,6 +126,11 @@ internal sealed class GroundBody
         // The sea, or the lowest ground less the fine detail; with no map (a body made up by Circling
         // with none), its ground is level at its heights' zero.
         _lowestHeight = new(() => hasSea || map is null ? 0f : Map.MinHeight - Scene.FineDetailMargin);
+        _lowOverTheGround = new(() =>
+        {
+            var top = SeaRadius + (map is null ? 0f : MaxHeight + Scene.FineDetailMargin) + Scene.GroundTopSpeedHeight;
+            return top * top;
+        });
         _highestWave = new(() => Map.Seas.Select(s => s.Waves / 2f).DefaultIfEmpty(0f).Max());
         _tileCellsPerFace = new(() => Physics.TerrainTiles.CellsFor(this));
     }
@@ -222,6 +227,15 @@ internal sealed class GroundBody
     /// map's ground gets (<see cref="MaxHeight"/>).
     /// </summary>
     public float OrbitFloor => HasAir ? Scene.AtmosphereHeight : MaxHeight;
+
+    /// <summary>
+    /// Whether <paramref name="p"/> is low over its ground: within <see cref="Scene.GroundTopSpeedHeight"/>
+    /// of its highest ground, its fine detail included, where a craft's speed over the ground is
+    /// held to <see cref="Scene.GroundTopSpeed"/> (in the physics and under formula alike); one
+    /// made up with no map, of its level ground.
+    /// </summary>
+    public bool LowOverTheGround(Vector3 p) => (p - Centre).LengthSquared() < _lowOverTheGround.Value;
+    private readonly Lazy<float> _lowOverTheGround;
 
     /// <summary>Its baked map.</summary>
     public TerrainMap Map => _map.Value;

@@ -1039,14 +1039,14 @@ public sealed class TerrainTileTests(ITestOutputHelper output)
             using var physics = new RocketPhysics(GroundBody.Planet);
             using var settings = SphereShapeSettings.Create(1f);
             using var craft = new Craft(Booster, 0, 0, uint.MaxValue, ((ShapeSettings)settings).CreateShape(), null);
-            var hits = Scene.TopSpeed * Scene.TerrainTileUrgentSeconds; // a quarter second on
-            (Vector3, Vector3, Vector3) Motion(Craft _) => (ground + d * 5f, level * Scene.TopSpeed, d);
-            craft.GroundAhead = (ground + level * hits, level, Scene.TopSpeed, Scene.TerrainTileUrgentSeconds);
+            var hits = Scene.GroundTopSpeed * Scene.TerrainTileUrgentSeconds; // a quarter second on
+            (Vector3, Vector3, Vector3) Motion(Craft _) => (ground + d * 5f, level * Scene.GroundTopSpeed, d);
+            craft.GroundAhead = (ground + level * hits, level, Scene.GroundTopSpeed, Scene.TerrainTileUrgentSeconds);
             physics.Tiles.Update([craft], Motion, stepScale);
             return physics.Tiles.MadeInStep;
         }
         var (full, slowed) = (Urgent(1f), Urgent(0.05f));
-        output.WriteLine($"at {Scene.TopSpeed:0} m/s, 5 m up: {full} cells made in the step at full steps, {slowed} with them at a twentieth");
+        output.WriteLine($"at {Scene.GroundTopSpeed:0} m/s, 5 m up: {full} cells made in the step at full steps, {slowed} with them at a twentieth");
         Assert.True(full >= 20, $"only {full} urgent cells at full steps: this shows little");
         Assert.True(slowed * 5 <= full, $"{slowed} urgent cells slowed, {full} at full steps");
     }

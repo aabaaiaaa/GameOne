@@ -634,13 +634,16 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
 - **Near misses at orbital speed over an airless body** (the user, 2026-11-03): 6,000 m/s close
   passes and crashes over a body without air; the speed sweep (to the top speed, 4,000 m/s, now) extended to them
   now there is one: the moon (40 km out, 2.5 km round, airless) is the first.
-- **Raising the top speed** (to discuss before raising it). `Scene.TopSpeed` (4,000 m/s, a
-  craft's cap, so two close at up to 8,000 m/s) is the one place the game's speed range is
-  written: every limit follows from it or the speeds hit at, and the speed sweep and the paced fast
-  collisions (`ShortPerfTests`) measure it. The world is the ground's frame, so something still
-  among the stars moves over the ground at the planet's turn times its distance, 4,000 m/s about
-  700 km from the centre: the moon, 40 km out, is far inside that, but a body further out, or
-  anything sent past 700 km, would need the cap raised, or far things flown in another frame.
+- **Raising the ground's top speed** (to discuss before raising it). Open space has no cap:
+  Jolt's own is set far past anything flown, so an escape far from the axis (where the ground's
+  frame itself moves faster than 4,000 m/s, past about 700 km) follows its path. What is left is
+  the cap low over the ground: `Scene.GroundTopSpeed` (4,000 m/s, so two close at up to 8,000 m/s
+  there), held by the game within `Scene.GroundTopSpeedHeight` (1,144 m, worked out from it) of a
+  body's highest ground, in the physics and under formula, is the one place it is written: every
+  limit follows from it or the speeds hit at, and the speed sweep and the paced fast collisions
+  (`ShortPerfTests`) measure it. Raising it raises the band with it (the reaches are each that
+  speed times a quarter second), and costs what the table below found, all of it the ground's:
+  the tiles laid at full speed low over the ground, and the floes' room from a face's edge.
   Higher top speeds were tried (scratch runs, Release,
   not kept: the fast collision tests' collisions scaled up to twice the top speed closing, and the
   two paced checks; frames are a frame's physics, 95th percentile, 10 ms the budget; taken with
@@ -650,9 +653,9 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   |---|---|---|---|---|---|
   | 4,000 (as built) | all 22 probe cases | 0.027 at 8,000 closing; 4.4 to 5.6 s | 0.55 ms in the vacuum; 2.1 ms (worst 8.7) diving at the slope at 10°, 1.9 at 45° | 2.1 ms coasting low; 1.8 ms (worst 8.1) level over the floe band | nothing |
   | 8,000 | all, to 16,000 closing (crossing 11,314) | 0.0137 at 16,000; 4.4 to 5.6 s | 3.2 to 3.5 ms in the vacuum at 5 km (the tiles laid under a second's 8 km stretch); 3.5 ms (worst 109) at the slope at 10°, 2.8 at 45° | 3.5 ms coasting low, 3.0 diving at 10° and 45°; 12.6 ms (worst 15) level over the floe band (the seabed's tiles made in the step, the worker outrun) | the ground's tiles: at full speed low over the floe band, and the urgent tiles made all at once as a slowed dive turns urgent (its worst frame) |
-  | 16,000 | all, to 32,000 closing, once the floes fit (below) | 0.0068 at 32,000; 4.4 to 5.5 s | 4.3 ms in the vacuum; 14.5 ms (worst 186) at the slope at 10° (which, started 24 km out on a planet 31 km round, came down in the sea), 3.9 at 45° | 5.3 ms coasting low (it leaves the ground sooner); 24 ms over the floe band | the floes, at load: `Floes` throws "a floe band is 179 cells (about 4654 m) from cube face 4's edge, but a craft at the top speed (Scene.TopSpeed, 16000 m/s) takes up floes 4120 m round it (Scene.FloeReach + the top speed × Scene.FloeReachSeconds), which needs 230 cells (about 5980 m): lower the top speed or FloeReachSeconds, or lay the bands further from the edge"; with `FloeReachSeconds` halved (0.125 s) everything else ran, and then the tiles, as at 8,000 |
+  | 16,000 | all, to 32,000 closing, once the floes fit (below) | 0.0068 at 32,000; 4.4 to 5.5 s | 4.3 ms in the vacuum; 14.5 ms (worst 186) at the slope at 10° (which, started 24 km out on a planet 31 km round, came down in the sea), 3.9 at 45° | 5.3 ms coasting low (it leaves the ground sooner); 24 ms over the floe band | the floes, at load: `Floes` throws "a floe band is 179 cells (about 4654 m) from cube face 4's edge, but a craft at the ground's top speed (Scene.GroundTopSpeed, 16000 m/s) takes up floes 4120 m round it (Scene.FloeReach + the top speed × Scene.FloeReachSeconds), which needs 230 cells (about 5980 m): lower the top speed or FloeReachSeconds, or lay the bands further from the edge"; with `FloeReachSeconds` halved (0.125 s) everything else ran, and then the tiles, as at 8,000 |
 
-  Jolt held at every speed (its cap follows `Scene.TopSpeed`, and no collision passed through),
+  Jolt held at every speed (its cap then followed the top speed, and no collision passed through),
   and so did the wake (woken 2,171 m off at 8,000 m/s against its 2,200 m reach, 4,076 m at
   16,000 against 4,200) and the float precision (nothing within 10 km of the origin went
   wrong; a moon 40 km out would be the test of it). Two things found were fixed for every
@@ -755,3 +758,8 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
     the ground's tiles per world, and the turning frame's pulls about a moved origin.
   - **Which case it would help:** vessels far from their body's origin, and many vessels spread
     over a body.
+  - **Bubbles that travel** (the user's idea, 2026-11-18, to discuss before building): physics
+    bubbles in open space that travel with their vessels, merged by closing speed as vessels near
+    each other (and split again as they part), and even the flown vessel on formula when nothing
+    is near it, which needs the formula to steer and burn as the physics does (today it turns its
+    attitude to its aim at once and flies no nodes).

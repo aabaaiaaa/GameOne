@@ -21,7 +21,7 @@ public sealed class SolarEdgeTests(ITestOutputHelper output)
     private static Vector3 Above(float height) => Planet.Centre + Up * (Planet.SeaRadius + height);
 
     /// <summary>Where <paramref name="leg"/> is at world time <paramref name="t"/>, in its body's ground frame then.</summary>
-    private static Vector3Double GroundAt(in PathLeg leg, double t)
+    internal static Vector3Double GroundAt(in PathLeg leg, double t)
     {
         var reference = leg.Start - leg.Orbit.From;
         var p = leg.Orbit.PlaceAfter(t - leg.Start);

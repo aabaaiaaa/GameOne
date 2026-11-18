@@ -198,7 +198,7 @@ internal sealed class Vessel
         (_lastVelocity, _lastSpin) = (Velocity, _angularVelocity);
         _formulaLegs = still && _craft.LegsDeployed ? RocketPhysics.RestingLegs(Body, Legs, _model).Extension : Vector4.One;
         OnFormula = true;
-        var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, _centreOfMass) && !EngineLit;
+        var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, _centreOfMass, Velocity) && !EngineLit;
         _motion = Formula.Begin(Body, _trueCentre, _trueVelocity, _rotation, _angularVelocity, now, onItsOrbit);
         (Apoapsis, Periapsis) = Body.Orbit(_centreOfMass, Body.AmongStars(_centreOfMass, Velocity));
         _autoFrame = Frames.Auto(Body, _autoFrame, Periapsis, still);
@@ -372,7 +372,7 @@ internal sealed class Vessel
         OnFormula = true;
         (AboardByFormula, _handedBack, _playingOut) = (false, false, false);
         // On its orbit above the air and clear of the ground, its engine off; stepped otherwise (see Formula).
-        var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, _centreOfMass) && !EngineLit;
+        var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, _centreOfMass, Velocity) && !EngineLit;
         _motion = Formula.Begin(Body, _trueCentre, _trueVelocity, _rotation, _angularVelocity, now, onItsOrbit);
         // The same all along its orbit, so worked out once here, not each step (see AfterPhysics).
         (Apoapsis, Periapsis) = Body.Orbit(_centreOfMass, Body.AmongStars(_centreOfMass, Velocity));
@@ -432,7 +432,7 @@ internal sealed class Vessel
             MoveByFormula(at, velocity, rotation, spin, orbitChanged: true);
             // Begun again from here, at the new body: on its orbit there if it can be, else stepped.
             var held = _motion.Held;
-            var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, _centreOfMass) && !EngineLit;
+            var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, _centreOfMass, Velocity) && !EngineLit;
             _motion = Formula.Begin(body, at, velocity, rotation, spin, now, onItsOrbit);
             _motion.Held = held;
         }
