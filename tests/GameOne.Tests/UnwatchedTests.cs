@@ -540,7 +540,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
     /// Two satellites on one circle 9 km up, their middles 15 m further apart than their sizes
     /// reach, the one behind <paramref name="faster"/> m/s faster along its way.
     /// </summary>
-    private static (VesselState Behind, VesselState Ahead) Closing(float faster)
+    internal static (VesselState Behind, VesselState Ahead) Closing(float faster)
     {
         const float Altitude = 9000f;
         var s = Satellite(0, Altitude, 0f, 60f);

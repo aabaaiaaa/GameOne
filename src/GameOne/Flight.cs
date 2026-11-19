@@ -716,6 +716,7 @@ internal sealed partial class Flight : IDisposable
         _worlds = worlds;
         _collisions = new Collisions(this);
         Unwatched = new Unwatched(this);
+        FormulaCollisions = new FormulaCollisions(this);
         Site = site ?? LaunchSites.Home;
         Load(world ?? new WorldState(), mission);
     }
@@ -2235,6 +2236,9 @@ internal sealed partial class Flight : IDisposable
 
     /// <summary>Who is in the physics, and who is moved by formula (see <see cref="GameOne.Unwatched"/>).</summary>
     internal Unwatched Unwatched { get; }
+
+    /// <summary>The collisions between vessels under formula over each window at a formula's rate (see <see cref="GameOne.FormulaCollisions"/>).</summary>
+    internal FormulaCollisions FormulaCollisions { get; }
 
     /// <summary>Each lit place's lights, on from its own dusk to its own dawn, faded by real time (see <see cref="PlaceLights"/>): reset by a load, stepped by every frame.</summary>
     public PlaceLights Lights { get; } = new();

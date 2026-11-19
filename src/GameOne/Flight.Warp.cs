@@ -248,21 +248,26 @@ internal sealed partial class Flight
     /// <summary>
     /// One window of a frame at a formula's rate (<see cref="AdvanceByFormula"/>): what a step does
     /// after the input (<see cref="Step"/>), but that every vessel is moved by formula and nothing of
-    /// Jolt's is stepped: the vessels' rules once, their legs and doors, their moves, then their
-    /// crossings, the edge, the bodies asked ahead, the target, the losses and the runs. Not the look
-    /// ahead nor the handover (nothing is in the physics to hand over), nor the collisions under
-    /// formula (the look over a window is their own).
+    /// Jolt's is stepped: the vessels' rules once, their moves and the collisions between them along
+    /// their ways across the window (<see cref="FormulaCollisions"/>: each one's start kept, then
+    /// the window judged once all are at its end), their legs and doors, then their crossings, the
+    /// edge, the bodies asked ahead, the target, the losses and the runs. Not the look ahead nor the
+    /// handover (nothing is in the physics to hand over), nor <see cref="Unwatched.FindCollisions"/>
+    /// (its quarter-second looks ahead are the physics' rates').
     /// </summary>
     private void FormulaStep(float dt, in FlightInput input)
     {
         Timings.BeginStep();
+        var from = WorldTime;
         WorldTime += dt;
         _bodiesAt = WorldTime; // nothing in the physics is behind: it isn't stepped
         TakeChoices(input);
         RunVessels(dt, input);
-        Timings.Lap(StepPart.Rules);
         Rafts.Time = WorldTime; // the rafts' poses, which the physics sets as it steps, at the window's end
+        FormulaCollisions.Begin(from);
         Unwatched.Move();
+        FormulaCollisions.Judge(from, WorldTime);
+        Timings.Lap(StepPart.Rules);
         foreach (var vessel in _world)
             vessel.AfterPhysics(dt, WorldTime);
         Cross(WorldTime);

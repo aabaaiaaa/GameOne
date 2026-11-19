@@ -416,6 +416,15 @@ say) stalls frames and spoils the timing.
   frozen ones waking them by its touch alone and freezing on them; a chain of them
   freezing together; stages and fairing halves parting without a hit; a wreck left in the world, undrawn,
   while its hit plays out; and touching another's foot touching it (Jolt's live contacts).
+- **`FormulaCollisionTests`:** collisions between vessels under formula inside one top-rate
+  frame (`FormulaCollisions`): two boosters meeting head on 150 s in (at 500, 2,000 and
+  8,000 m/s, put on their Kepler ways back from the meeting) both wrecked "Hit another vessel"
+  where they met, the warp going on; a pass just outside their reach, and one within their sizes
+  but clear of their bodies, leaving both flying; a slow bump (3 m/s) wrecking neither and one at
+  10 m/s wrecking both, judged as their touch begins; five pairs among the hundred satellites
+  (their polar copies raised apart, so as not to meet over the pole) set to cross at random
+  moments in the frame, exactly those wrecked and as many judged as a brute-force check of every
+  pair's Kepler ways finds; and a top-rate frame among the hundred allocating nothing.
 - **`FormulaRateTests`:** a frame at a formula's rate as one advance by formula, in windows
   (`Scene.FormulaWindowSeconds`): a low orbit coasted 60 frames at the top rate ending within a
   metre of where Kepler puts it, the clock 60 frames' worth on; nothing in the physics then (its

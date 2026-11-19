@@ -408,18 +408,6 @@ internal sealed class Unwatched(Flight flight)
     /// <summary>The longest a check looks back (game seconds): a jump in the world's time past this (a world loaded) starts afresh from now, not from far back.</summary>
     private const double MostBehind = 1.0;
 
-    /// <summary>
-    /// How much further apart than touching two bodies may be, moved back to their collision's time
-    /// from where they are as it comes, and still be hit as found: what a formula step's own
-    /// bending (its pull's change over the interval, under a centimetre) and the halving leave,
-    /// with room to spare. Further, the motion of one has been remade since (a burn lit, a
-    /// landing), and the collision found from it is no longer theirs.
-    /// </summary>
-    private const float CollisionSlack = 1f;
-
-    /// <summary>The most times a pair's bodies are sampled across the stretch their sizes overlap: some 60 at most for the vessels there are (two sizes over half their widths).</summary>
-    private const int MostSamples = 256;
-
     // Each vessel under formula as a check reads it, by its slot in this check: its place in the
     // world's list, its middle (over the ground), its velocity among the stars and its pull (both
     // in the stars' frame matching the ground at the check), its reach (its size-sphere, or its
@@ -601,147 +589,20 @@ internal sealed class Unwatched(Flight flight)
     }
 
     /// <summary>
-    /// How far apart two bodies' axes are (see <see cref="Body"/>), the second's middle
-    /// <paramref name="gap"/> from the first's; and how fast they close, moving
-    /// <paramref name="relative"/> (the second's less the first's), along the way the two collide
-    /// there, their widths <paramref name="widthA"/> and <paramref name="widthB"/>: one's end
-    /// hitting the other (a nose into a side, two noses together) face on, along that one's axis,
-    /// as the physics' flat ends touch; else side to side, along the line between the axes'
-    /// nearest points.
-    /// </summary>
-    private static (float Apart, float Closing) Bodies(Vector3 bottomA, Vector3 topA, Vector3 gap, Vector3 bottomB, Vector3 topB, Vector3 relative,
-        float widthA, float widthB)
-    {
-        var within = widthA + widthB;
-        var (b0, b1) = (gap + bottomB, gap + topB);
-        var (along, apart) = TowersAndMasts.Closest(bottomA, topA, b0, b1);
-        var nearA = Vector3.Lerp(bottomA, topA, along);
-        var d = b1 - b0;
-        var acrossB = Math.Clamp(Vector3.Dot(nearA - b0, d) / MathF.Max(d.LengthSquared(), 1e-9f), 0f, 1f);
-        var nearB = b0 + d * acrossB;
-        var line = nearB - nearA;
-        if (Face(bottomA, topA, along, nearB, b0, b1, widthB, within) is { } outA)
-            line = outA; // the first's end into the second: from the first, out of its end
-        else if (Face(b0, b1, acrossB, nearA, bottomA, topA, widthA, within) is { } outB)
-            line = -outB; // the second's end into the first: towards the second, into its end
-        else if (line.LengthSquared() < 1e-6f)
-            line = gap; // their axes crossing: the line between their middles stands in for it
-        var length = line.Length();
-        return (apart, length > 1e-6f ? -Vector3.Dot(line, relative) / length : relative.Length());
-
-        // Whether the end of the axis p0 to p1 nearest the other (at along) hits it face on: the
-        // other's nearest point within their widths of the axis's line, and the other's body (its
-        // axis q0 to q1 and as far out from it as `width`, which reaches along the end's way out
-        // by width times the sine of the angle between them) wholly beyond the end's face. So two
-        // side by side, along each other, hit side to side whichever end the nearest points fall
-        // at, and so does one swept sideways across the other's end: its side is what strikes.
-        // If so, the way out of that end.
-        static Vector3? Face(Vector3 p0, Vector3 p1, float along, Vector3 near, Vector3 q0, Vector3 q1, float width, float within)
-        {
-            if (along > 1e-4f && along < 1f - 1e-4f)
-                return null;
-            var axis = p1 - p0;
-            var length = axis.Length();
-            if (length < 1e-6f)
-                return null;
-            var (end, outward) = along >= 0.5f ? (p1, axis / length) : (p0, -axis / length);
-            var other = q1 - q0;
-            var lengthOther = other.Length();
-            var cos = lengthOther > 1e-6f ? Vector3.Dot(other / lengthOther, outward) : 0f;
-            var reach = width * MathF.Sqrt(MathF.Max(0f, 1f - cos * cos));
-            if (MathF.Min(Vector3.Dot(q0 - end, outward), Vector3.Dot(q1 - end, outward)) < reach)
-                return null;
-            var between = near - end;
-            return (between - outward * Vector3.Dot(between, outward)).Length() <= within ? outward : null;
-        }
-    }
-
-    /// <summary>
     /// Whether slots <paramref name="i"/> and <paramref name="j"/>'s bodies begin to touch between
-    /// <paramref name="low"/> and <paramref name="high"/> seconds from <paramref name="now"/>,
-    /// closing faster than either can take; if so, found (<see cref="_found"/>).
+    /// <paramref name="low"/> and <paramref name="high"/> seconds from <paramref name="now"/>
+    /// (<see cref="FormulaContact.Touch"/>), closing faster than either can take; if so, found (<see cref="_found"/>).
     /// </summary>
     private void Solve(IReadOnlyList<Vessel> world, int i, int j, double now, float low, float high)
     {
-        var r = _middle[j] - _middle[i];
-        var u = _moving[j] - _moving[i];
-        var a = _pull[j] - _pull[i];
-        var reach = _size[i] + _size[j];
-        var reach2 = reach * reach;
-        Vector3 Gap(float t) => r + u * t + a * (t * t / 2f);
-
-        // Their closest within the interval, from their lines' closest (Collisions' solve): their
-        // reaches overlapping nowhere in it, their bodies can't touch.
-        var uu = u.LengthSquared();
-        var line = uu > 1e-6f ? -Vector3.Dot(r, u) / uu : low;
-        var closest = Math.Clamp(Collisions.Approach(r, u, a, Math.Clamp(line, low, high)), low, high);
-        if (Gap(closest).LengthSquared() > reach2)
-            return;
-        // The stretch within reach: from the first moment they are (at the start, already, or
-        // halved for on the way in: the gap shrinks all the way to the closest) to the last (the
-        // end, or halved for on the way out).
-        var (first, last) = (low, high);
-        if (Gap(low).LengthSquared() > reach2)
-            first = Halve(r, u, a, reach2, low, closest);
-        if (Gap(high).LengthSquared() > reach2)
-            last = Halve(r, u, a, reach2, high, closest);
-
-        // Their bodies across it.
-        var (wi, wj) = (_width[i], _width[j]);
-        var within = wi + wj;
-        var (bi, ti, bj, tj) = (_bottom[i], _top[i], _bottom[j], _top[j]);
-        if (Bodies(bi, ti, Gap(first), bj, tj, u + a * first, wi, wj).Apart < within)
-        {
-            if (first <= low)
-                return; // touching as the check begins: a contact begun before, judged as it began
-        }
-        var speed = MathF.Max((u + a * first).Length(), (u + a * last).Length());
-        var samples = Math.Clamp((int)MathF.Ceiling((last - first) * speed / (within / 2f)), 1, MostSamples);
-        var (before, touch) = (first, float.NaN);
-        for (var k = 0; k <= samples; k++)
-        {
-            var t = first + (last - first) * k / samples;
-            if (Bodies(bi, ti, Gap(t), bj, tj, u, wi, wj).Apart < within)
-            {
-                // The moment they begin to touch, halved for between the sample before and this.
-                var (outside, inside) = (before, t);
-                for (var h = 0; h < 16 && k > 0; h++)
-                {
-                    var mid = (outside + inside) / 2f;
-                    if (Bodies(bi, ti, Gap(mid), bj, tj, u, wi, wj).Apart < within)
-                        inside = mid;
-                    else
-                        outside = mid;
-                }
-                touch = inside;
-                break;
-            }
-            before = t;
-        }
+        var (touch, closing) = FormulaContact.Touch(_middle[j] - _middle[i], _moving[j] - _moving[i], _pull[j] - _pull[i], _size[i] + _size[j], low, high,
+            _bottom[i], _top[i], _width[i], _bottom[j], _top[j], _width[j]);
         if (float.IsNaN(touch))
-            return; // within each other's reach, but their bodies pass clear
-        // How fast they close there: along the line between their nearest points, as the physics
-        // judges a hit by the closing at the contact.
-        var closing = Bodies(bi, ti, Gap(touch), bj, tj, u + a * touch, wi, wj).Closing;
+            return;
         var (vi, vj) = (world[_place[i]], world[_place[j]]);
         if (closing <= MathF.Min(vi.ImpactTolerance, vj.ImpactTolerance))
             return; // a bump: nothing changes
         Keep(ref _found, ref _foundCount, new Found { A = vi, B = vj, SlotA = i, SlotB = j, At = now + touch, Closing = closing });
-    }
-
-    /// <summary>The moment between <paramref name="outside"/> (out of reach) and <paramref name="inside"/> (within it) the gap <c>r + u t + a t²/2</c> crosses the reach.</summary>
-    private static float Halve(Vector3 r, Vector3 u, Vector3 a, float reach2, float outside, float inside)
-    {
-        for (var k = 0; k < 24; k++)
-        {
-            var mid = (outside + inside) / 2f;
-            var gap = r + u * mid + a * (mid * mid / 2f);
-            if (gap.LengthSquared() > reach2)
-                outside = mid;
-            else
-                inside = mid;
-        }
-        return inside;
     }
 
     /// <summary>Adds <paramref name="f"/> to <paramref name="list"/>, growing it (never written past) should it be full.</summary>
@@ -764,7 +625,7 @@ internal sealed class Unwatched(Flight flight)
     /// <summary>
     /// Each collision found whose time has come by <paramref name="now"/>, the two moved back along
     /// their ways to it from where they are now (within a step): if their bodies touch there (as
-    /// found, within <see cref="CollisionSlack"/>), each of the two closing faster than its tolerance is
+    /// found, within <see cref="FormulaContact.Slack"/>), each of the two closing faster than its tolerance is
     /// wrecked with the physics' reason, there. If not, one's motion was remade since it was
     /// found (a burn lit, a landing): judged now instead if their bodies touch now, judged by their
     /// closing now; else they missed after all. One no longer under formula (brought back, the
@@ -796,18 +657,14 @@ internal sealed class Unwatched(Flight flight)
         var relative = m.B.Velocity - m.A.Velocity;
         var gapNow = Collisions.Middle(m.B) - Collisions.Middle(m.A);
         var (then, closing) = (gapNow - relative * since, m.Closing);
-        if (Bodies(bottomA, topA, then, bottomB, topB, relative, widthA, widthB).Apart >= within + CollisionSlack)
+        if (FormulaContact.Bodies(bottomA, topA, then, bottomB, topB, relative, widthA, widthB).Apart >= within + FormulaContact.Slack)
         {
-            (var apart, closing) = Bodies(bottomA, topA, gapNow, bottomB, topB, relative, widthA, widthB);
+            (var apart, closing) = FormulaContact.Bodies(bottomA, topA, gapNow, bottomB, topB, relative, widthA, widthB);
             if (apart >= within)
                 return; // missed, the motion it was found from remade
             since = 0f;
         }
-        var (atA, atB) = (m.A.CentreOfMass - m.A.Velocity * since, m.B.CentreOfMass - m.B.Velocity * since);
-        if (closing > m.A.ImpactTolerance)
-            m.A.WreckByFormula(Vessel.HitAnotherVessel(closing), atA, hit: m.B.Craft);
-        if (closing > m.B.ImpactTolerance)
-            m.B.WreckByFormula(Vessel.HitAnotherVessel(closing), atB, hit: m.A.Craft);
+        FormulaContact.Wreck(m.A, m.A.CentreOfMass - m.A.Velocity * since, m.B, m.B.CentreOfMass - m.B.Velocity * since, closing);
     }
 
     private bool Whole(Vessel v)
@@ -1020,5 +877,179 @@ internal sealed class Unwatched(Flight flight)
         Array.Resize(ref _top, count);
         Array.Resize(ref _width, count);
         Array.Resize(ref _bodyOf, count);
+    }
+}
+
+/// <summary>
+/// The body-to-body solve the collisions between vessels under formula share, the physics' rates'
+/// (<see cref="Unwatched.FindCollisions"/>) and the formula's (<see cref="FormulaCollisions"/>):
+/// when two bodies, each an axis as wide as itself, begin to touch, how fast they close then, and
+/// how they are wrecked by it.
+/// </summary>
+internal static class FormulaContact
+{
+    /// <summary>
+    /// How much further apart than touching two bodies may be, moved back to their collision's time
+    /// from where they are as it comes, and still be hit as found: what a formula step's own
+    /// bending (its pull's change over the interval, under a centimetre) and the halving leave,
+    /// with room to spare. Further, the motion of one has been remade since (a burn lit, a
+    /// landing), and the collision found from it is no longer theirs. And how much further apart
+    /// than their reaches two may come at their closest along their ways over a window at a
+    /// formula's rate and still be solved: what those ways' own error leaves.
+    /// </summary>
+    internal const float Slack = 1f;
+
+    /// <summary>The most times a pair's bodies are sampled across the stretch their sizes overlap: some 60 at most for the vessels there are (two sizes over half their widths).</summary>
+    private const int MostSamples = 256;
+
+    /// <summary>
+    /// When two bodies begin to touch between <paramref name="low"/> and <paramref name="high"/>
+    /// seconds on, the second's middle <paramref name="r"/> from the first's, moving
+    /// <paramref name="u"/> and pulled <paramref name="a"/> relative to it (all among the stars), and
+    /// how fast they close then; NaN if they don't (or touch already at <paramref name="low"/>: a
+    /// contact begun before, judged as it began). Their reaches (<paramref name="reach"/> together)
+    /// overlapping nowhere in the stretch, their bodies can't touch; within it, their bodies (each
+    /// its axis's two ends from its middle, and how wide it is) are sampled no further apart than
+    /// half their widths, so neither passes through the other between, and the moment halved for.
+    /// The closing is along the line between their nearest points, as the physics judges a hit by
+    /// the closing at the contact (see <see cref="Bodies"/>).
+    /// </summary>
+    internal static (float At, float Closing) Touch(Vector3 r, Vector3 u, Vector3 a, float reach, float low, float high,
+        Vector3 bottomA, Vector3 topA, float widthA, Vector3 bottomB, Vector3 topB, float widthB)
+    {
+        var none = (float.NaN, 0f);
+        var reach2 = reach * reach;
+        Vector3 Gap(float t) => r + u * t + a * (t * t / 2f);
+
+        // Their closest within the stretch, from their lines' closest (Collisions' solve).
+        var uu = u.LengthSquared();
+        var line = uu > 1e-6f ? -Vector3.Dot(r, u) / uu : low;
+        var closest = Math.Clamp(Collisions.Approach(r, u, a, Math.Clamp(line, low, high)), low, high);
+        if (Gap(closest).LengthSquared() > reach2)
+            return none;
+        // The stretch within reach: from the first moment they are (at the start, already, or
+        // halved for on the way in: the gap shrinks all the way to the closest) to the last (the
+        // end, or halved for on the way out).
+        var (first, last) = (low, high);
+        if (Gap(low).LengthSquared() > reach2)
+            first = Halve(r, u, a, reach2, low, closest);
+        if (Gap(high).LengthSquared() > reach2)
+            last = Halve(r, u, a, reach2, high, closest);
+
+        // Their bodies across it.
+        var within = widthA + widthB;
+        if (first <= low && Bodies(bottomA, topA, Gap(first), bottomB, topB, u + a * first, widthA, widthB).Apart < within)
+            return none; // touching as the stretch begins: a contact begun before, judged as it began
+        var speed = MathF.Max((u + a * first).Length(), (u + a * last).Length());
+        var samples = Math.Clamp((int)MathF.Ceiling((last - first) * speed / (within / 2f)), 1, MostSamples);
+        var (before, touch) = (first, float.NaN);
+        for (var k = 0; k <= samples; k++)
+        {
+            var t = first + (last - first) * k / samples;
+            if (Bodies(bottomA, topA, Gap(t), bottomB, topB, u, widthA, widthB).Apart < within)
+            {
+                // The moment they begin to touch, halved for between the sample before and this.
+                var (outside, inside) = (before, t);
+                for (var h = 0; h < 16 && k > 0; h++)
+                {
+                    var mid = (outside + inside) / 2f;
+                    if (Bodies(bottomA, topA, Gap(mid), bottomB, topB, u, widthA, widthB).Apart < within)
+                        inside = mid;
+                    else
+                        outside = mid;
+                }
+                touch = inside;
+                break;
+            }
+            before = t;
+        }
+        if (float.IsNaN(touch))
+            return none; // within each other's reach, but their bodies pass clear
+        return (touch, Bodies(bottomA, topA, Gap(touch), bottomB, topB, u + a * touch, widthA, widthB).Closing);
+    }
+
+    /// <summary>The moment between <paramref name="outside"/> (out of reach) and <paramref name="inside"/> (within it) the gap <c>r + u t + a t²/2</c> crosses the reach.</summary>
+    private static float Halve(Vector3 r, Vector3 u, Vector3 a, float reach2, float outside, float inside)
+    {
+        for (var k = 0; k < 24; k++)
+        {
+            var mid = (outside + inside) / 2f;
+            var gap = r + u * mid + a * (mid * mid / 2f);
+            if (gap.LengthSquared() > reach2)
+                outside = mid;
+            else
+                inside = mid;
+        }
+        return inside;
+    }
+
+    /// <summary>
+    /// How far apart two bodies' axes are (see <see cref="Unwatched.Body"/>), the second's middle
+    /// <paramref name="gap"/> from the first's; and how fast they close, moving
+    /// <paramref name="relative"/> (the second's less the first's), along the way the two collide
+    /// there, their widths <paramref name="widthA"/> and <paramref name="widthB"/>: one's end
+    /// hitting the other (a nose into a side, two noses together) face on, along that one's axis,
+    /// as the physics' flat ends touch; else side to side, along the line between the axes'
+    /// nearest points.
+    /// </summary>
+    internal static (float Apart, float Closing) Bodies(Vector3 bottomA, Vector3 topA, Vector3 gap, Vector3 bottomB, Vector3 topB, Vector3 relative,
+        float widthA, float widthB)
+    {
+        var within = widthA + widthB;
+        var (b0, b1) = (gap + bottomB, gap + topB);
+        var (along, apart) = TowersAndMasts.Closest(bottomA, topA, b0, b1);
+        var nearA = Vector3.Lerp(bottomA, topA, along);
+        var d = b1 - b0;
+        var acrossB = Math.Clamp(Vector3.Dot(nearA - b0, d) / MathF.Max(d.LengthSquared(), 1e-9f), 0f, 1f);
+        var nearB = b0 + d * acrossB;
+        var line = nearB - nearA;
+        if (Face(bottomA, topA, along, nearB, b0, b1, widthB, within) is { } outA)
+            line = outA; // the first's end into the second: from the first, out of its end
+        else if (Face(b0, b1, acrossB, nearA, bottomA, topA, widthA, within) is { } outB)
+            line = -outB; // the second's end into the first: towards the second, into its end
+        else if (line.LengthSquared() < 1e-6f)
+            line = gap; // their axes crossing: the line between their middles stands in for it
+        var length = line.Length();
+        return (apart, length > 1e-6f ? -Vector3.Dot(line, relative) / length : relative.Length());
+
+        // Whether the end of the axis p0 to p1 nearest the other (at along) hits it face on: the
+        // other's nearest point within their widths of the axis's line, and the other's body (its
+        // axis q0 to q1 and as far out from it as `width`, which reaches along the end's way out
+        // by width times the sine of the angle between them) wholly beyond the end's face. So two
+        // side by side, along each other, hit side to side whichever end the nearest points fall
+        // at, and so does one swept sideways across the other's end: its side is what strikes.
+        // If so, the way out of that end.
+        static Vector3? Face(Vector3 p0, Vector3 p1, float along, Vector3 near, Vector3 q0, Vector3 q1, float width, float within)
+        {
+            if (along > 1e-4f && along < 1f - 1e-4f)
+                return null;
+            var axis = p1 - p0;
+            var length = axis.Length();
+            if (length < 1e-6f)
+                return null;
+            var (end, outward) = along >= 0.5f ? (p1, axis / length) : (p0, -axis / length);
+            var other = q1 - q0;
+            var lengthOther = other.Length();
+            var cos = lengthOther > 1e-6f ? Vector3.Dot(other / lengthOther, outward) : 0f;
+            var reach = width * MathF.Sqrt(MathF.Max(0f, 1f - cos * cos));
+            if (MathF.Min(Vector3.Dot(q0 - end, outward), Vector3.Dot(q1 - end, outward)) < reach)
+                return null;
+            var between = near - end;
+            return (between - outward * Vector3.Dot(between, outward)).Length() <= within ? outward : null;
+        }
+    }
+
+    /// <summary>
+    /// Two vessels under formula touching, closing at <paramref name="closing"/>: each closing faster
+    /// than its <see cref="Vessel.ImpactTolerance"/> is wrecked as part 1 wrecks a vessel hit by
+    /// another, its centre of mass where it was then (<paramref name="atA"/>, <paramref name="atB"/>),
+    /// by the other's body; under it, a bump: nothing changes (no bounce under formula).
+    /// </summary>
+    internal static void Wreck(Vessel a, Vector3 atA, Vessel b, Vector3 atB, float closing)
+    {
+        if (closing > a.ImpactTolerance)
+            a.WreckByFormula(Vessel.HitAnotherVessel(closing), atA, hit: b.Craft);
+        if (closing > b.ImpactTolerance)
+            b.WreckByFormula(Vessel.HitAnotherVessel(closing), atB, hit: a.Craft);
     }
 }
