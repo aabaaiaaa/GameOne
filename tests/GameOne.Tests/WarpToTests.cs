@@ -17,17 +17,6 @@ public sealed class WarpToTests(ITestOutputHelper output)
 {
     private static readonly float Fastest = Flight.Rates[^1];
 
-    /// <summary>A free-play flight flying <paramref name="states"/>' first (its others in the world beside it).</summary>
-    private static (Simulation Sim, Vessel Flown) Flying(params VesselState[] states)
-    {
-        var sim = new Simulation(Mission.FreePlay, world: new WorldState { Time = 0.0, Vessels = [.. states], NextVesselId = states.Length, Flights = 1 });
-        var flown = sim.Flight.WorldVessels.Single(v => v.Id == states[0].Id);
-        sim.Step(new FlightInput(SwitchTo: flown));
-        sim.Step(default);
-        Assert.Same(flown, sim.Flight.Controlled);
-        return (sim, flown);
-    }
-
     private static List<PathLeg> PathOf(Vessel vessel, double now)
     {
         var legs = new List<PathLeg>(Scene.PatchedLegs);
@@ -38,7 +27,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
     [Fact]
     public void It_warps_at_the_fastest_rate_and_stops_within_a_step_of_the_time_where_the_path_said()
     {
-        var (sim, flown) = Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
+        var (sim, flown) = WarpScenes.Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
         using var _ = sim;
         var flight = sim.Flight;
         var now = flight.WorldTime;
@@ -75,7 +64,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
     [InlineData(false)]
     public void A_rate_key_ends_it_at_normal_speed(bool slower)
     {
-        var (sim, _) = Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
+        var (sim, _) = WarpScenes.Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
         using var _s = sim;
         var flight = sim.Flight;
         sim.Step(new FlightInput(WarpTo: flight.WorldTime + 300.0));
@@ -91,7 +80,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
     {
         var other = InOrbit.Round(GroundBody.Planet, 1, 2000f);
         other = other with { Position = other.Position + new Vector3(0f, 0f, 3000f) };
-        var (sim, _) = Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f), other);
+        var (sim, _) = WarpScenes.Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f), other);
         using var _s = sim;
         var flight = sim.Flight;
         sim.Step(new FlightInput(WarpTo: flight.WorldTime + 300.0));
@@ -107,7 +96,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
     public void Past_the_ground_it_stops_where_the_path_comes_down_and_a_warning_ends_it_first()
     {
         // Falling from 6 km at a third of the speed that would hold it there: down within the minute.
-        var (sim, flown) = Flying(InOrbit.UpperStage(0, 6000f, 0.3f));
+        var (sim, flown) = WarpScenes.Flying(InOrbit.UpperStage(0, 6000f, 0.3f));
         using var _ = sim;
         var flight = sim.Flight;
         var now = flight.WorldTime;
@@ -145,7 +134,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
         var up = Planet.Up(centre);
         state = InOrbit.At(state, centre, Planet.AmongStars(centre, Vector3.Zero),
             Quaternion.CreateFromAxisAngle(Vector3.UnitZ, MathF.PI) * Planet.UprightAt(centre)) with { Aim = -up };
-        var (sim, flown) = Flying(state);
+        var (sim, flown) = WarpScenes.Flying(state);
         using var _ = sim;
         var flight = sim.Flight;
         sim.Step(new FlightInput(FullThrottle: true));
@@ -166,7 +155,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
         var state = InOrbit.UpperStage(0, 20000f, 1f);
         var centre = state.CentreOfMass.ToSingle();
         state = InOrbit.At(state, centre, Planet.East(centre) * 3000f + Planet.Up(centre) * 1000f);
-        var (sim, flown) = Flying(state);
+        var (sim, flown) = WarpScenes.Flying(state);
         using var _ = sim;
         var flight = sim.Flight;
         var legs = PathOf(flown, flight.WorldTime);
@@ -185,7 +174,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
         Assert.Null(flight.WarpingTo);
         Assert.Equal(1f, flight.PlayerRate);
 
-        var (inOrbit, _) = Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
+        var (inOrbit, _) = WarpScenes.Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
         using var _s = inOrbit;
         inOrbit.Step(new FlightInput(WarpTo: inOrbit.Flight.WorldTime - 1.0));
         Assert.Null(inOrbit.Flight.WarpingTo);
@@ -233,7 +222,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
     [InlineData(-30.0)]  // and before it
     public void A_world_loaded_mid_warp_drops_it_and_its_clock_never_goes_back(double clockFromNow)
     {
-        var (sim, _) = Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
+        var (sim, _) = WarpScenes.Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
         using var _s = sim;
         var flight = sim.Flight;
         sim.Step(new FlightInput(WarpTo: flight.WorldTime + 300.0));
@@ -318,7 +307,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
     {
         // Round a low orbit, burning retrograde: its path comes down sooner and sooner, and the
         // warp is held to where it does, never run on past it.
-        var (sim, flown) = Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
+        var (sim, flown) = WarpScenes.Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
         using var _ = sim;
         var flight = sim.Flight;
         sim.Step(new FlightInput(ChooseHold: HoldMode.Retrograde));

@@ -145,15 +145,38 @@ frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
   - **To discuss with that:** what the HUD, the map and the small views show meanwhile; and the
     world's other clocks at that rate (the sea's waves, the eclipses), which may need to skip
     rather than ease.
-  - **First, measure:** nothing here has yet timed a frame at ×32. `Timings` (the readout's
-    parts and `StepDetail`) at ×32 on a moon transfer, in a low orbit, and in a busy world, to
-    find what each frame spends its time on before choosing what to cut.
-  - **The ideas here that bear on it:** the crossing search in `Patched.Legs` kept or shared
-    (asked several times a frame on a transfer, the looking ahead at warp among them); the step's
-    cost for each vessel and the fixed cost of a world, and the flight's step allocating (each
-    paid once a step, so 32 times over at ×32); Jolt's worker pool sized to the work; the tiles'
-    worker skipping cells it can't finish in time (it lags in warp); a point of interest's place
-    cached (asked through a long warp).
+  - **First, measure** (done, 2026-11-19, Release, headless, a frame's steps only, no drawing,
+    `WarpPerfTests`): at ×32 the flown upper stage's frame takes 9.4 to 10.3 ms of the 12 ms
+    budget on a moon transfer, 9.5 ms in a low orbit (both reach ×32.0), and 12.2 ms among a
+    hundred satellites, which stops short at ×29. A step costs 0.3 ms (0.43 ms with the
+    hundred), 32 steps a frame. Jolt is the most in every scene (67%, 74% and 50% of the
+    frame, 6.1 to 7.0 ms: 0.2 ms a step even for one vessel in empty space); then the contact
+    part (17%, 18%, 12%), nearly all of it each vessel's own checks (`StepDetail.Vessels`,
+    14%, 14%, 9%); then the rules (8%, 3%, 34%).
+  - **The ideas here that bear on it,** each with what the measuring found of its share of a
+    ×32 frame (moon transfer / low orbit / hundred satellites) and the scene it helps:
+    - the crossing search in `Patched.Legs` kept or shared (asked several times a frame on a
+      transfer, the looking ahead at warp among them): not timed on its own; the rules' time
+      outside any piece (`StepDetail.Collisions`, `Formula`, `FormulaCollisions`) is 0.65 ms
+      (7%) / 0.23 ms (2%) / 0.96 ms (8%), where the looking ahead is, so at most that; helps a
+      transfer and a crowd, not a coast in one orbit;
+    - the step's cost for each vessel and the fixed cost of a world: the contact part, 1.6 ms
+      (17%) / 1.7 ms (18%) / 1.4 ms (12%), its `Vessels` check 1.3 / 1.4 / 1.1 ms of it, and the
+      water's 0.27 ms (2% to 3%) and the rest's 0.13 ms (1%) in every scene: helps all three,
+      most the flown vessel alone in a low orbit (the checks are of one vessel, 0.04 ms a step);
+    - the flight's step allocating (paid once a step, so 32 times over at ×32): not measured
+      (`Timings` doesn't count allocations), so its share is unknown; to be counted before it
+      is weighed;
+    - Jolt's worker pool sized to the work: Jolt's step is the biggest share, 6.3 ms (67%) /
+      7.0 ms (74%) / 6.1 ms (50%), for one to a hundred vessels alike, which says its cost is
+      mostly fixed for the world (the pad's rocket, the foundations and masts are in every
+      flight), not the workers' wake, which is a guess to test: helps every scene, most the low
+      orbit;
+    - the tiles' worker skipping cells it can't finish in time (it lags in warp): the tiles in
+      the step are 0.09 to 0.13 ms (1%) in all three, so no gain shows in a frame here; its lag is
+      off the step, on its own thread, and wants a scene near the ground to see;
+    - a point of interest's place cached (asked through a long warp): none of these scenes has a
+      mission's points, so it costs nothing in them; helps a lander mission's warp only.
   - **The bigger lever:** "Local physics, as an experiment" (below), and its bubbles that travel,
     the flown vessel itself under formula when nothing is near it, so a coast in orbit or on a
     transfer is Kepler's, not stepped, and rates past ×32 become possible there.

@@ -436,6 +436,27 @@ internal static class MoonTrip
         return (Stage(id, Moon, centre, velocity, velocity, lander), time);
     }
 
+    /// <summary>
+    /// The upper stage (<see cref="Stage"/>), numbered <paramref name="id"/>, <paramref name="secondsAfterBurn"/>
+    /// after the transfer's burn (trimmed as <see cref="Arriving"/>'s is), on the planet's leg of
+    /// the path, its nose along the way it goes, and the world time it is there.
+    /// </summary>
+    public static (VesselState Vessel, double Time) Transferring(int id, double secondsAfterBurn)
+    {
+        var burn = Start + Wait;
+        var (n, r) = Solve(burn, periapsis: Moon.MaxHeight + MoonHeight);
+        var (normal, at, speed) = Aimed(burn, n, r);
+        var low = Planet.SeaRadius + LowHeight;
+        var legs = new List<PathLeg>();
+        Patched.Legs(Planet, ((Vector3Double)Planet.Centre + at * low).ToSingle(), (Vector3Double.Cross(normal, at) * speed).ToSingle(), burn, legs);
+        var (place, stars) = legs[0].Orbit.StateAfter(secondsAfterBurn);
+        // Among the planet's stars as they matched its ground at the burn; turned to its ground when it is there.
+        var back = -secondsAfterBurn;
+        var centre = Planet.Turned(place, back);
+        var velocity = Planet.OverGround(centre, Planet.TurnedDirection(stars, back));
+        return (Stage(id, Planet, centre, velocity, velocity), burn + secondsAfterBurn);
+    }
+
     /// <summary>How far inside the moon's sphere <see cref="Arriving"/> is, in metres.</summary>
     public const float Inside = 200f;
 
