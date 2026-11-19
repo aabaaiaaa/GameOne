@@ -21,10 +21,10 @@ namespace GameOne;
 /// body's stars as they are at world time 0, a lap on (or out to where it leaves its body's pull,
 /// or to the first child's sphere it would enter: only its leg round its own body is drawn). It is
 /// made again only as its orbit changes (its body, or its orbit's shape and energy). Each frame,
-/// every body's laps are placed in the view by one transform for the body (every path is drawn
-/// among the stars, as the flown one's is: <see cref="LegPlace"/>).</item>
+/// every body's laps are placed in the view by one transform for the body, whatever the line's frame:
+/// at the map's scale a lap among the stars is what it shows over the ground too.</item>
 /// <item>A vessel in the physics (the witnessed, and what is by them) has its path patched at the
-/// spheres of influence each frame, as the flown one's is: they are few.</item>
+/// spheres of influence each frame, in the line's frame, as the flown one's is: they are few.</item>
 /// <item>A line is left out whole where it is under <see cref="Scene.MapLineMinPixels"/> across or
 /// wholly off the screen; it is drawn in as many points as its size on the screen needs (up to
 /// <see cref="LapSegments"/>); and only the bodies (and the sun) that could hide part of it are
@@ -77,6 +77,7 @@ internal sealed class SystemMap
     private readonly List<PathLeg> _legs = new(Scene.PatchedLegs);
     private readonly List<(Vector3 At, double Seconds)> _samples = [];
     private readonly List<Vector3> _radial = new(3); // a straight up and down line's points (Orbit.Path), room for its three at most made at once: the first such lap allocates nothing
+    private Frame _frame;
     private double _now;
     private GroundBody _flown = GroundBody.Planet;
     private BodyFrames _frames = null!;
@@ -141,6 +142,7 @@ internal sealed class SystemMap
     public void Build(Flight flight, BodyFrames frames, Vector3 camera)
     {
         _frames = frames;
+        _frame = flight.LineFrame;
         _flown = flight.Body;
         _now = flight.WorldTime;
         var view = flight.Body;
@@ -336,7 +338,7 @@ internal sealed class SystemMap
 
     /// <summary>
     /// <paramref name="v"/>'s path (in the physics) patched at the spheres of influence from where it
-    /// is now, each leg placed in the view's frame as the flown path's are
+    /// is now, each leg placed in the view's frame in the line's frame as the flown path's are
     /// (<see cref="LegPlace"/>: round its own body as it is now), each after the first where the
     /// line breaks.
     /// </summary>
@@ -351,6 +353,7 @@ internal sealed class SystemMap
         {
             var leg = _legs[i];
             var place = new LegPlace(leg, view, now);
+            var startsIn = leg.Start - now;
             if (i > 0)
                 lap.Starts.Add(lap.Placed.Count);
             if (leg.Orbit.Radial)
@@ -359,17 +362,17 @@ internal sealed class SystemMap
                 if (leg.LeavesSystem)
                 {
                     // Out along its line to the solar system's edge, where it ends.
-                    lap.Placed.Add(place.Point(_radial[0]));
-                    lap.Placed.Add(place.Point(leg.Orbit.PlaceAfter(leg.End - leg.Start).ToSingle()));
+                    lap.Placed.Add(place.Point(_frame, _radial[0], startsIn));
+                    lap.Placed.Add(place.Point(_frame, leg.Orbit.PlaceAfter(leg.End - leg.Start).ToSingle(), leg.End - now));
                     continue;
                 }
                 foreach (var p in _radial)
-                    lap.Placed.Add(place.Point(p));
+                    lap.Placed.Add(place.Point(_frame, p, startsIn));
                 continue;
             }
             leg.Orbit.Samples(_samples, 0, leg.End - leg.Start, LapSegments);
-            foreach (var (at, _) in _samples)
-                lap.Placed.Add(place.Point(at));
+            foreach (var (at, seconds) in _samples)
+                lap.Placed.Add(place.Point(_frame, at, startsIn + seconds));
         }
         lap.LeavesSystem = _legs[^1].LeavesSystem;
     }

@@ -338,7 +338,7 @@ public sealed class SystemMapTests(ITestOutputHelper output)
     {
         // Flying the new rocket on Home's pad, a stage on a round orbit of the moon under formula is
         // drawn on the map round the moon where the moon is now (in the planet's frame), a closed
-        // loop from where it is (among the stars, whatever the frame); a stage in orbit of the
+        // loop from where it is (among the stars, whatever the line's frame); a stage in orbit of the
         // planet round the planet.
         var (planet, moon) = (GroundBody.Planet, GroundBody.Moon);
         using var sim = WorldWith(3456.7, InOrbit.Round(moon, 0, 400f), InOrbit.Round(planet, 1, 2000f));
@@ -363,7 +363,7 @@ public sealed class SystemMapTests(ITestOutputHelper output)
             var off = WorstOff(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(points), centre, radius);
             var start = ((Vector3Double)points[0] - change.Point(v.CentreOfMass)).Length();
             var shut = Vector3.Distance(points[0], points[^1]);
-            output.WriteLine($"vessel {id} round {body.Name} ({flight.Frame}): {points.Count} points, {off:0.00} m off its orbit's radius round it, starting {start:0.00} m from it, its ends {shut:0.00} m apart");
+            output.WriteLine($"vessel {id} round {body.Name} ({flight.LineFrame}): {points.Count} points, {off:0.00} m off its orbit's radius round it, starting {start:0.00} m from it, its ends {shut:0.00} m apart");
             Assert.True(off < 5, $"vessel {id}'s path is {off:0.00} m off its round orbit of {body.Name}");
             Assert.True(start < 5, $"vessel {id}'s path starts {start:0.00} m from it");
             Assert.True(shut < 5, $"vessel {id}'s lap is open by {shut:0.00} m");
@@ -426,13 +426,13 @@ public sealed class SystemMapTests(ITestOutputHelper output)
         var last = new LegPlace(legs[^1], planet, t);
         var samples = new List<(Vector3 At, double Seconds)>();
         legs[^1].Orbit.Samples(samples, 0, legs[^1].End - legs[^1].Start, SystemMap.LapSegments);
-        var end = last.Point(samples[^1].At);
+        var end = last.Point(flight.LineFrame, samples[^1].At, legs[^1].Start - t + samples[^1].Seconds);
         output.WriteLine($"the witnessed one: {points.Count} points over {legs.Count} legs, its end {Vector3.Distance(points[^1], end):0.00} m from its last leg's, round the moon");
         Assert.True(Vector3.Distance(points[^1], end) < 1f, "its path ends as its patched path round the moon does");
         // One stretch a leg: the line breaks at each crossing, where the last leg starts as it is placed.
         var starts = map.StartsOf(beside);
         Assert.Equal(legs.Count - 1, starts.Count);
-        var start = last.Point(samples[0].At);
+        var start = last.Point(flight.LineFrame, samples[0].At, legs[^1].Start - t + samples[0].Seconds);
         Assert.True(Vector3.Distance(points[starts[^1]], start) < 1f, "its last leg starts a stretch of its own");
         // And as laid on the screen: no run of it goes across a leg's start (each of its runs is
         // its points in a row, by where each point is on the screen, all within one leg).

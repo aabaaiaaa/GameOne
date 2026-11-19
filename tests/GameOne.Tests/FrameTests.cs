@@ -167,6 +167,7 @@ public sealed class FrameTests(ITestOutputHelper output)
         sim.Step(new FlightInput(SetTarget: NavTarget.OfVessel(satellite), ChooseFrame: FrameChoice.Target));
         Assert.Equal(FrameChoice.Target, flight.FrameChoice);
         Assert.Equal(Frame.Target, flight.Frame);
+        Assert.Equal(Frame.Surface, flight.LineFrame); // the line as Auto would draw it, on the pad
         Assert.NotNull(flight.RelativeSpeed);
 
         sim.Step(new FlightInput(ClearTarget: true));
@@ -297,6 +298,7 @@ public sealed class FrameTests(ITestOutputHelper output)
         sim.Step(new FlightInput(SwitchTo: mine));
         sim.Step(new FlightInput(SetTarget: NavTarget.OfVessel(theirs), ChooseFrame: FrameChoice.Target));
         Assert.Equal(Frame.Target, flight.Frame);
+        Assert.Equal(Frame.Orbital, flight.LineFrame);
         output.WriteLine($"relative speed {flight.RelativeSpeed:0.000} m/s");
         Assert.InRange(flight.RelativeSpeed!.Value, 2.9f, 3.1f);
 
@@ -469,106 +471,103 @@ public sealed class FrameTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void A_sub_orbital_path_in_the_surface_frame_is_drawn_as_its_own_ellipse_among_the_stars()
+    public void The_line_starts_along_prograde_in_the_frame_in_use()
     {
-        // A booster above the air, going east at 150 m/s and climbing at 60 m/s: its periapsis is
-        // under the ground, so Auto has it in the surface frame. Its line is still the orbit's own
-        // conic among the stars, every point on it (as the orbit has it in the frame that matches
-        // the ground now), not the track over the turning ground, which by its end (some minutes
-        // on, the ground turning at about 50 m/s here) is kilometres off it.
-        using var sim = Drops.At(Vector3.Zero, Planet.East(Vector3.Zero), -60f, sideways: Planet.East(Vector3.Zero) * 150f, clearance: 3500f);
+        // A booster above the air going north at 150 m/s and climbing at 60 m/s: its periapsis is
+        // under the ground. Over the ground it goes north, among the stars north-east too (the
+        // ground's turn carries it east), so the two progrades are well apart. With Surface picked
+        // the line is drawn over the ground, so its first piece points along surface prograde (the
+        // travel marker and the holds' way); with Orbit, among the stars, along orbital prograde.
+        using var sim = Drops.At(Vector3.Zero, Planet.North(Vector3.Zero), -60f, sideways: Planet.North(Vector3.Zero) * 150f, clearance: 3500f);
         var flight = sim.Flight;
-        sim.Step(new FlightInput(ChooseFrame: FrameChoice.Auto));
-        Assert.Equal(Frame.Surface, flight.Frame);
-        var orbit = Orbit.OverGround(GroundBody.Planet, flight.CentreOfMass, flight.Velocity);
-        Assert.True(orbit.EndsOnGround, "it should come down");
-        var line = Built(flight).Line;
-        var worst = line.Max(p => Vector3.Distance(p, orbit.At(orbit.AnomalyToward(p - Planet.Centre))));
-        var start = Vector3.Distance(line[0], flight.CentreOfMass);
-        var end = Vector3.Distance(line[^1], Planet.Turned(orbit.Landing, orbit.SecondsToEnd));
-        output.WriteLine($"{line.Count} points, at most {worst:0.000} m off the conic; it starts {start:0.00} m from the vessel and ends {end:0.00} m from where the landing's ground will be by then");
-        Assert.InRange(worst, 0f, 0.05f);
-        Assert.InRange(start, 0f, 0.05f);
-        Assert.InRange(end, 0f, 0.05f);
-        sim.Step(new FlightInput(ChooseFrame: FrameChoice.Orbit));
-        var orbital = Built(flight).Line;
-        Assert.Equal(line.Count, orbital.Count);
-        Assert.InRange(line.Zip(orbital).Max(p => Vector3.Distance(p.First, p.Second)), 0f, 10f); // the same line in every frame, but for the step between
+        foreach (var (choice, frame) in new[] { (FrameChoice.Surface, Frame.Surface), (FrameChoice.Orbit, Frame.Orbital) })
+        {
+            sim.Step(new FlightInput(ChooseFrame: choice));
+            Assert.Equal(frame, flight.Frame);
+            var line = Built(flight).Line;
+            var off = Degrees(line[1] - line[0], flight.FrameVelocity);
+            var apart = Degrees(flight.Velocity, Planet.AmongStars(flight.CentreOfMass, flight.Velocity));
+            output.WriteLine($"{frame}: the line's first piece {off:0.00}° off prograde in the frame (the two progrades {apart:0.0}° apart)");
+            Assert.True(apart > 10f, $"the two progrades should be well apart ({apart:0.0}°)");
+            Assert.InRange(off, 0f, 3f);
+        }
     }
 
     [Fact]
-    public void Round_the_moon_the_path_in_the_surface_frame_closes_on_itself()
+    public void Round_the_moon_the_path_among_the_stars_closes_on_itself()
     {
-        // A stage in a low round orbit of the moon, flown there with Surface picked: its line is one
-        // closed lap round the moon among its stars (the moon turns once a lap, so over its ground
-        // the lap's end would be a long way round from its start).
+        // A stage in a low round orbit of the moon, flown there in Orbit (and in Auto, orbital): its
+        // line is one closed lap round the moon among its stars (the moon turns once a lap, so over
+        // its ground the lap's end would be a long way round from its start).
         var moon = GroundBody.Moon;
         using var sim = new Simulation(Mission.FreePlay, world: new WorldState
         {
             Time = 3456.7, Vessels = [InOrbit.Round(moon, 0, 400f)], NextVesselId = 1, Flights = 1,
         });
         var flight = sim.Flight;
-        sim.Step(new FlightInput(SwitchTo: flight.WorldVessels.Single(v => v.Id == 0), ChooseFrame: FrameChoice.Surface));
+        sim.Step(new FlightInput(SwitchTo: flight.WorldVessels.Single(v => v.Id == 0)));
         Assert.Same(moon, flight.Body);
-        Assert.Equal(Frame.Surface, flight.Frame);
-        var orbit = Orbit.OverGround(moon, flight.CentreOfMass, flight.Velocity);
-        Assert.True(orbit.Closed, "it should go round");
-        var line = Built(flight).Line;
-        var worst = line.Max(p => Vector3.Distance(p, orbit.At(orbit.AnomalyToward(p - moon.Centre))));
-        var shut = Vector3.Distance(line[0], line[^1]);
-        var overGround = Vector3.Distance(line[0], moon.Turned(line[^1], -orbit.Period)); // where a track over the ground would end
-        output.WriteLine($"{line.Count} points, at most {worst:0.000} m off the conic; its ends {shut:0.00} m apart (over the ground they would be {overGround:0} m apart)");
-        Assert.InRange(worst, 0f, 0.5f);
-        Assert.InRange(shut, 0f, 2f);
-        Assert.True(overGround > 1000f, "the moon should turn well under it in a lap");
+        foreach (var choice in new[] { FrameChoice.Orbit, FrameChoice.Auto })
+        {
+            sim.Step(new FlightInput(ChooseFrame: choice));
+            Assert.Equal(Frame.Orbital, flight.Frame);
+            var orbit = Orbit.OverGround(moon, flight.CentreOfMass, flight.Velocity);
+            Assert.True(orbit.Closed, "it should go round");
+            var line = Built(flight).Line;
+            var worst = line.Max(p => Vector3.Distance(p, orbit.At(orbit.AnomalyToward(p - moon.Centre))));
+            var shut = Vector3.Distance(line[0], line[^1]);
+            var overGround = Vector3.Distance(line[0], moon.Turned(line[^1], -orbit.Period)); // where a track over the ground would end
+            output.WriteLine($"{choice}: {line.Count} points, at most {worst:0.000} m off the conic; its ends {shut:0.00} m apart (over the ground they would be {overGround:0} m apart)");
+            Assert.InRange(worst, 0f, 0.5f);
+            Assert.InRange(shut, 0f, 2f);
+            Assert.True(overGround > 1000f, "the moon should turn well under it in a lap");
+        }
     }
 
     [Fact]
-    public void Above_the_air_a_hop_follows_its_line_among_the_stars_and_near_the_ground_its_landing_mark_is_where_it_comes_down()
+    public void Above_the_air_a_hop_follows_its_surface_line_and_near_the_ground_the_line_ends_where_it_comes_down()
     {
         // A booster above the air, going east at 150 m/s and climbing at 60 m/s: for the whole of its
-        // 80 s or so up there (12 km of track), its centre of mass's real path among the stars is the
-        // line built at the start. A few metres' bound: the line is sampled 256 pieces a lap, and
-        // the physics steps in floats. (Built from the body's origin with the centre of mass's
-        // velocity, the ground's turn would be added for the wrong point, and the path drift off
-        // the line by about 0.1 m/s: nearly 9 m by the end.)
+        // 80 s or so up there (12 km of track), its centre of mass's real track over the ground is the
+        // surface line built at the start. A few metres' bound: the line is sampled 256 pieces a lap,
+        // and the physics steps in floats. (Built from the body's origin with the centre of mass's
+        // velocity, as it once was, the ground's turn was added for the wrong point, and the track
+        // drifted off the line by about 0.1 m/s: nearly 9 m by the end.)
         using (var high = Drops.At(Vector3.Zero, Planet.East(Vector3.Zero), -60f, sideways: Planet.East(Vector3.Zero) * 150f, clearance: 3500f))
         {
             high.Step(new FlightInput(ChooseFrame: FrameChoice.Surface));
             var (off, seconds) = TrackOff(high, Built(high.Flight).Line);
-            output.WriteLine($"hop: at most {off:0.00} m off the line over {seconds:0.0} s above the air");
+            output.WriteLine($"hop: at most {off:0.00} m off the surface line over {seconds:0.0} s above the air");
             Assert.True(seconds > 70, $"it was above the air for only {seconds:0.0} s");
             Assert.InRange(off, 0f, 3f);
         }
 
-        // Low down, the landing can only be judged near the end: the path ignores the air, whose
-        // drag slows a hop through it by tens of metres a second. Built about 2 s before it comes
-        // down, its landing mark is within 20 m of there. Not closer: the path follows the
-        // booster's centre of mass to the ground, and on a drag-slowed, shallow descent the hull
-        // hits about 10 m above that.
+        // Low down, the line can only be judged near the end: it ignores the air, whose drag slows a
+        // hop through it by tens of metres a second. Built about 2 s before it comes down, it ends
+        // within 20 m of there. Not closer: the line follows the booster's centre of mass to the
+        // ground, and on a drag-slowed, shallow descent the hull hits about 10 m above that.
         using var sim = Drops.At(Vector3.Zero, Planet.East(Vector3.Zero), 0f, sideways: Planet.East(Vector3.Zero) * 150f, clearance: 400f);
         var flight = sim.Flight;
         sim.Step(new FlightInput(ChooseFrame: FrameChoice.Surface));
-        var marks = new List<(double Time, Vector3 Mark)>();
+        var ends = new List<(double Time, Vector3 End)>();
         Assert.True(sim.Run((_, _) => default, f =>
         {
-            if (Built(f).LandingMark is { } mark)
-                marks.Add((f.WorldTime, mark));
+            ends.Add((f.WorldTime, Built(f).Line[^1]));
             return f.Controlled.State != FlightState.Flying;
         }, maxSeconds: 120), "it never came down");
         var down = flight.Controlled.Position;
-        var landing = marks.MinBy(e => Math.Abs(flight.WorldTime - 2 - e.Time)).Mark;
-        output.WriteLine($"hop: the landing mark built 2 s before is {AcrossGround(landing, down):0.0} m from where it comes down");
-        Assert.InRange(AcrossGround(landing, down), 0f, 20f);
+        var end = ends.MinBy(e => Math.Abs(flight.WorldTime - 2 - e.Time)).End;
+        output.WriteLine($"hop: the line built 2 s before ends {AcrossGround(end, down):0.0} m from where it comes down");
+        Assert.InRange(AcrossGround(end, down), 0f, 20f);
     }
 
     [Fact]
-    public void Straight_up_and_down_the_line_s_top_is_among_the_stars()
+    public void Straight_up_and_down_the_surface_line_s_top_is_where_the_ground_will_be_by_then()
     {
         // A booster above the air going straight up among the stars at 100 m/s: its path is a
-        // line, and its top is where the vessel will be among the stars once it has climbed there,
-        // ten seconds or so on, the ground having turned some hundreds of metres under it
-        // meanwhile (so over the ground, where it is then, it is that far from the line's top).
+        // line, and over the ground its top is where the vessel will be over the ground once it
+        // has climbed there, ten seconds or so on, the ground having turned some hundreds of metres
+        // under it meanwhile (as it was, turned by the start's time alone, it was that far off).
         var start = Drops.Placed(Vector3.Zero, Planet.East(Vector3.Zero), 0f, clearance: 3500f, legsOut: false);
         var placed = InOrbit.At(start, start.CentreOfMass.ToSingle(), Planet.Up(start.CentreOfMass.ToSingle()) * 100f);
         using var sim = new Simulation(world: new WorldState { Vessels = [placed], NextVesselId = 1 });
@@ -584,23 +583,21 @@ public sealed class FrameTests(ITestOutputHelper output)
                 (top, highest, at) = (f.CentreOfMass, Planet.Altitude(f.CentreOfMass), f.WorldTime);
             return default;
         }, f => Planet.Altitude(f.CentreOfMass) < highest - 50f, maxSeconds: 60);
-        var off = Vector3.Distance(Planet.Turned(top, at - built), line[1]); // among the stars as they were when it was built
-        var overGround = Vector3.Distance(top, line[1]);
-        output.WriteLine($"the top {highest:0} m up, {at - built:0.0} s on: {off:0.00} m from the line's among the stars ({overGround:0} m over the ground)");
-        Assert.True(overGround > 100f, "the ground should have turned well under it meanwhile");
+        var off = Vector3.Distance(top, line[1]);
+        var untimed = Vector3.Distance(top, Planet.Turned(line[1], at - built)); // the top as the start's turn alone would put it
+        output.WriteLine($"the top {highest:0} m up, {at - built:0.0} s on: {off:0.00} m from the line's ({untimed:0} m from where the start's turn alone would put it)");
+        Assert.True(untimed > 100f, "the ground should have turned well under it meanwhile");
         Assert.InRange(off, 0f, 5f);
     }
 
     [Fact]
-    public void Above_the_air_a_de_orbit_follows_its_line_and_its_landing_mark_is_on_the_ground_it_comes_down_on()
+    public void Above_the_air_a_de_orbit_follows_its_surface_line_to_its_landing_mark()
     {
         // A satellite burned against its orbit until its periapsis is 2 km under the ground: then
-        // Auto has it in the surface frame, and its line comes down. Above the air its real path
-        // among the stars is that line (a few metres' bound: the line is sampled 256 pieces a lap,
-        // and the physics steps in floats). Its landing mark is the place on the ground it comes
-        // down on, as the ground is now; the line ends where that will have turned to by then.
-        // Below, the air (which the line ignores) takes over, and it breaks up in the thick of it:
-        // no test of the line there.
+        // Auto has it in the surface frame, and its line comes down, at the landing mark. Above the
+        // air its real track over the ground is that line (a few metres' bound: the line is sampled
+        // 256 pieces a lap, and the physics steps in floats). Below, the air (which the line
+        // ignores) takes over, and it breaks up in the thick of it: no test of the frame there.
         using var sim = new Simulation(Mission.ReachOrbit, world: WorldPresets.Satellites());
         var flight = sim.Flight;
         var satellite = flight.WorldVessels.First(v => v.Flight == 0);
@@ -612,26 +609,18 @@ public sealed class FrameTests(ITestOutputHelper output)
             var way = -Vector3.Normalize(Planet.AmongStars(f.CentreOfMass, f.Velocity));
             return new FlightInput(Hold: way, Throttle: Vector3.Dot(f.Controlled.Up, way) > 0.999f ? 1f : -1f);
         }, f => f.Periapsis < -2000f && f.Throttle == 0f, maxSeconds: 300), "the burn never brought the periapsis down");
-        Assert.Equal(Frame.Surface, flight.Frame);
+        Assert.Equal(Frame.Surface, flight.LineFrame);
 
         var paths = Built(flight);
-        var orbit = Orbit.OverGround(GroundBody.Planet, flight.CentreOfMass, flight.Velocity);
         Assert.NotNull(paths.LandingMark);
-        var (mark, end) = (Vector3.Distance(orbit.Landing, paths.LandingMark.Value), Vector3.Distance(paths.Line[^1], Planet.Turned(paths.LandingMark.Value, orbit.SecondsToEnd)));
-        output.WriteLine($"de-orbit: the landing mark {mark:0.00} m from where it comes down; the line ends {end:0.00} m from where that ground will be by then");
-        Assert.InRange(mark, 0f, 1f);
-        Assert.InRange(end, 0f, 2f);
+        Assert.InRange(Vector3.Distance(paths.Line[^1], paths.LandingMark.Value), 0f, 1f);
         var (off, seconds) = TrackOff(sim, paths.Line);
-        output.WriteLine($"de-orbit: at most {off:0.00} m off the line over {seconds:0} s above the air");
+        output.WriteLine($"de-orbit: at most {off:0.00} m off the surface line over {seconds:0} s above the air");
         Assert.True(seconds > 30, $"it was above the air for only {seconds:0} s");
         Assert.InRange(off, 0f, 3f);
     }
 
-    /// <summary>
-    /// Flies the flown vessel on with no input while it is above the air (for <paramref name="forSeconds"/>
-    /// at most): the farthest it is from <paramref name="line"/> (built now, among the stars as they
-    /// are now: each place over the ground turned on by the ground's turn since), and for how long.
-    /// </summary>
+    /// <summary>Flies the flown vessel on with no input while it is above the air (for <paramref name="forSeconds"/> at most): the farthest it is from <paramref name="line"/>, and for how long.</summary>
     private static (float Off, double Seconds) TrackOff(Simulation sim, IReadOnlyList<Vector3> line, double forSeconds = 300)
     {
         var start = sim.Flight.WorldTime;
@@ -640,34 +629,36 @@ public sealed class FrameTests(ITestOutputHelper output)
         {
             if (f.Altitude <= Scene.AtmosphereHeight || f.Controlled.State != FlightState.Flying)
                 return true;
-            worst = MathF.Max(worst, DistanceToLine(Planet.Turned(f.CentreOfMass, f.WorldTime - start), [line]));
+            worst = MathF.Max(worst, DistanceToLine(f.CentreOfMass, [line]));
             return false;
         }, maxSeconds: forSeconds);
         return (worst, sim.Flight.WorldTime - start);
     }
 
     [Fact]
-    public void In_orbit_the_line_is_the_ellipse_in_every_frame()
+    public void In_orbit_the_orbital_line_is_the_ellipse_and_the_surface_line_drifts_west()
     {
-        // A satellite: its line closes on itself, a lap among the stars, and is the same line in
-        // every frame (but for the vessel's moving on a step between).
         using var sim = new Simulation(world: WorldPresets.Satellites());
         var flight = sim.Flight;
         var satellite = flight.WorldVessels.First(v => v.Flight == 0);
-        sim.Step(new FlightInput(SwitchTo: satellite, SetTarget: NavTarget.OfVessel(flight.WorldVessels.First(v => v != satellite)), ChooseFrame: FrameChoice.Orbit));
+        sim.Step(new FlightInput(SwitchTo: satellite, ChooseFrame: FrameChoice.Orbit));
         var orbital = Built(flight).Line;
         var gap = Vector3.Distance(orbital[0], orbital[^1]);
-        output.WriteLine($"the line closes to {gap:0.0} m");
+
+        sim.Step(new FlightInput(ChooseFrame: FrameChoice.Surface));
+        var surface = Built(flight).Line;
+        var (first, last) = (surface[0], surface[^1]);
+        // The ground turns east under the orbit, so a lap on, the track is west of where it began,
+        // by the planet's turn in a lap.
+        var axis = Planet.NorthPole;
+        Vector3 Flat(Vector3 p) => Vector3.Normalize(p - Planet.Centre - axis * Vector3.Dot(p - Planet.Centre, axis));
+        var drift = MathF.Acos(Math.Clamp(Vector3.Dot(Flat(first), Flat(last)), -1f, 1f));
+        var lap = Orbit.OverGround(GroundBody.Planet, flight.CentreOfMass, flight.Velocity).Period;
+        var expected = (float)(2 * Math.PI * lap / Planet.TurnSeconds);
+        output.WriteLine($"orbital line closes to {gap:0.0} m; surface line drifts {float.RadiansToDegrees(drift):0.00}° (the turn in a lap {float.RadiansToDegrees(expected):0.00}°)");
         Assert.InRange(gap, 0f, 50f);
-        foreach (var choice in new[] { FrameChoice.Surface, FrameChoice.Target, FrameChoice.Auto })
-        {
-            sim.Step(new FlightInput(ChooseFrame: choice));
-            var line = Built(flight).Line;
-            var apart = line.Max(p => DistanceToLine(p, [orbital]));
-            output.WriteLine($"{choice} ({flight.Frame}): {line.Count} points, at most {apart:0.00} m off the Orbit frame's line");
-            Assert.Equal(orbital.Count, line.Count);
-            Assert.InRange(apart, 0f, 2f);
-        }
+        Assert.True(Vector3.Dot(last - first, Planet.East(first)) < 0f, "it should drift west");
+        Assert.InRange(drift, expected * 0.9f, expected * 1.1f);
     }
 
     [Fact]
@@ -731,23 +722,55 @@ public sealed class FrameTests(ITestOutputHelper output)
         // then (the line starts there too), not from the next point on.
         var later = (planned[0].Seconds + planned[^1].Seconds) / 2;
         later = (planned.Last(p => p.Seconds < later).Seconds + planned.First(p => p.Seconds >= later).Seconds) / 2;
-        paths.LayWindow(plannedAt + later);
+        paths.LayWindow(flight.LineFrame, plannedAt + later);
         var ahead = planned.Where(p => p.Seconds >= later).ToList();
         output.WriteLine($"{planned.Count} points from {planned[0].Seconds:0} to {planned[^1].Seconds:0} s; {paths.WindowLine.Count} drawn {later:0.0} s on");
         Assert.InRange(ahead.Count, 1, planned.Count - 1);
         Assert.True(ahead[0].Joined, "half way through it fell in a gap between two stretches, not part way through one");
         Assert.Equal(ahead.Count + 1, paths.WindowLine.Count);
-        Assert.Equal(Paths.WindowPoint(ahead[0].At, plannedAt, plannedAt + later), paths.WindowLine[1].At);
+        Assert.Equal(Paths.WindowPoint(flight.LineFrame, ahead[0].At, ahead[0].Seconds, plannedAt, plannedAt + later), paths.WindowLine[1].At);
         Assert.False(paths.WindowLine[0].Joined); // where the shading starts
         Assert.True(paths.WindowLine[1].Joined);
         var orbit = Orbit.OverGround(GroundBody.Planet, low.CentreOfMass, low.Velocity);
-        var there = Paths.WindowPoint(orbit.StateAfter(later).Position, plannedAt, plannedAt + later);
+        var there = Paths.WindowPoint(flight.LineFrame, orbit.StateAfter(later).Position, later, plannedAt, plannedAt + later);
         var off = Vector3.Distance(there, paths.WindowLine[0].At);
         var between = planned[planned.Count - ahead.Count - 1].Quality;
         output.WriteLine($"the shading starts {off:0.00} m from where the vessel is then, at quality {paths.WindowLine[0].Quality:0.000} " +
             $"(the points either side {between:0.000} and {ahead[0].Quality:0.000})");
         Assert.InRange(off, 0f, 2f);
         Assert.InRange(paths.WindowLine[0].Quality, MathF.Min(between, ahead[0].Quality) - 1e-4f, MathF.Max(between, ahead[0].Quality) + 1e-4f);
+    }
+
+    [Fact]
+    public void A_second_lap_window_lies_on_the_two_lap_surface_line()
+    {
+        // A satellite, and a place whose de-orbit window is on the next lap: over the ground the
+        // line goes on round a second lap, over the ground as it will be then, so the window is
+        // shaded on the track where it is. With the window on this lap, the line is one lap.
+        using var sim = new Simulation(world: WorldPresets.Satellites());
+        var flight = sim.Flight;
+        Vector3 Round(int laps)
+        {
+            var orbit = Orbit.OverGround(GroundBody.Planet, flight.CentreOfMass, flight.Velocity);
+            var seconds = laps * orbit.Period;
+            return Frames.OnLine(GroundBody.Planet, Frame.Surface, orbit.PositionAfter(seconds), seconds);
+        }
+
+        var (which, paths) = WindowOnLap(sim, FrameChoice.Surface, 1);
+        var worst = paths.WindowLine.Max(p => DistanceToLine(p.At, [paths.Line]));
+        var end = Vector3.Distance(paths.Line[^1], Round(2));
+        output.WriteLine($"{which}: {paths.WindowLine.Count} window points on the next lap, at most {worst:0.00} m off the line; the line ends {end:0.0} m from two laps on");
+        Assert.InRange(worst, 0f, 2f);
+        Assert.InRange(end, 0f, 5f);
+        Assert.All(paths.WindowLine, p => Assert.False(p.NextLap, "over the ground it is on the line: no need to mark it"));
+
+        // Half a lap on, the same place's window is on this lap.
+        using var later = new Simulation(world: SatelliteMovedOn(MathF.PI));
+        flight = later.Flight;
+        (which, paths) = WindowOnLap(later, FrameChoice.Surface, 0);
+        end = Vector3.Distance(paths.Line[^1], Round(1));
+        output.WriteLine($"{which}, half a lap on: window on this lap; the line ends {end:0.0} m from a lap on");
+        Assert.InRange(end, 0f, 5f);
     }
 
     /// <summary>The Satellites world, with its first satellite moved on round its orbit by <paramref name="radians"/>.</summary>
@@ -770,26 +793,22 @@ public sealed class FrameTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void In_every_frame_a_second_lap_window_is_marked_next_lap()
+    public void In_the_orbital_frame_a_second_lap_window_is_marked_next_lap()
     {
         // Among the stars the ellipse is the same every lap, so the line stays one lap and a
-        // window on the next is shaded on it, marked as the next lap's; this lap's isn't. The
-        // surface frame draws the line among the stars too, so the same.
-        foreach (var choice in new[] { FrameChoice.Orbit, FrameChoice.Surface })
-        {
-            using var sim = new Simulation(world: WorldPresets.Satellites());
-            var (_, paths) = WindowOnLap(sim, choice, 1);
-            var orbit = Orbit.OverGround(GroundBody.Planet, sim.Flight.CentreOfMass, sim.Flight.Velocity);
-            var end = Vector3.Distance(paths.Line[^1], orbit.PositionAfter(orbit.Period));
-            output.WriteLine($"{choice}: the line ends {end:0.00} m from where the orbit is a lap on");
-            Assert.InRange(end, 0f, 5f); // a lap: among the stars, back where it started
-            Assert.All(paths.WindowLine, p => Assert.True(p.NextLap));
-            Assert.InRange(paths.WindowLine.Max(p => DistanceToLine(p.At, [paths.Line])), 0f, 2f);
+        // window on the next is shaded on it, marked as the next lap's; this lap's isn't.
+        using var sim = new Simulation(world: WorldPresets.Satellites());
+        var (_, paths) = WindowOnLap(sim, FrameChoice.Orbit, 1);
+        var orbit = Orbit.OverGround(GroundBody.Planet, sim.Flight.CentreOfMass, sim.Flight.Velocity);
+        var end = Vector3.Distance(paths.Line[^1], orbit.PositionAfter(orbit.Period));
+        output.WriteLine($"the line ends {end:0.00} m from where the orbit is a lap on");
+        Assert.InRange(end, 0f, 5f); // a lap: among the stars, back where it started
+        Assert.All(paths.WindowLine, p => Assert.True(p.NextLap));
+        Assert.InRange(paths.WindowLine.Max(p => DistanceToLine(p.At, [paths.Line])), 0f, 2f);
 
-            using var later = new Simulation(world: SatelliteMovedOn(MathF.PI)); // half a lap on: this lap's
-            (_, paths) = WindowOnLap(later, choice, 0);
-            Assert.All(paths.WindowLine, p => Assert.False(p.NextLap));
-        }
+        using var later = new Simulation(world: SatelliteMovedOn(MathF.PI)); // half a lap on: this lap's
+        (_, paths) = WindowOnLap(later, FrameChoice.Orbit, 0);
+        Assert.All(paths.WindowLine, p => Assert.False(p.NextLap));
     }
 
     [Fact]
@@ -804,13 +823,13 @@ public sealed class FrameTests(ITestOutputHelper output)
         var plannedAt = sim.Flight.WorldTime;
         var period = Orbit.OverGround(GroundBody.Planet, sim.Flight.CentreOfMass, sim.Flight.Velocity).Period;
         var middle = (planned[0].Seconds + planned[^1].Seconds) / 2;
-        paths.LayWindow(plannedAt + middle - period); // half of it within a lap
+        paths.LayWindow(Frame.Orbital, plannedAt + middle - period); // half of it within a lap
         var marked = paths.WindowLine.Count(p => p.NextLap);
         output.WriteLine($"{planned.Count} points, {planned[0].Seconds:0} to {planned[^1].Seconds:0} s on (a lap {period:0} s); drawn {middle - period:0} s on, {marked} still the next lap's");
         Assert.Equal(planned.Count, paths.WindowLine.Count); // none passed
         Assert.Equal(planned.Count(p => p.Seconds - (middle - period) >= period), marked);
         Assert.InRange(marked, 1, planned.Count - 1);
-        paths.LayWindow(plannedAt + planned[^1].Seconds - period + 1);
+        paths.LayWindow(Frame.Orbital, plannedAt + planned[^1].Seconds - period + 1);
         Assert.All(paths.WindowLine, p => Assert.False(p.NextLap));
     }
 
@@ -818,9 +837,9 @@ public sealed class FrameTests(ITestOutputHelper output)
     public void A_later_lap_that_comes_down_has_its_landing_marked()
     {
         // An orbit that dips low: clear of the ground this lap, it comes down on high ground the
-        // next (the ground having turned under it), after a window on that lap. Its landing is
-        // marked, on the ground it comes down on (where the next lap's orbit has it), in every
-        // frame alike.
+        // next (the ground having turned under it), after a window on that lap. Over the ground the
+        // line goes round to there and its end is marked as a landing; among the stars the landing
+        // is marked on the ellipse as the next lap's.
         var (world, site) = DipsOntoHighGroundNextLap();
         using var sim = new Simulation(world: world);
         var flight = sim.Flight;
@@ -829,17 +848,17 @@ public sealed class FrameTests(ITestOutputHelper output)
         var paths = Built(flight);
         Assert.Equal(1, paths.WindowLap);
         Assert.Null(paths.LandingMark); // this lap doesn't come down
-        var orbit = Orbit.OverGround(GroundBody.Planet, flight.CentreOfMass, flight.Velocity);
-        var next = orbit.NextLap();
-        Assert.True(next.EndsOnGround);
         var later = paths.LaterLanding!.Value;
-        output.WriteLine($"to {Sites.All[site].Name}: the later landing is {Vector3.Distance(later, next.Landing):0.00} m from where the next lap comes down, {Planet.SurfaceAltitude(later):0.0} m over the ground");
-        Assert.InRange(Vector3.Distance(later, next.Landing), 0f, 5f);
-        Assert.InRange(Planet.SurfaceAltitude(later), -5f, 20f);
+        output.WriteLine($"to {Sites.All[site].Name}: over the ground, the later landing is {Vector3.Distance(later.At, paths.Line[^1]):0.00} m from the line's end, {Planet.SurfaceAltitude(later.At):0.0} m over the ground");
+        Assert.False(later.NextLap);
+        Assert.InRange(Vector3.Distance(later.At, paths.Line[^1]), 0f, 1f);
 
         sim.Step(new FlightInput(ChooseFrame: FrameChoice.Orbit));
         paths = Built(flight);
-        Assert.InRange(Vector3.Distance(paths.LaterLanding!.Value, later), 0f, 5f);
+        later = paths.LaterLanding!.Value;
+        output.WriteLine($"among the stars, it is {DistanceToLine(later.At, [paths.Line]):0.00} m off the ellipse");
+        Assert.True(later.NextLap);
+        Assert.InRange(DistanceToLine(later.At, [paths.Line]), 0f, 2f);
     }
 
     /// <summary>
@@ -1045,6 +1064,81 @@ public sealed class FrameTests(ITestOutputHelper output)
         output.WriteLine($"started at {started:0.0} s; after the burn, again at {paths.WorkingSince:0.0} s");
         Assert.Equal(flight.WorldTime, paths.WorkingSince);
         Assert.Equal(Built(flight).PlannedWindow, Built(flight, null, paths).PlannedWindow);
+    }
+
+    [Fact]
+    public void Once_a_next_lap_window_is_on_this_lap_the_surface_line_is_one_lap_again()
+    {
+        // Over the ground the line goes round a second lap to a window on it. Once the vessel has
+        // come far enough round that the window is within this lap, it is one lap again, even
+        // drawn from the plan before (as between plans, under a fast warp): the laps are counted
+        // from the furthest of the window still ahead, each frame.
+        using var sim = new Simulation(world: WorldPresets.Satellites());
+        WindowOnLap(sim, FrameChoice.Surface, 1);
+        var flight = sim.Flight;
+        Vector3 LapsOn(int laps)
+        {
+            var orbit = Orbit.OverGround(GroundBody.Planet, flight.CentreOfMass, flight.Velocity);
+            return Frames.OnLine(GroundBody.Planet, Frame.Surface, orbit.PositionAfter(laps * orbit.Period), laps * orbit.Period);
+        }
+        var paths = new Paths();
+        do
+            paths.Build(flight, PlanFor(flight));
+        while (paths.Working);
+        var planned = paths.PlannedWindow.ToList();
+        Assert.InRange(Vector3.Distance(paths.Line[^1], LapsOn(2)), 0f, 5f);
+
+        // Round until the window's far end is within a lap, but none of it passed.
+        var period = Orbit.OverGround(GroundBody.Planet, flight.CentreOfMass, flight.Velocity).Period;
+        var start = flight.WorldTime;
+        var until = start + (planned[^1].Seconds - period) + 20;
+        Assert.True(until - start < planned[0].Seconds, "the window would be passed by then");
+        sim.Run((_, _) => default, f => f.WorldTime >= until, maxSeconds: until - start + 5);
+        paths.Build(flight, PlanFor(flight)); // drawn from the plan before: one started now takes some frames to work out
+        Assert.Equal(planned, paths.PlannedWindow);
+        var end = Vector3.Distance(paths.Line[^1], LapsOn(1));
+        var off = paths.WindowLine.Max(p => DistanceToLine(p.At, [paths.Line]));
+        output.WriteLine($"{flight.WorldTime - start:0} s on: the line ends {end:0.0} m from a lap on; the window, {paths.WindowLine.Count} points, at most {off:0.00} m off it");
+        Assert.InRange(end, 0f, 5f);
+        Assert.Equal(planned.Count, paths.WindowLine.Count);
+        Assert.InRange(off, 0f, 5f);
+    }
+
+    [Fact]
+    public void A_two_lap_surface_line_drawn_a_while_after_its_plan_runs_on_without_doubling_back()
+    {
+        // Between plans (a replan takes a while, longer under warp) the line is this lap from now,
+        // then the later lap as planned: the later lap joins on where this lap ends, never going
+        // back to where the plan's own lap ended and over the ground again from there.
+        using var sim = new Simulation(world: WorldPresets.Satellites());
+        WindowOnLap(sim, FrameChoice.Surface, 1);
+        var flight = sim.Flight;
+        var orbit = Orbit.OverGround(GroundBody.Planet, flight.CentreOfMass, flight.Velocity);
+        var twoLaps = Frames.OnLine(GroundBody.Planet, Frame.Surface, orbit.PositionAfter(2 * orbit.Period), 2 * orbit.Period); // where the planned lap ends
+        var paths = Built(flight);
+        var planned = paths.PlannedWindow.ToList();
+        var spacing = Longest(paths.Line); // drawn as planned: the samples' spacing
+        sim.Run((_, _) => default, _ => false, maxSeconds: 20);
+        paths.Build(flight, PlanFor(flight)); // drawn from the plan 20 s ago: one started now takes some frames
+        Assert.Equal(planned, paths.PlannedWindow);
+        var line = paths.Line;
+        var longest = Longest(line);
+        var turn = 1f;
+        for (var i = 2; i < line.Count; i++)
+            turn = MathF.Min(turn, Vector3.Dot(Vector3.Normalize(line[i] - line[i - 1]), Vector3.Normalize(line[i - 1] - line[i - 2])));
+        var end = Vector3.Distance(line[^1], twoLaps);
+        output.WriteLine($"20 s on: {line.Count} points, the longest step {longest:0} m (as planned {spacing:0} m), the sharpest turn's cosine {turn:0.000}; it ends {end:0.0} m from where the planned lap does");
+        Assert.InRange(longest, 0f, 1.5f * spacing);
+        Assert.InRange(turn, 0.9f, 1f); // a track over the ground: never back along itself
+        Assert.InRange(end, 0f, 5f);
+    }
+
+    private static float Longest(IReadOnlyList<Vector3> line)
+    {
+        var longest = 0f;
+        for (var i = 1; i < line.Count; i++)
+            longest = MathF.Max(longest, Vector3.Distance(line[i], line[i - 1]));
+        return longest;
     }
 
     [Fact]

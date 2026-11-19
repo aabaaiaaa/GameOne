@@ -239,8 +239,14 @@ say) stalls frames and spoils the timing.
   turning orbital once, as the orbit clears the air, by the time its orbit step is ticked; the
   satellite mission's upper stage, put in orbit, brought home on Auto (orbital, then surface by the
   end of its burn) onto the landing zone; a rendezvous in the target frame, closing from 1 km to
-  under 50 m and holding there, under 0.5 m/s; and a hop from the pad onto the nearest test pad in
-  the surface frame, by its line's landing mark.
+  under 50 m and holding there, under 0.5 m/s; and a hop from the pad onto the nearest test pad on
+  the surface frame's line.
+- **`FrameTests`:** the frames of reference one rule at a time, the line among them: over the
+  ground in Surface (a hop's and a de-orbit's real track above the air on it, its end where it
+  comes down; a lap drifting west by the ground's turn; a window on a later lap with the line
+  going round to it), among the stars in Orbit (the ellipse, closed round the planet and round the
+  moon; a later lap's window and landing marked as the next lap's); and a suborbital hop's line
+  starting along the prograde of the frame in use, within 3°, in Surface and in Orbit alike.
 - **`FreePlayTests`:** free play: the satellite launcher with no steps, its vessels of no run, so
   never won, failed or scored (on the pad, past 400 m, after staging), nothing its landing site; its booster flown down
   and landed, and still nothing won.

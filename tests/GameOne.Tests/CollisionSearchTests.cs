@@ -380,8 +380,8 @@ public sealed class CollisionSearchTests(ITestOutputHelper output)
         // Each runs into the cross, from no earlier than now (the collision is under the lead's two minutes off).
         Assert.All(paths.LeadIns, l => Assert.InRange(Vector3.Distance(l.Points[^1], mark.At), 0f, 2 * Size + 10f));
         var far = Planet.Centre - Vector3.UnitY * (Planet.SeaRadius + altitude); // the far side, under the pad
-        // Drawn among the stars, where it is (in every frame).
-        Assert.InRange(Vector3.Distance(mark.At, far), 0f, 100f);
+        // Drawn in the line's frame: among the stars, where it is; over the ground, where the ground will be by then.
+        Assert.InRange(Vector3.Distance(mark.At, Frames.OnLine(GroundBody.Planet, flight.LineFrame, far, hitsIn - flight.WorldTime + world.Time)), 0f, 100f);
         Assert.Contains("Satellite 1", mark.Label);
         Assert.Contains("Satellite 2", mark.Label);
 

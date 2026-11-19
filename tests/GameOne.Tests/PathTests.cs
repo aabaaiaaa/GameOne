@@ -190,7 +190,7 @@ public sealed class PathTests(ITestOutputHelper output)
             var nodeAt = plan.Legs[plan.NodeLeg(0)!.Value].End;
             var from = paths.LineGlowsFrom;
             var worst = paths.Line.Take(from).Select((p, i) => (Off: OnPolyline(p, paths.ToFirst), i)).MaxBy(x => x.Off);
-            output.WriteLine($"{paths.Line.Count} line points, {paths.ToFirst.Count} to the node; the line's glows from point {from}; the furthest before it {worst.Off:0.00} m off the path to the node (point {worst.i}); frame {flight.Frame}");
+            output.WriteLine($"{paths.Line.Count} line points, {paths.ToFirst.Count} to the node; the line's glows from point {from}; the furthest before it {worst.Off:0.00} m off the path to the node (point {worst.i}); frame {flight.LineFrame}");
             Assert.InRange(from, 1, paths.Line.Count - 1);
             // Every point before it lies on the path to the node (both chords of the same orbit, so
             // within their sag), and the one at it is past the node's end of it.
@@ -476,7 +476,7 @@ public sealed class PathTests(ITestOutputHelper output)
 
         var (position, velocity) = planned.StateAfter(elapsed);
         var now = new Orbit(GroundBody.Planet, Planet.Turned(position, -elapsed), Planet.TurnedDirection(velocity, -elapsed));
-        var drawn = Paths.WindowPoint(point, plannedAt: 100.0, now: 100.0 + elapsed);
+        var drawn = Paths.WindowPoint(Frame.Orbital, point, planned.TimeTo(planned.Now + 1.5), plannedAt: 100.0, now: 100.0 + elapsed);
         var onPath = now.At(now.AnomalyToward(drawn - Planet.Centre));
         var off = Vector3.Distance(drawn, onPath);
         output.WriteLine($"{elapsed:0.0} s after the plan: drawn {off:0.00} m off the path");
