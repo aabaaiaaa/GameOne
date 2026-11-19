@@ -732,7 +732,9 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   eased in from none to all of it by `Scene.MoonReliefWithin` (three radii), so the handover
   doesn't jump. The far side's 800 m mountain is then seen to grow up out of the ground over that
   2.5 km of the way in. The user would expect it to keep its shape, as near as can be, at every
-  distance. Ways to look at: the ray-cast marching the map's heights so its outline carries the
+  distance. The same goes for the map (the user, 2026-11-19): zoomed out, a body's outline should
+  show its real shape, the moon's far-side mountain standing off its limb as it does, not a plain
+  sphere (the planet's from afar likewise, where its highest ground would show). Ways to look at: the ray-cast marching the map's heights so its outline carries the
   relief from afar, with the mesh then drawn with all its relief from the handover; or the mesh
   drawn further out, with its full relief, from where the mountain stands far enough off the
   limb to be seen.
