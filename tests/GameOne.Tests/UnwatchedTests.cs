@@ -78,12 +78,12 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
         sim.Run((_, _) => new FlightInput(Watched: watched), _ => false, maxSeconds: 1);
         var unwatched = sim.Flight.Unwatched;
         var camera = sim.Flight.Controlled.CentreOfMass;
-        unwatched.Advance(0f);
+        unwatched.Advance();
         unwatched.Update(0f, watched, camera); // warmed up
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var i = 0; i < 100; i++)
         {
-            unwatched.Advance(0f);
+            unwatched.Advance();
             unwatched.Update(0f, watched, camera);
         }
         Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);

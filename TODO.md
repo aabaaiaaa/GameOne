@@ -152,23 +152,31 @@ frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
     hundred), 32 steps a frame. Jolt is the most in every scene (67%, 74% and 50% of the
     frame, 6.1 to 7.0 ms: 0.2 ms a step even for one vessel in empty space); then the contact
     part (17%, 18%, 12%), nearly all of it each vessel's own checks (`StepDetail.Vessels`,
-    14%, 14%, 9%); then the rules (8%, 3%, 34%).
+    14%, 14%, 9%); then the rules (8%, 3%, 34%). The moon transfer's scene then was past its
+    crossing into the moon's sphere, on a conic that never reached it; measured again 120 s after
+    the burn (its path going on into the moon's sphere), at the physics' top rate (×8, as ×32 is
+    a formula's rate now): 4.7 ms a frame, 0.58 ms a step, the contact part the most (56%,
+    `Vessels` 48%: the stage still low over the planet, its hull measured), then Jolt (34%, the
+    same 0.2 ms a step), the rules (6%), the water (4%). The figures below for the moon transfer
+    are that ×8 frame's; the other two scenes' are their ×32 frames'.
   - **The ideas here that bear on it,** each with what the measuring found of its share of a
     ×32 frame (moon transfer / low orbit / hundred satellites) and the scene it helps:
     - the crossing search in `Patched.Legs` kept or shared (asked several times a frame on a
       transfer, the looking ahead at warp among them): not timed on its own; the rules' time
-      outside any piece (`StepDetail.Collisions`, `Formula`, `FormulaCollisions`) is 0.65 ms
-      (7%) / 0.23 ms (2%) / 0.96 ms (8%), where the looking ahead is, so at most that; helps a
+      outside any piece (`StepDetail.Collisions`, `Formula`, `FormulaCollisions`) is 0.20 ms
+      (4%) / 0.23 ms (2%) / 0.96 ms (8%), where the looking ahead is, so at most that; helps a
       transfer and a crowd, not a coast in one orbit;
-    - the step's cost for each vessel and the fixed cost of a world: the contact part, 1.6 ms
-      (17%) / 1.7 ms (18%) / 1.4 ms (12%), its `Vessels` check 1.3 / 1.4 / 1.1 ms of it, and the
-      water's 0.27 ms (2% to 3%) and the rest's 0.13 ms (1%) in every scene: helps all three,
+    - the step's cost for each vessel and the fixed cost of a world: the contact part, 2.6 ms
+      (56%) / 1.7 ms (18%) / 1.4 ms (12%), its `Vessels` check 2.3 / 1.4 / 1.1 ms of it, and the
+      water's 0.18 to 0.27 ms (2% to 4%) and the rest's 0.11 to 0.13 ms (1% to 2%) in every
+      scene: helps all three,
       most the flown vessel alone in a low orbit (the checks are of one vessel, 0.04 ms a step);
     - the flight's step allocating (paid once a step, so 32 times over at ×32): not measured
       (`Timings` doesn't count allocations), so its share is unknown; to be counted before it
       is weighed;
-    - Jolt's worker pool sized to the work: Jolt's step is the biggest share, 6.3 ms (67%) /
-      7.0 ms (74%) / 6.1 ms (50%), for one to a hundred vessels alike, which says its cost is
+    - Jolt's worker pool sized to the work: Jolt's step is a big share, 1.6 ms (34%, of eight
+      steps) / 7.0 ms (74%) / 6.1 ms (50%), 0.2 ms a step for one to a hundred vessels
+      alike, which says its cost is
       mostly fixed for the world (the pad's rocket, the foundations and masts are in every
       flight), not the workers' wake, which is a guess to test: helps every scene, most the low
       orbit;

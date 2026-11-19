@@ -8,8 +8,8 @@ namespace GameOne.Tests;
 /// </summary>
 internal static class WarpScenes
 {
-    /// <summary>How long after the transfer's burn the moon transfer scene is: the stage is well on its way, out of the low orbit.</summary>
-    public const double TransferSeconds = 600.0;
+    /// <summary>How long after the transfer's burn the moon transfer scene is: the stage on its way, out of the low orbit, well short of the moon's sphere (some 330 s after the burn).</summary>
+    public const double TransferSeconds = 120.0;
 
     /// <summary>How high over the air's top the low orbit is: its periapsis is clear of the air by a kilometre.</summary>
     public const float LowOrbitHeight = 1000f;
@@ -35,6 +35,10 @@ internal static class WarpScenes
         var (state, time) = MoonTrip.Transferring(0, TransferSeconds);
         var scene = Flying(MoonTrip.World(time, state), state.Id);
         Assert.Same(GroundBody.Planet, scene.Flown.Body); // still on the planet's leg, not yet in the moon's sphere
+        var flown = scene.Flown;
+        var legs = new List<PathLeg>(Scene.PatchedLegs);
+        Patched.Legs(flown.Body, flown.CentreOfMass, flown.Body.AmongStars(flown.CentreOfMass, flown.Velocity), scene.Sim.Flight.WorldTime, legs);
+        Assert.True(legs.Count > 1 && legs[1].Body == GroundBody.Moon, "the transfer's path goes on into the moon's sphere");
         return scene;
     }
 

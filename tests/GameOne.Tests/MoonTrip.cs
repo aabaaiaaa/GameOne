@@ -439,7 +439,8 @@ internal static class MoonTrip
     /// <summary>
     /// The upper stage (<see cref="Stage"/>), numbered <paramref name="id"/>, <paramref name="secondsAfterBurn"/>
     /// after the transfer's burn (trimmed as <see cref="Arriving"/>'s is), on the planet's leg of
-    /// the path, its nose along the way it goes, and the world time it is there.
+    /// the path, its nose along the way it goes, and the world time it is there: short of its
+    /// crossing into the moon's sphere (past it, the planet's leg is no path at all), or it throws.
     /// </summary>
     public static (VesselState Vessel, double Time) Transferring(int id, double secondsAfterBurn)
     {
@@ -449,6 +450,8 @@ internal static class MoonTrip
         var low = Planet.SeaRadius + LowHeight;
         var legs = new List<PathLeg>();
         Patched.Legs(Planet, ((Vector3Double)Planet.Centre + at * low).ToSingle(), (Vector3Double.Cross(normal, at) * speed).ToSingle(), burn, legs);
+        if (legs.Count > 1 && secondsAfterBurn >= legs[1].Start - burn)
+            throw new ArgumentOutOfRangeException(nameof(secondsAfterBurn), $"{secondsAfterBurn} s after the burn is past its crossing into {legs[1].Body.Name}'s sphere, {legs[1].Start - burn:0} s after it");
         var (place, stars) = legs[0].Orbit.StateAfter(secondsAfterBurn);
         // Among the planet's stars as they matched its ground at the burn; turned to its ground when it is there.
         var back = -secondsAfterBurn;

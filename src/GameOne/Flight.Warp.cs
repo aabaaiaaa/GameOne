@@ -186,7 +186,8 @@ internal sealed partial class Flight
     /// <see cref="Scene.FormulaWindowSeconds"/> (<see cref="FormulaStep"/>), each cut short at the
     /// earliest event in it (<see cref="NextCut"/>). One-off inputs are taken in the first window
     /// only, held ones in every window, as <see cref="Advance"/> takes them; a frame of no time is
-    /// still one window, of no time, so its inputs are taken. It stops early at a window's end once
+    /// still one window, of no time, so its inputs are taken, and a menu's choice is taken in a
+    /// first window of no time. It stops early at a window's end once
     /// <paramref name="budgetSeconds"/> of real time has gone, and once the rate is no longer a
     /// formula's (a drop, a menu's choice, a warp to a point there): the vessels are given back to
     /// the physics then (<see cref="LeaveFormula"/>), and the rest of the frame isn't run. Returns
@@ -198,9 +199,13 @@ internal sealed partial class Flight
         var start = System.Diagnostics.Stopwatch.GetTimestamp();
         var held = HeldOf(input);
         var (done, windows) = (0.0, 0);
+        // A menu's choice (a mission begun, one carried on, started again or rewound) is taken in a
+        // window of no time: the world it leaves (one brought back, a new rocket on its pad) is in
+        // the physics, back at normal speed, and no window's rules may run on it unstepped.
+        var choice = input.Choose is not null || input.CarryOn is not null || input.StartAgain || input.Rewind;
         do
         {
-            var to = NextCut(WorldTime, WorldTime + Math.Min(Scene.FormulaWindowSeconds, dt - done));
+            var to = windows == 0 && choice ? WorldTime : NextCut(WorldTime, WorldTime + Math.Min(Scene.FormulaWindowSeconds, dt - done));
             var each = (float)(to - WorldTime);
             FormulaStep(each, windows == 0 ? input : held);
             done += each;

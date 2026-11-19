@@ -29,6 +29,7 @@ public sealed class WarpPerfTests(ITestOutputHelper output)
     private const int TimedFrames = 300;
 
     [PerfFact] public void Where_a_frame_at_32x_goes_on_a_moon_transfer() => Report("Moon transfer", WarpScenes.MoonTransfer(), 32f);
+    [PerfFact] public void Where_a_frame_at_the_physics_top_rate_goes_on_a_moon_transfer() => Report("Moon transfer", WarpScenes.MoonTransfer(), Scene.PhysicsTopRate);
     [PerfFact] public void Where_a_frame_at_32x_goes_in_a_low_orbit() => Report("Low orbit", WarpScenes.LowOrbit(), 32f);
     [PerfFact] public void Where_a_frame_at_32x_goes_among_a_hundred_satellites() => Report("Hundred satellites", WarpScenes.HundredSatellites(), 32f);
 

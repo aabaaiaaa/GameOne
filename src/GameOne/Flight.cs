@@ -1747,7 +1747,7 @@ internal sealed partial class Flight : IDisposable
         _bodiesAt = WorldTime;
         // Those under formula moved on to now too, so everything after (their rules, the target,
         // the look ahead) sees every vessel where it is at this time.
-        Unwatched.Advance(dt);
+        Unwatched.Advance();
 
         foreach (var vessel in _world)
             vessel.AfterPhysics(dt, WorldTime);

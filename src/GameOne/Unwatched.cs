@@ -215,13 +215,13 @@ internal sealed class Unwatched(Flight flight)
     }
 
     /// <summary>
-    /// Moves every vessel under formula on <paramref name="dt"/>, to the flight's world time: in
+    /// Moves every vessel under formula on to the flight's world time (<see cref="Move"/>): in
     /// the step just after the physics, so the vessels' rules, the target and the look ahead see
     /// every vessel where it is now, as those in the physics are (see <see cref="Update"/>); then
     /// finds and judges their collisions with each other (<see cref="FindCollisions"/>). Each timed
     /// apart (<see cref="StepDetail.Formula"/>, <see cref="StepDetail.FormulaCollisions"/>).
     /// </summary>
-    public void Advance(float dt)
+    public void Advance()
     {
         Move();
         FindCollisions(_flight.WorldTime);

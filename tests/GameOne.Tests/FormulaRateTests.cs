@@ -243,6 +243,34 @@ public sealed class FormulaRateTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void A_rewind_at_the_top_rate_runs_no_rules_on_the_world_it_brings_back()
+    {
+        // Carried on while burning (the rewind point), then coasting at the top rate: the rewind
+        // brings it back burning, and the frame it is asked in runs nothing on it unstepped.
+        var (sim, flown) = WarpScenes.LowOrbit();
+        using var _ = sim;
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(FullThrottle: true));
+        Assert.True(flown.EngineLit);
+        var fuel = flown.Fuel; // as the carry-on's step begins, where its rewind point is taken
+        sim.Step(new FlightInput(CarryOn: flown.Id));
+        Assert.True(flight.CanRewind);
+        sim.Step(new FlightInput(CutThrottle: true));
+        ToTheTop(flight);
+        sim.Step(default);
+        Assert.Equal(Scene.TopRate, flight.TimeScale);
+
+        sim.Step(new FlightInput(Rewind: true));
+        var back = flight.Controlled;
+        output.WriteLine($"fuel {fuel:0.000000} at the rewind point, {back.Fuel:0.000000} after it; {flight.PlayerRate}x");
+        Assert.Equal(flown.Id, back.Id);
+        Assert.True(back.EngineLit);
+        Assert.Equal(1f, flight.PlayerRate);
+        Assert.False(back.OnFormula);
+        Assert.Equal(fuel, back.Fuel, 6);
+    }
+
+    [Fact]
     public void A_frame_at_the_top_rate_allocates_nothing()
     {
         var (sim, _) = WarpScenes.LowOrbit();
