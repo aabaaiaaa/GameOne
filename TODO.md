@@ -718,6 +718,17 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   impact wipes out what was there: the younger crater's bowl would replace the ground inside it
   (laid in age order, each bowl and rim blended over what is under it), so overlapping craters
   read as one on top of the other.
+- **The moon's far-side mountain rising out of its ground as the camera nears** (the user, playing
+  on the moon, 2026-11-19: it takes away from the immersion; to discuss before building). From
+  afar the sky's ray-cast draws the moon as its datum's sphere, shaded by its map but with no
+  relief in its outline. Within `Scene.MoonMeshReach` (four radii) the mesh takes over, its relief
+  eased in from none to all of it by `Scene.MoonReliefWithin` (three radii), so the handover
+  doesn't jump. The far side's 800 m mountain is then seen to grow up out of the ground over that
+  2.5 km of the way in. The user would expect it to keep its shape, as near as can be, at every
+  distance. Ways to look at: the ray-cast marching the map's heights so its outline carries the
+  relief from afar, with the mesh then drawn with all its relief from the handover; or the mesh
+  drawn further out, with its full relief, from where the mountain stands far enough off the
+  limb to be seen.
 
 - **Double precision in Jolt, as a trial** (a future feature and a performance question, from the
   double copy of each craft's place and velocity, 2026-11-18; the user wants to know whether it
