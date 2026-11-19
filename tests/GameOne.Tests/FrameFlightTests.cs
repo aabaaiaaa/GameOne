@@ -16,9 +16,11 @@ public sealed class FrameFlightTests(ITestOutputHelper output)
     [Trait("Kind", "Playthrough")]
     public void Auto_turns_to_orbit_on_the_way_up_as_it_clears_the_air()
     {
-        // Auto goes by height: the ascent turns orbital once, as it climbs past the air's top and
-        // the margin over it, its periapsis still in the air, well before the orbit step is
-        // ticked, and stays orbital through the circularising burn and on in orbit.
+        // Auto goes by height over the ground under it: the ascent turns orbital as it climbs past
+        // Auto's height (a share of the planet's radius, about the air's top) and the margin over
+        // it, its periapsis still in the air, well before the orbit step is ticked, and stays
+        // orbital through the circularising burn. On in a low orbit it may turn the surface's
+        // again only where high ground brings it under the height, and back once past the margin.
         using var sim = new Simulation(Mission.ReachOrbit);
         var flight = sim.Flight;
         var orbit = Array.FindIndex(flight.Mission.Steps, s => s.Label.StartsWith("Reach a stable orbit"));
@@ -26,12 +28,12 @@ public sealed class FrameFlightTests(ITestOutputHelper output)
         Assert.Equal(Frame.Surface, flight.Frame);
 
         var pilot = new OrbitAutopilot();
-        var turns = new List<(double Time, Frame To, float Altitude, float Periapsis)>();
+        var turns = new List<(double Time, Frame To, float Altitude, float Over, float Periapsis)>();
         var frame = flight.Frame;
         Pilot watched = (f, dt) =>
         {
             if (f.Frame != frame)
-                turns.Add((f.WorldTime, f.Frame, Planet.Altitude(f.CentreOfMass), f.Periapsis));
+                turns.Add((f.WorldTime, f.Frame, Planet.Altitude(f.CentreOfMass), Planet.SurfaceAltitude(f.CentreOfMass), f.Periapsis));
             frame = f.Frame;
             return pilot.Fly(f, dt);
         };
@@ -40,15 +42,23 @@ public sealed class FrameFlightTests(ITestOutputHelper output)
         sim.Run(watched, _ => false, maxSeconds: 60); // and on in orbit, coasting: it stays orbital
 
         foreach (var turn in turns)
-            output.WriteLine($"{turn.Time:0.0} s: to {turn.To}, {turn.Altitude:0} m up, the periapsis {turn.Periapsis:0} m");
-        output.WriteLine($"the orbit step ticked at {ticked:0.0} s; the periapsis now {flight.Periapsis:0} m");
-        var only = Assert.Single(turns);
-        Assert.Equal(Frame.Orbital, only.To);
-        Assert.InRange(only.Altitude, Scene.AtmosphereHeight + Scene.FrameOrbitMargin, Scene.AtmosphereHeight + Scene.FrameOrbitMargin + 50f);
-        Assert.True(only.Periapsis < Scene.AtmosphereHeight, "it turns orbital by its height, its orbit still in the air");
-        Assert.True(only.Time < ticked);
+            output.WriteLine($"{turn.Time:0.0} s: to {turn.To}, {turn.Altitude:0} m up, {turn.Over:0} m over the ground under it, the periapsis {turn.Periapsis:0} m");
+        output.WriteLine($"the orbit step ticked at {ticked:0.0} s; the periapsis now {flight.Periapsis:0} m; the planet's highest ground {GroundBody.Planet.MaxHeight:0} m");
+        var within = GroundBody.Planet.FrameSurfaceHeight;
+        var first = turns[0];
+        Assert.Equal(Frame.Orbital, first.To);
+        Assert.InRange(first.Over, within + Scene.FrameOrbitMargin, within + Scene.FrameOrbitMargin + 50f);
+        Assert.True(first.Periapsis < Scene.AtmosphereHeight, "it turns orbital by its height, its orbit still in the air");
+        Assert.True(first.Time < ticked);
+        Assert.DoesNotContain(turns, t => t.Time > first.Time && t.Time < ticked); // orbital through the burn
+        foreach (var turn in turns.Skip(1))
+        {
+            if (turn.To == Frame.Surface)
+                Assert.InRange(turn.Over, within - 50f, within);
+            else
+                Assert.InRange(turn.Over, within + Scene.FrameOrbitMargin, within + Scene.FrameOrbitMargin + 50f);
+        }
         Assert.Equal(FrameChoice.Auto, flight.FrameChoice);
-        Assert.Equal(Frame.Orbital, flight.Frame);
     }
 
     // Started where it is put, and moved 30 m and 300 m north or south, and 3 km along the way:

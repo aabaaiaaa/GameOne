@@ -18,26 +18,51 @@ public enum FrameChoice { Auto, Surface, Orbit, Target }
 public static class Frames
 {
     /// <summary>
-    /// A vessel's own frame at <paramref name="body"/>, by its <paramref name="height"/> (its centre
-    /// of mass's over the body's datum), whatever its orbit: the orbital one once it is above the
-    /// body's orbit floor (<see cref="GroundBody.OrbitFloor"/>: the top of its air, or with no air
-    /// its highest ground) by <see cref="Scene.FrameOrbitMargin"/>, the surface's again as it comes
-    /// down under the floor. So through the ascent above the air and the circularising burn the
-    /// line is the ellipse among the stars, and low down and landing it is the track over the
-    /// ground. The two thresholds differ so that a vessel at the floor doesn't flicker between
-    /// frames; <paramref name="current"/> is its last Auto frame. On the ground or afloat it is
-    /// always the surface's. A height that isn't a finite number (a state gone bad) is the
-    /// surface's too: a NaN would otherwise fail every comparison and stick in whichever frame it
-    /// found.
+    /// A vessel's own frame at <paramref name="body"/>, by its <paramref name="height"/> over what is
+    /// under it (<see cref="GroundBody.SurfaceAltitude"/>: the ground, a pad, or the calm sea),
+    /// whatever its orbit: the surface's near the ground, under the body's
+    /// <see cref="GroundBody.FrameSurfaceHeight"/> (a share of its radius, as the room to bleed off
+    /// its orbital speed grows with its size), the orbital one once it is above that by
+    /// <see cref="Scene.FrameOrbitMargin"/>. So the ascent's upper part and the circularising burn
+    /// have orbital prograde, and the way down and the landing surface prograde (the line is drawn
+    /// among the stars in either). The two thresholds differ so that a vessel at the edge doesn't
+    /// flicker between frames; <paramref name="current"/> is its last Auto frame. On the ground or
+    /// afloat it is always the surface's. A height that isn't a finite number (a state gone bad) is
+    /// the surface's too: a NaN would otherwise fail every comparison and stick in whichever frame
+    /// it found.
     /// </summary>
     internal static Frame Auto(GroundBody body, Frame current, float height, bool onTheGround)
     {
         if (onTheGround || !float.IsFinite(height))
             return Frame.Surface;
-        var floor = body.OrbitFloor;
+        var within = body.FrameSurfaceHeight;
         if (current == Frame.Orbital)
-            return height < floor ? Frame.Surface : Frame.Orbital;
-        return height > floor + Scene.FrameOrbitMargin ? Frame.Orbital : Frame.Surface;
+            return height < within ? Frame.Surface : Frame.Orbital;
+        return height > within + Scene.FrameOrbitMargin ? Frame.Orbital : Frame.Surface;
+    }
+
+    /// <summary>
+    /// <see cref="Auto(GroundBody, Frame, float, bool)"/> for a vessel's centre of mass at
+    /// <paramref name="p"/> in <paramref name="body"/>'s frame, its height read over what is under
+    /// it only where the answer could hang on it: far above the highest ground, or nearer the
+    /// centre than the lowest surface allows, the answer is the same whatever the ground there,
+    /// so no terrain is read (most vessels in orbit, every step).
+    /// </summary>
+    internal static Frame Auto(GroundBody body, Frame current, Vector3 p, bool onTheGround)
+    {
+        var altitude = body.Altitude(p);
+        if (onTheGround || !float.IsFinite(altitude))
+            return Frame.Surface;
+        var within = body.FrameSurfaceHeight;
+        // No surface stands higher than the map's highest ground, its fine detail and a pad's or a
+        // deck's top over that (a generous 50 m), nor lower than its lowest surface.
+        var under = altitude - (body.MaxHeight + Scene.FineDetailMargin + 50f);
+        if (under > within + Scene.FrameOrbitMargin)
+            return Auto(body, current, under, false);
+        var over = (p - body.Centre).Length() - body.LowestRadius;
+        if (over < within)
+            return Auto(body, current, over, false);
+        return Auto(body, current, body.SurfaceAltitude(p), false);
     }
 
     /// <summary>

@@ -236,15 +236,19 @@ say) stalls frames and spoils the timing.
   flown once for both by a class fixture); releasing the satellite leaving the upper stage behind, with
   its legs.
 - **`FrameFlightTests`:** whole flights flown by the frames' pilots: the orbit mission on Auto
-  turning orbital once, as it climbs past the air's top and the margin (its periapsis still in the
-  air), before its orbit step is ticked; the
+  turning orbital as it climbs past Auto's height (a share of the planet's radius, about the air's
+  top) and the margin (its periapsis still in the air), before its orbit step is ticked, and
+  orbital through the burn (on in a low orbit, the surface's again only where high ground brings
+  it under the height); the
   satellite mission's upper stage, put in orbit, brought home on Auto (orbital through its burn above
   the air, surface once down in it) onto the landing zone; a rendezvous in the target frame, closing from 1 km to
   under 50 m and holding there, under 0.5 m/s; and a hop from the pad onto the nearest test pad in
   the surface frame, by its line's landing mark.
-- **`FrameTests`:** the frames of reference one rule at a time: Auto by height, not by the orbit
-  (a booster above the air with its periapsis under the ground orbital, 400 m up surface; a
-  frame picked by hand kept as a booster thrown up through the floor passes both switches); the
+- **`FrameTests`:** the frames of reference one rule at a time: Auto by height over the ground
+  under it, not by the orbit, against a share of the body's radius (the planet's and the moon's;
+  each side of the height and the margin, held between; the overload by place the same as by the
+  height read, the ground skipped only where it can be; a booster above the air with its
+  periapsis under the ground orbital, 400 m up surface; a frame picked by hand kept as a booster thrown up through the floor passes both switches); the
   line among the stars round its body in every frame (a hop's and a de-orbit's real path above the
   air on it, its landing mark on the ground it comes down on; the straight-up top among the stars;
   an orbit the same closed ellipse in every frame, round the planet and round the moon; a later
@@ -845,9 +849,11 @@ say) stalls frames and spoils the timing.
   own; and the window looked for only as far as the orbit is flown to a crossing. The pass joins
   the planet's legs either side within a centimetre.
 - **`MoonFrameTests`:** the frames, the HUD's numbers and the readout by the body the flown
-  vessel is at: on the moon Auto orbital once the vessel is above its highest ground (822 m) by
-  the margin, surface under it, each frame kept between (the planet's hysteresis), and a vessel
-  400 m over it orbital, 50 m over it the surface's; Surface over the moon's ground and Orbit round
+  vessel is at: on the moon Auto orbital once the vessel is above its share of the radius (750 m
+  over the ground under it) by the margin, surface under it, each frame kept between (the
+  planet's hysteresis), and a vessel on its orbit 200 m over that orbital, 200 m under it the
+  surface's; at one height over the datum, the surface's over its mountain and orbital over its
+  lowest ground; Surface over the moon's ground and Orbit round
   its centre among its stars, in orbit and landed; a lander's readings the moon's (`Body`, its
   altitude over the moon's datum and the ground under it, tilt 0, still, no air, falling back,
   its local time by the moon's sun, the compass (`Hud.CompassFor`) facing its north 0° and its
@@ -862,7 +868,7 @@ say) stalls frames and spoils the timing.
   Launch and Land's booster set down on the moon where its frame has the landing zone's
   coordinates (0.1 m off them round the moon's ground) never landed on target, the zone 40.7 km
   off across the bodies, no points; and on the planet, every reading the planet's
-  (Auto by the air's top, the pad's readings, the moon's distance and height by its centre and Home's up, a planet orbit's
+  (Auto by the planet's height, about the air's top, the pad's readings, the moon's distance and height by its centre and Home's up, a planet orbit's
   period).
 - **`SolarSystemTests`:** the bodies on their paths: the sun's direction from them the clock's as
   it always was (to 1e-4 rad, the first day to 200 years in); the planet's lap round the sun the

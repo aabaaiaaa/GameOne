@@ -87,7 +87,7 @@ internal sealed class Vessel
         _lastVelocity = Velocity;
         _lastSpin = craft.Removed ? Vector3.Zero : physics!.AngularVelocity(craft); // a stand-in (see the restoring constructor) has no body
         (Apoapsis, Periapsis) = Body.Orbit(CentreOfMass, Body.AmongStars(CentreOfMass, Velocity));
-        _autoFrame = Frames.Auto(Body, Frame.Surface, Body.Altitude(_centreOfMass), onTheGround: false); // where it is, with no history
+        _autoFrame = Frames.Auto(Body, Frame.Surface, _centreOfMass, onTheGround: false); // where it is, with no history
         Measure(); // its heights and tilt from the start, before its first step
     }
 
@@ -200,7 +200,7 @@ internal sealed class Vessel
         var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, _centreOfMass, Velocity) && !EngineLit;
         _motion = Formula.Begin(Body, _trueCentre, _trueVelocity, _rotation, _angularVelocity, now, onItsOrbit);
         (Apoapsis, Periapsis) = Body.Orbit(_centreOfMass, Body.AmongStars(_centreOfMass, Velocity));
-        _autoFrame = Frames.Auto(Body, _autoFrame, Body.Altitude(_centreOfMass), still);
+        _autoFrame = Frames.Auto(Body, _autoFrame, _centreOfMass, still);
     }
 
     /// <summary>
@@ -453,7 +453,7 @@ internal sealed class Vessel
             (_burnAim, _burned) = (then.Direction((Vector3Double)burnAim).ToSingle(), then.Direction((Vector3Double)_burned).ToSingle());
         }
         _keptHull = null; // measured in the frame it left
-        _autoFrame = Frames.Auto(Body, _autoFrame, Body.Altitude(_centreOfMass), onTheGround: false);
+        _autoFrame = Frames.Auto(Body, _autoFrame, _centreOfMass, onTheGround: false);
         _at = now;
         // Its heights and tilt over its new body's ground (far from it at a sphere's edge, as a rule).
         if (Body.Altitude(_centreOfMass) - Reach > Body.MaxHeight + 4f * Reach + AirborneClearance)
@@ -1830,7 +1830,7 @@ internal sealed class Vessel
                 if (OrbitStable && !EngineLit)
                     AchievedOrbit = true;
             }
-            _autoFrame = Frames.Auto(Body, _autoFrame, Body.Altitude(_centreOfMass), State is FlightState.Landed or FlightState.Floating);
+            _autoFrame = Frames.Auto(Body, _autoFrame, _centreOfMass, State is FlightState.Landed or FlightState.Floating);
             return;
         }
         if (State is FlightState.Landed or FlightState.Floating && _craft.Frozen)
@@ -1867,7 +1867,7 @@ internal sealed class Vessel
         Timings.Lap(StepPart.Contact);
         // After the contact, so a vessel that has just come down is in the surface frame from that
         // step, and lifts off again from it.
-        _autoFrame = Frames.Auto(Body, _autoFrame, Body.Altitude(_centreOfMass), State is FlightState.Landed or FlightState.Floating);
+        _autoFrame = Frames.Auto(Body, _autoFrame, _centreOfMass, State is FlightState.Landed or FlightState.Floating);
         _lastVelocity = Velocity;
         if (!_craft.Removed)
             _lastSpin = _physics!.AngularVelocity(_craft);

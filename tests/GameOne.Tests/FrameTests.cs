@@ -11,29 +11,42 @@ namespace GameOne.Tests;
 /// </summary>
 public sealed class FrameTests(ITestOutputHelper output)
 {
+    /// <summary>The planet's Auto height: a share of its radius, its air's top, near enough.</summary>
+    private static readonly float Within = GroundBody.Planet.FrameSurfaceHeight;
+
     [Fact]
-    public void Auto_switches_to_orbit_past_the_margin_and_back_in_the_air()
+    public void Auto_s_surface_height_is_a_share_of_the_body_s_radius()
+    {
+        output.WriteLine($"the planet's {GroundBody.Planet.FrameSurfaceHeight:0.0} m, the moon's {GroundBody.Moon.FrameSurfaceHeight:0.0} m");
+        Assert.Equal(Scene.FrameSurfaceWithin * GroundBody.Planet.SeaRadius, GroundBody.Planet.FrameSurfaceHeight);
+        Assert.Equal(Scene.FrameSurfaceWithin * GroundBody.Moon.SeaRadius, GroundBody.Moon.FrameSurfaceHeight);
+        Assert.InRange(GroundBody.Planet.FrameSurfaceHeight, Scene.AtmosphereHeight - 20f, Scene.AtmosphereHeight + 20f);
+        Assert.InRange(GroundBody.Moon.FrameSurfaceHeight, 740f, 760f);
+    }
+
+    [Fact]
+    public void Auto_switches_to_orbit_past_the_margin_and_back_near_the_ground()
     {
         var frame = Frame.Surface;
-        frame = Frames.Auto(GroundBody.Planet, frame, 3050f, false);
+        frame = Frames.Auto(GroundBody.Planet, frame, Within + 50f, false);
         Assert.Equal(Frame.Surface, frame);
-        frame = Frames.Auto(GroundBody.Planet, frame, 3101f, false);
+        frame = Frames.Auto(GroundBody.Planet, frame, Within + Scene.FrameOrbitMargin + 1f, false);
         Assert.Equal(Frame.Orbital, frame);
-        frame = Frames.Auto(GroundBody.Planet, frame, 3050f, false);
+        frame = Frames.Auto(GroundBody.Planet, frame, Within + 50f, false);
         Assert.Equal(Frame.Orbital, frame);
-        frame = Frames.Auto(GroundBody.Planet, frame, 2999f, false);
+        frame = Frames.Auto(GroundBody.Planet, frame, Within - 1f, false);
         Assert.Equal(Frame.Surface, frame);
     }
 
     [Fact]
-    public void Auto_switches_exactly_at_the_air_s_top_and_the_margin_over_it()
+    public void Auto_switches_exactly_at_the_height_and_the_margin_over_it()
     {
-        // From Orbital, down to the air's top itself is still clear of it; anything lower drops.
-        Assert.Equal(Frame.Orbital, Frames.Auto(GroundBody.Planet, Frame.Orbital, Scene.AtmosphereHeight, false));
-        Assert.Equal(Frame.Surface, Frames.Auto(GroundBody.Planet, Frame.Orbital, Scene.AtmosphereHeight - 0.1f, false));
+        // From Orbital, down to the height itself is still clear of it; anything lower drops.
+        Assert.Equal(Frame.Orbital, Frames.Auto(GroundBody.Planet, Frame.Orbital, Within, false));
+        Assert.Equal(Frame.Surface, Frames.Auto(GroundBody.Planet, Frame.Orbital, Within - 0.1f, false));
         // From Surface, the margin itself isn't past it; anything higher is.
-        Assert.Equal(Frame.Surface, Frames.Auto(GroundBody.Planet, Frame.Surface, Scene.AtmosphereHeight + Scene.FrameOrbitMargin, false));
-        Assert.Equal(Frame.Orbital, Frames.Auto(GroundBody.Planet, Frame.Surface, Scene.AtmosphereHeight + Scene.FrameOrbitMargin + 0.1f, false));
+        Assert.Equal(Frame.Surface, Frames.Auto(GroundBody.Planet, Frame.Surface, Within + Scene.FrameOrbitMargin, false));
+        Assert.Equal(Frame.Orbital, Frames.Auto(GroundBody.Planet, Frame.Surface, Within + Scene.FrameOrbitMargin + 0.1f, false));
     }
 
     [Theory]
@@ -52,7 +65,7 @@ public sealed class FrameTests(ITestOutputHelper output)
     {
         var frame = Frame.Surface;
         var seen = new List<Frame>();
-        foreach (var height in new[] { 2990f, 3020f, 3110f, 3040f, 3105f, 2998f, 3060f })
+        foreach (var height in new[] { -10f, 20f, 110f, 40f, 105f, -2f, 60f }.Select(h => Within + h))
             seen.Add(frame = Frames.Auto(GroundBody.Planet, frame, height, false));
         Assert.Equal(
             [Frame.Surface, Frame.Surface, Frame.Orbital, Frame.Orbital, Frame.Orbital, Frame.Surface, Frame.Surface],
@@ -71,24 +84,57 @@ public sealed class FrameTests(ITestOutputHelper output)
     [Fact]
     public void Auto_goes_by_height_not_by_the_orbit()
     {
-        // A booster above the air going east at 150 m/s: its periapsis is far under the ground, but
-        // it is over the orbit floor by more than the margin, so Auto has it orbital (the line the
-        // ellipse among the stars, with orbital prograde on it). The same booster 400 m over the
-        // ground is under the floor: surface.
+        // A booster 3.5 km over the ground going east at 150 m/s: its periapsis is far under the
+        // ground, but it is over Auto's height by more than the margin, so Auto has it orbital
+        // (orbital prograde on its line). The same booster 400 m over the ground is under the
+        // height: surface.
         using (var high = Drops.At(Vector3.Zero, Planet.East(Vector3.Zero), 0f, sideways: Planet.East(Vector3.Zero) * 150f, clearance: 3500f))
         {
             var flight = high.Flight;
             output.WriteLine($"high: {flight.Altitude:0} m up, periapsis {flight.Periapsis:0} m: {flight.Controlled.AutoFrame}");
             Assert.True(flight.Periapsis < 0f, "it should be suborbital");
-            Assert.True(flight.Altitude > GroundBody.Planet.OrbitFloor + Scene.FrameOrbitMargin);
+            Assert.True(Planet.SurfaceAltitude(flight.CentreOfMass) > Within + Scene.FrameOrbitMargin);
             Assert.Equal(Frame.Orbital, flight.Controlled.AutoFrame);
             Assert.Equal(Frame.Orbital, flight.Frame);
         }
         using var low = Drops.At(Vector3.Zero, Planet.East(Vector3.Zero), 0f, sideways: Planet.East(Vector3.Zero) * 150f, clearance: 400f);
         output.WriteLine($"low: {low.Flight.Altitude:0} m up: {low.Flight.Controlled.AutoFrame}");
-        Assert.True(low.Flight.Altitude < GroundBody.Planet.OrbitFloor);
+        Assert.True(Planet.SurfaceAltitude(low.Flight.CentreOfMass) < Within);
         Assert.Equal(Frame.Surface, low.Flight.Controlled.AutoFrame);
         Assert.Equal(Frame.Surface, low.Flight.Frame);
+    }
+
+    [Fact]
+    public void Auto_by_a_place_reads_the_height_over_what_is_under_it_and_skips_the_ground_only_where_it_can()
+    {
+        // The overload by place answers what the height over the surface under it would, from either
+        // frame, whether it reads the ground or not: places from under the lowest surface to far
+        // above the highest ground, over the planet and the moon, in every direction.
+        var checkedPlaces = 0;
+        foreach (var body in new[] { GroundBody.Planet, GroundBody.Moon })
+        {
+            var within = body.FrameSurfaceHeight;
+            for (var i = 0; i < 400; i++)
+            {
+                // Directions spread over the sphere (a Fibonacci lattice), heights over the datum
+                // from below the lowest ground to well above the highest.
+                var z = 1f - 2f * (i + 0.5f) / 400f;
+                var (sin, cos) = MathF.SinCos(i * 2.39996323f);
+                var direction = new Vector3(MathF.Sqrt(1f - z * z) * cos, z, MathF.Sqrt(1f - z * z) * sin);
+                foreach (var height in new[] { -200f, 0f, within - 5f, within + 50f, within + 300f, body.MaxHeight + within, body.MaxHeight + within + 200f, 20_000f })
+                {
+                    var p = body.Centre + direction * (body.SeaRadius + height);
+                    if ((p - body.Centre).Length() < body.LowestRadius)
+                        continue;
+                    var over = body.SurfaceAltitude(p);
+                    foreach (var current in new[] { Frame.Surface, Frame.Orbital })
+                        Assert.Equal(Frames.Auto(body, current, over, false), Frames.Auto(body, current, p, false));
+                    checkedPlaces++;
+                }
+            }
+        }
+        output.WriteLine($"{checkedPlaces} places checked");
+        Assert.Equal(Frame.Surface, Frames.Auto(GroundBody.Planet, Frame.Orbital, new Vector3(float.NaN), false));
     }
 
     [Fact]

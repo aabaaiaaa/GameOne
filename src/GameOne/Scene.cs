@@ -343,7 +343,14 @@ internal static class Scene
     public const float DetailScale = 10000f;
     public const float SurfaceGravity = 9.81f;
     public const float AtmosphereHeight = 3000f;      // no air at all above this: an orbit clear of it is stable
-    public const float FrameOrbitMargin = 100f;       // Auto's frame turns orbital this far above the air (and back at the air's top), so a grazing orbit doesn't flicker
+    /// <summary>
+    /// How near its ground Auto keeps a vessel in the surface frame, as a share of its body's radius
+    /// (its datum's): the room needed to bleed off a body's orbital speed grows with that speed
+    /// (v² = gR, so at a deceleration of g the distance is R/2), so in proportion to the radius.
+    /// The planet's 3 km (its air's top), the moon's 750 m, each over the ground under the vessel.
+    /// </summary>
+    public const float FrameSurfaceWithin = 0.3f;
+    public const float FrameOrbitMargin = 100f;       // Auto's frame turns orbital this far above its surface height (and back below it), so a vessel at the edge doesn't flicker
     public const float AtmosphereScaleHeight = 700f;  // the air thins by a factor of e every this much higher
     // Below these speeds in the frame in use the holds leave the nose where it is. Over the ground
     // (or round an orbit) a slow vessel's velocity is mostly the noise of touching the ground and of

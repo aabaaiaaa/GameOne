@@ -229,6 +229,13 @@ internal sealed class GroundBody
     public float OrbitFloor => HasAir ? Scene.AtmosphereHeight : MaxHeight;
 
     /// <summary>
+    /// The height over what is under a vessel (<see cref="SurfaceAltitude"/>) below which Auto has it
+    /// in the surface frame: <see cref="Scene.FrameSurfaceWithin"/> of its radius (its datum's,
+    /// <see cref="SeaRadius"/>), as the room to bleed off its orbital speed grows with its size.
+    /// </summary>
+    public float FrameSurfaceHeight => Scene.FrameSurfaceWithin * SeaRadius;
+
+    /// <summary>
     /// Whether <paramref name="p"/> is low over its ground: within <see cref="Scene.GroundTopSpeedHeight"/>
     /// of its highest ground, its fine detail included, where a craft's speed over the ground is
     /// held to <see cref="Scene.GroundTopSpeed"/> (in the physics and under formula alike); one
