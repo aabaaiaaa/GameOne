@@ -100,6 +100,86 @@ public sealed class CameraSubjectTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void On_the_planet_the_camera_is_held_among_the_stars_and_the_planet_turns_under_it()
+    {
+        // Centred on the planet in the map, from the planet's own frame (the flown vessel's): over
+        // 200 s of world time its place about the planet's centre, among the stars, is where it was
+        // put, while held in the turning ground's frame it would have gone round with the ground by
+        // the planet's turn. And in the chase view on it the same way (its distance there kept clear
+        // of the ground under it, which differs as the planet turns under it).
+        var camera = new ChaseCamera(null);
+        camera.Update(Dt, Vector3.Zero, Dt, Home, 0.0);
+        camera.CentreOn(new CameraCentre(CentreKind.Body, Home.Index));
+        camera.ToggleZoomOut(Scene.PlanetRadius);
+        foreach (var map in new[] { true, false })
+        {
+            if (!map)
+                camera.ToggleZoomOut(Scene.PlanetRadius); // back to the chase view, still on the planet
+            var t = map ? 0.0 : 1000.0;
+            for (var i = 0; i < 5; i++, t += 1.0) // settled: the zoom's way done
+                camera.Update(1f, Home.Centre, 1f, Home, t);
+            var (start, from) = (camera.Position - Home.Centre, t - 1.0);
+            for (var i = 0; i < 200; i++, t += 1.0)
+                camera.Update(1f, Home.Centre, 1f, Home, t);
+            var (now, seconds) = (camera.Position - Home.Centre, t - 1.0 - from);
+            var amongStars = Home.TurnedDirection(now, seconds); // where it is now, among the stars as they were at the start
+            var off = Vector3.Distance(amongStars, start) / start.Length();
+            var way = float.RadiansToDegrees(MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(amongStars), Vector3.Normalize(start)), -1f, 1f)));
+            var pole = Vector3.Normalize(Home.NorthPole);
+            Vector3 Flat(Vector3 v) => Vector3.Normalize(v - pole * Vector3.Dot(v, pole)); // round the pole, which the turn is about
+            var overGround = float.RadiansToDegrees(MathF.Acos(Math.Clamp(Vector3.Dot(Flat(now), Flat(start)), -1f, 1f)));
+            var spin = float.RadiansToDegrees(MathF.Abs(Home.TurnAngle(seconds)));
+            output.WriteLine($"{(map ? "map" : "chase")}: after {seconds:0} s, {way:0.000} deg and {off * 100:0.000}% of its distance off where it was among the stars; over the ground it has gone round {overGround:0.00} deg (the planet's turn {spin:0.00} deg)");
+            Assert.InRange(way, 0f, 0.05f);
+            if (map)
+                Assert.InRange(off, 0f, 0.001f);
+            Assert.InRange(overGround, spin - 0.5f, spin + 0.5f);
+            Assert.True(spin > 10f, "the planet should turn well under it meanwhile");
+        }
+    }
+
+    [Fact]
+    public void On_the_moon_the_camera_is_held_among_the_stars_across_the_view_s_frame_changing()
+    {
+        // Centred on the moon in the map from the planet's frame, then the view's frame changed to
+        // the moon's (the flown vessel crossing into its sphere): its place about the moon's centre,
+        // among the moon's stars, is held all the while, the moon turning under it.
+        var camera = new ChaseCamera(null);
+        camera.Update(Dt, Vector3.Zero, Dt, Home, 0.0);
+        camera.CentreOn(new CameraCentre(CentreKind.Body, Moon.Index));
+        camera.ToggleZoomOut(Scene.PlanetRadius);
+        var t = 100.0;
+        // The camera's offset from the moon's centre in the moon's own frame, among its stars as they were at `from`.
+        Vector3 Held(GroundBody view, double at, double from)
+        {
+            var toMoon = view == Moon ? FrameChange.Identity : Bodies.Change(view, Moon, at);
+            var offset = (toMoon.Point((Vector3Double)camera.Position) - (Vector3Double)Moon.Centre).ToSingle();
+            return Moon.TurnedDirection(offset, at - from);
+        }
+        void Fly(GroundBody view, int seconds)
+        {
+            for (var i = 0; i < seconds; i++, t += 1.0)
+            {
+                var across = view == Moon ? FrameChange.Identity : Bodies.Change(Moon, view, t);
+                camera.Update(1f, across.Point((Vector3Double)Moon.Centre).ToSingle(), 1f, view, t, Moon, across);
+            }
+        }
+        Fly(Home, 5);
+        var from = t - 1.0;
+        var start = Held(Home, from, from);
+        Fly(Home, 300);
+        var before = Held(Home, t - 1.0, from);
+        camera.Rebase(Bodies.Change(Home, Moon, t - 1.0));
+        Fly(Moon, 300);
+        var after = Held(Moon, t - 1.0, from);
+        var spin = float.RadiansToDegrees(MathF.Abs(Moon.TurnAngle(t - 1.0 - from)));
+        output.WriteLine($"{start.Length():0} m out; {Vector3.Distance(before, start):0.00} m off before the rebase, {Vector3.Distance(after, start):0.00} m after; the moon turned {spin:0.0} deg meanwhile");
+        Assert.InRange(Vector3.Distance(before, start), 0f, start.Length() * 0.001f);
+        Assert.InRange(Vector3.Distance(after, start), 0f, start.Length() * 0.001f);
+        Assert.True(spin > 1f, "the moon should turn under it meanwhile");
+    }
+
+    [Fact]
     public void The_compass_tape_keeps_the_facing_it_had_on_the_flown_vessel_while_the_camera_is_elsewhere()
     {
         // Every mark on the tape is the flown vessel's, so its facing is too: the camera's while on

@@ -1085,7 +1085,10 @@ say) stalls frames and spoils the timing.
   `Scene.PlaceViewAside` aside, turned and zoomed round it; and the markers' distances measured
   from the flown vessel wherever the camera is (`Markers.DistancesFrom`: on the moon, not 0 m to it);
   and the map centred on a body, the one the flown vessel is at as well as another, looking at its
-  centre from over its pole, nothing in the camera not a number; a right click finding a vessel
+  centre from over its pole, nothing in the camera not a number; on a body the camera held among
+  the stars as the body turns under it (the planet's, in the map and the chase view, its place
+  about the centre kept where it was put after 200 s while the ground turns 65 degrees; the moon's
+  from the planet's frame, then across the view's frame changing to the moon's); a right click finding a vessel
   seen at another body (`Hud.VesselClicked`, changed into the view's frame); a click on a body's
   disc finding it, and none off it, behind the camera or behind the sun (`Hud.BodyDisc`); and the
   compass tape keeping the facing it had on the flown vessel while the camera is elsewhere

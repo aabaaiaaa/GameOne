@@ -28,7 +28,8 @@ namespace GameOne;
 /// the pole, far enough out for its orbit).</para>
 /// <para>It can be put on something other than its vessel (<see cref="CentreOn"/>: another vessel,
 /// a place or a body, <see cref="CameraSubject"/>), followed and turned round the same way, its
-/// angles in the local frame of the body that is at.</para>
+/// angles in the local frame of the body that is at; on a body's centre, held among the stars as
+/// the body turns under it (<see cref="HoldAmongTheStars"/>).</para>
 /// </remarks>
 internal sealed class ChaseCamera
 {
@@ -532,6 +533,8 @@ internal sealed class ChaseCamera
             _pitch = Math.Clamp(_pitch + _pendingDrag.Y * Scene.CameraRadiansPerDragPixel, MinPitch, MaxPitch);
             _distance = Math.Clamp(_distance * MathF.Pow(0.9f, _pendingZoom), Scene.CameraMinDistance, Scene.CameraMaxDistance);
         }
+        if (Centre.Kind == CentreKind.Body)
+            HoldAmongTheStars(around, dt);
         NoteFacing();
         _pendingDrag = Vector2.Zero;
         _pendingZoom = 0f;
@@ -598,6 +601,29 @@ internal sealed class ChaseCamera
             ZoomedOutView(position);
             Position = OutsideTheSun(body, worldTime, Position);
         }
+    }
+
+    /// <summary>
+    /// On a body's centre, its angles are round that body's pole (<see cref="PoleFrame"/>, in its
+    /// ground's frame, which turns with it), so left alone the camera would go round with the
+    /// ground and the body seem not to turn. Turned back by the body's own turn over the
+    /// <paramref name="dt"/> of game time (so in a warp the body turns under it faster too), its
+    /// place about the body's centre and the way it looks are held among the stars from where it
+    /// was put, the body turning under it; the player's own turning and zooming still move it.
+    /// The turn is about the pole, so it is the yaw alone, the map's and the chase view's alike.
+    /// </summary>
+    private void HoldAmongTheStars(GroundBody body, float dt)
+    {
+        if (dt == 0f)
+            return;
+        var (_, east, south) = PoleFrame(body);
+        var (sin, cos) = MathF.SinCos(_outYaw);
+        var held = body.TurnedDirection(east * sin + south * cos, -dt);
+        var turn = MathF.Atan2(Vector3.Dot(held, east), Vector3.Dot(held, south)) - _outYaw;
+        // Kept within a turn either way, so the angles keep their precision however long it is held.
+        _yaw = (float)Math.IEEERemainder(_yaw + turn, Math.Tau);
+        _outYaw = (float)Math.IEEERemainder(_outYaw + turn, Math.Tau);
+        _lookYaw = (float)Math.IEEERemainder(_lookYaw + turn, Math.Tau); // a free look's way, held with it
     }
 
     /// <summary>
