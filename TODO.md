@@ -315,6 +315,30 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   time warp, the map and nodes, small views, the moon), how long it runs, whether it pauses at
   each screen, and which parts need a prepared world because a script can't fly there (orbit,
   the moon), as the Satellites and moon-trip worlds do for their scripts.
+- **A quick save and a quick load** (the user, 2026-11-19; to discuss before building). One temp
+  slot holding one game state: quick save just before a re-entry, say, and quick load to try it
+  again if it fails. Saving asks nothing. Loading asks for the quick-load key a second time within
+  3 s, so an old state isn't loaded by accident (losing the one now). Keys: F5 to save and F9 to
+  load are the common ones, in other games and in other flight games alike, and are free here (F2
+  hides the HUD). To discuss:
+  - The keys are about the game, not the flight, against CLAUDE.md's "Keys are for flying; the game
+    is in the menu" (F2 is its one exception, about the screen). Quick save and load would be a
+    second exception, by the user's call, written there; or they live in the game menu too.
+  - What the slot is: one per world or one in all; kept on disk (surviving a quit) or in memory only.
+  - How it sits beside the world's own saving and the rewind to when a mission began or was resumed
+    (resuming missions): a quick load is a rewind to the moment saved, undoing everything since,
+    the world log and other missions included.
+  - What the second press shows meanwhile (a line on the HUD: "Press F9 again to load the quick
+    save from <time> ago"), and that the link-up shows after it, as a carry-on's does.
+- **Pausing with P, and a paused warp** (the user, 2026-11-19; to discuss before building). The P
+  key pauses the game and again carries on, with no menu over it; and the rate keys' lowest setting
+  is a paused warp (time standing still: `Flight.Rates` gains a 0 under ×1). To discuss: CLAUDE.md
+  has Esc as the only way to pause (it opens the game menu); a P pause is a key for the game's
+  clock, much as the rate keys are (they are flying aids), so it would be written there as such.
+  Whether P and the paused rate are one thing (P sets the rate to paused, and back to the rate
+  before); what can still be done paused (the camera turned and zoomed, the map, nodes planned and
+  dragged, the HUD read, vessels switched); and that nothing steps (the physics, the formula, the
+  look ahead's collisions) while it stands, as with the menu up.
 - **Vessels left on the pads, flown when the player likes** (the user, 2026-11-02). Today a new
   flight clears its own pad by itself (`Flight.StartFlight`): it removes anything within the pad
   and 3 m round it (up to 58 m high), abandoning a mission whose waiting rocket that was, before
