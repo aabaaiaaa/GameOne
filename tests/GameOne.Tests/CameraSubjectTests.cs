@@ -139,6 +139,32 @@ public sealed class CameraSubjectTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void On_the_planet_the_camera_is_held_among_the_stars_frame_by_frame_for_an_hour()
+    {
+        // As the game steps it, at 60 frames a second, for an hour of world time (the planet turning
+        // round some three times under it): each frame's turn is a small share of a float's step
+        // in the yaw, so a rounding not carried on would drift it off by a degree or so.
+        var camera = new ChaseCamera(null);
+        camera.Update(Dt, Vector3.Zero, Dt, Home, 0.0);
+        camera.CentreOn(new CameraCentre(CentreKind.Body, Home.Index));
+        camera.ToggleZoomOut(Scene.PlanetRadius);
+        const int perSecond = 60;
+        var frame = 0;
+        double At(int f) => (double)f / perSecond;
+        for (; frame < 2 * perSecond; frame++) // settled: the zoom's way done
+            camera.Update(1f / perSecond, Home.Centre, 1f / perSecond, Home, At(frame));
+        var (start, from) = (camera.Position - Home.Centre, At(frame - 1));
+        for (var end = frame + 3600 * perSecond; frame < end; frame++)
+            camera.Update(1f / perSecond, Home.Centre, 1f / perSecond, Home, At(frame));
+        var seconds = At(frame - 1) - from;
+        var amongStars = Home.TurnedDirection(camera.Position - Home.Centre, seconds);
+        var way = float.RadiansToDegrees(MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(amongStars), Vector3.Normalize(start)), -1f, 1f)));
+        output.WriteLine($"after {seconds:0} s ({seconds * perSecond:0} frames, {seconds / Home.TurnSeconds:0.00} of the planet's turns): {way:0.0000} deg off where it was among the stars");
+        Assert.True(seconds / Home.TurnSeconds > 2, "the planet should turn round under it a few times");
+        Assert.InRange(way, 0f, 0.02f);
+    }
+
+    [Fact]
     public void On_the_moon_the_camera_is_held_among_the_stars_across_the_view_s_frame_changing()
     {
         // Centred on the moon in the map from the planet's frame, then the view's frame changed to

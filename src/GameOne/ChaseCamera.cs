@@ -610,20 +610,35 @@ internal sealed class ChaseCamera
     /// <paramref name="dt"/> of game time (so in a warp the body turns under it faster too), its
     /// place about the body's centre and the way it looks are held among the stars from where it
     /// was put, the body turning under it; the player's own turning and zooming still move it.
-    /// The turn is about the pole, so it is the yaw alone, the map's and the chase view's alike.
+    /// The turn is about the pole, so it is the yaw alone, the map's and the chase view's alike:
+    /// the body's turn itself, back over <paramref name="dt"/> (the pole frame's east is its up
+    /// crossed with its south, so a turn about the pole by an angle adds that angle to the yaw).
+    /// Each frame's turn is a small fraction of a float's step at a yaw near half a turn, so what
+    /// rounding leaves over is carried to the next (<see cref="Held"/>): held for hours, it doesn't drift.
     /// </summary>
     private void HoldAmongTheStars(GroundBody body, float dt)
     {
         if (dt == 0f)
             return;
-        var (_, east, south) = PoleFrame(body);
-        var (sin, cos) = MathF.SinCos(_outYaw);
-        var held = body.TurnedDirection(east * sin + south * cos, -dt);
-        var turn = MathF.Atan2(Vector3.Dot(held, east), Vector3.Dot(held, south)) - _outYaw;
-        // Kept within a turn either way, so the angles keep their precision however long it is held.
-        _yaw = (float)Math.IEEERemainder(_yaw + turn, Math.Tau);
-        _outYaw = (float)Math.IEEERemainder(_outYaw + turn, Math.Tau);
-        _lookYaw = (float)Math.IEEERemainder(_lookYaw + turn, Math.Tau); // a free look's way, held with it
+        var turn = body.TurnRadians(-dt);
+        _yaw = Held(_yaw, turn, ref _yawRest);
+        _outYaw = Held(_outYaw, turn, ref _outYawRest);
+        _lookYaw = Held(_lookYaw, turn, ref _lookYawRest); // a free look's way, held with it
+    }
+
+    private double _yawRest, _outYawRest, _lookYawRest; // what rounding the held yaws to floats left over (see Held)
+
+    /// <summary>
+    /// <paramref name="angle"/> turned by <paramref name="turn"/>, in double with what the last
+    /// rounding left over (<paramref name="rest"/>, given back for the next), kept within a turn
+    /// either way so it keeps its precision however long it is held.
+    /// </summary>
+    private static float Held(float angle, double turn, ref double rest)
+    {
+        var exact = Math.IEEERemainder(angle + rest + turn, Math.Tau);
+        var rounded = (float)exact;
+        rest = exact - rounded;
+        return rounded;
     }
 
     /// <summary>

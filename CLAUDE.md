@@ -633,9 +633,9 @@ dotnet run --project src/GameOne
   air's top (3 km, over the share's 2,990 m), the moon's its highest ground (822 m, over 750 m), so
   it is never orbital low over the moon's mountain; the share takes over on a bigger body. Orbital
   once above that height by `Scene.FrameOrbitMargin` (100 m), surface again under the height itself
-  (held between, so it doesn't flip-flop at the edge; landed or afloat always surface). So the ascent's upper part and the circularising burn have
-  orbital prograde, and the way down and the landing surface prograde. The HUD's and the
-  readout's numbers are that body's too (heights over its datum, its orbit, local time, the
+  (held between, so it doesn't flip-flop at the edge; landed or afloat always surface). So the
+  ascent's upper part and the circularising burn have orbital prograde, and the way down and the
+  landing surface prograde. The HUD's and the readout's numbers are that body's too (heights over its datum, its orbit, local time, the
   compass's north), never the planet's by assumption. The holds follow the frame in use (floor
   5 m/s; 0.2 m/s in Target against a flying target or in orbit, `Flight.HoldFloor`), as do the
   speeds and the travel markers, but not the paths: every path (the flown vessel's, its plan's, a
