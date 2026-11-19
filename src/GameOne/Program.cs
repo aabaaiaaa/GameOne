@@ -161,6 +161,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
         {
             // The rate keys are taken only here, so one pressed while paused stays waiting and
             // changes the rate on the first frame after the pause.
+            var rateKeys = controls.RateKeys(real);
             watched.Clear();
             var small = view.Views.Small;
             for (var i = 0; i < small.Count; i++) // by index: a foreach over the interface would box its enumerator every frame
@@ -177,7 +178,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
                 StartAgain = hud.TakeStartAgain(), Rewind = hud.TakeRewind(), CompleteRun = hud.TakeCompleteRun(), AbandonRun = hud.TakeAbandonRun(),
                 SwitchTo = swap, SetTarget = target, ClearTarget = clearTarget,
                 Plan = hud.TakePlan(), ChooseFrame = hud.TakeFrameChoice(), ChooseHold = hud.TakeHoldChoice(),
-                Slower = controls.Take(ControlAction.Slower), Faster = controls.Take(ControlAction.Faster), Watched = watched,
+                Slower = rateKeys.Slower, Faster = rateKeys.Faster, Watched = watched,
                 // Last frame's: what the main view showed, at the body what the camera is on is at, and the vessel it is on.
                 Camera = view.CameraPlace.Position, CameraBody = view.CameraPlace.Body, CameraVelocity = view.CameraVelocity, Watching = view.WatchingNow(flight),
                 NearMisses = hud.Settings.SlowNearMisses, WarpTo = hud.TakeWarpTo(),

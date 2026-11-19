@@ -89,6 +89,9 @@ internal static class Scene
     /// </summary>
     public const float PhysicsTopRate = 8f;
 
+    /// <summary>How long (real seconds) a held rate key waits, and then between steps, before it steps the rate on again (<see cref="RateKeyRepeat"/>).</summary>
+    public const float RateKeyRepeatSeconds = 0.25f;
+
     /// <summary>The fastest rate of all (<see cref="Flight.Rates"/>, doubling from 1/4): a lap of the sun in under a second of real time.</summary>
     public const float TopRate = 16384f;
 
