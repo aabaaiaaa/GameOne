@@ -565,6 +565,8 @@ internal sealed class Flight : IDisposable
     public float Fuel => Controlled.Fuel;
     public float TotalFuel => Controlled.TotalFuel;
     public float Mass => Controlled.Mass;
+    public float DeltaV => Controlled.DeltaV;
+    public float DeltaVInAll => Controlled.DeltaVInAll;
     public float MaxAcceleration => Controlled.MaxAcceleration;
     public float LegDeploy => Controlled.LegDeploy;
     public bool LegsWanted => Controlled.LegsWanted;

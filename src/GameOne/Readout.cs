@@ -251,6 +251,9 @@ internal sealed class Readout
         }
         Show("Throttle", $"{flight.Throttle * 100:0}%");
         Show("Fuel", $"{flight.Fuel * 100:0}%");
+        Show("Delta-v", $"{flight.DeltaV:0} m/s"); // the firing stage's, in vacuum
+        if (flight.CanStage)
+            Show("Delta-v in all", $"{flight.DeltaVInAll:0} m/s"); // every stage still on it, each burnt in turn
         if (flight.StageCount > 1)
             Show("Stage", $"{flight.CurrentStage.Name.ToLowerInvariant()} (stage {flight.Stage + 1} of {flight.StageCount})");
         if (flight.HasLegs)

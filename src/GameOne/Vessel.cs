@@ -904,6 +904,46 @@ internal sealed class Vessel
         }
     }
 
+    /// <summary>
+    /// The speed change its firing stage's fuel left can still give it, in m/s, in vacuum (the
+    /// rocket equation, by its <see cref="Stage.ExhaustVelocity"/>): from its <see cref="Mass"/>
+    /// now, which the thrust's acceleration is worked out from (<see cref="MaxAcceleration"/>), to
+    /// that less the fuel. 0 with no fuel or no engine.
+    /// </summary>
+    public float DeltaV => BurnDeltaV(Stage, Mass);
+
+    /// <summary>
+    /// The speed change all its stages' fuel left can still give it, in m/s, in vacuum: each stage
+    /// still on it burnt in turn from the bottom, carrying what is above it, and dropped once spent
+    /// (its fairing, while on, coming off as the stage under the payload is dropped, as staging has it).
+    /// </summary>
+    public float DeltaVInAll
+    {
+        get
+        {
+            var mass = Mass;
+            var total = 0f;
+            for (var i = Stage; i <= TopStage; i++)
+            {
+                total += BurnDeltaV(i, mass);
+                mass -= Vehicle.Stages[i].DryMass + _fuel[i];
+                if (FairingOn && i + 1 == TopStage)
+                    mass -= Fairing.Mass;
+            }
+            return total;
+        }
+    }
+
+    /// <summary>Stage <paramref name="i"/>'s fuel left burnt with <paramref name="mass"/> on the engine at the start, as a speed change in vacuum, in m/s.</summary>
+    private float BurnDeltaV(int i, float mass)
+    {
+        var stage = Vehicle.Stages[i];
+        var fuel = _fuel[i];
+        if (fuel <= 0f || stage.Thrust <= 0f || stage.FuelFlow <= 0f || mass <= fuel)
+            return 0f;
+        return stage.ExhaustVelocity * MathF.Log(mass / (mass - fuel));
+    }
+
     /// <summary>How far the legs are out, 0 (stowed) to 1 (deployed).</summary>
     public float LegDeploy { get; private set; }
     public bool LegsWanted => _legsWanted;

@@ -2288,6 +2288,12 @@ internal sealed class Hud : IDisposable
                 var x = min.X + (max.X - min.X) * reserve;
                 ImGui.GetWindowDrawList().AddLine(new float2(x, min.Y - 3f), new float2(x, max.Y + 3f), new ImColor8(90, 205, 255), 2f);
             }
+            // What the fuel left can still do, in vacuum (see Vessel.DeltaV): the firing stage's,
+            // and with stages above it, theirs too, each burnt in turn. Information, never a prompt.
+            if (flight.CanStage)
+                ImGui.Text($"Delta-v  {flight.DeltaV:0} m/s  ({flight.DeltaVInAll:0} m/s in all)");
+            else
+                ImGui.Text($"Delta-v  {flight.DeltaV:0} m/s");
             if (flight.JettisonsFairing && flight.State == FlightState.Flying)
             {
                 // Too soon, and the bare payload breaks up in the air: not only at the speed it is

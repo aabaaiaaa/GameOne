@@ -652,6 +652,10 @@ say) stalls frames and spoils the timing.
   (`NodeEditor.ChangedElsewhere`: a node gone as it matched), by which a grab is let go. Its
   handles shown (giving the steering rings way) only with the node and one of them on the screen
   (`NodeEditor.ShowsHandles`).
+- **`DeltaVTests`:** the delta-v left (`Vessel.DeltaV`, `DeltaVInAll`): a burn in vacuum giving
+  what it uses within 1% (against the same flight coasting), none with no fuel, and a stack's
+  stages burnt in turn as worked out by hand from the stage table, a payload's fairing carried
+  until the payload is let go.
 - **`NodeTests`:** manoeuvre nodes as a chain (`ManoeuvreChain`): a prograde node raising the far
   side, one flown by its guide turning matched and going as the engine is cut (in warp too),
   giving the orbit it planned, the guide counting down and saying when it goes past; a node past
