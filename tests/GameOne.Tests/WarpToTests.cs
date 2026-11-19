@@ -8,8 +8,10 @@ namespace GameOne.Tests;
 /// A right click on the flown vessel's path warps to that point (<see cref="FlightInput.WarpTo"/>,
 /// <see cref="Flight.WarpingTo"/>): the fastest rate at once, and normal speed within a step of
 /// the time asked, the vessel where its path said it would be; ended early, at normal speed, by a
-/// rate key, a switch, a collision warning or the vessel wrecked; no later than the path goes; and
-/// the HUD's hit on the drawn line, which an object under the pointer wins over.
+/// rate key, a switch, a warning (a collision's or a near miss's), a landing, the vessel wrecked
+/// or a world loaded; under a slow-down no faster than it; no later than the path goes, burning
+/// or not; and the HUD's hit on the drawn line (up to the first node), which an object under the
+/// pointer, or a press that deleted a node, wins over.
 /// </summary>
 public sealed class WarpToTests(ITestOutputHelper output)
 {
@@ -224,5 +226,142 @@ public sealed class WarpToTests(ITestOutputHelper output)
         Assert.Null(Hud.RightClickWarp(new CameraCentre(CentreKind.Body, 1), null, 123.0)); // a marker: a body's, a vessel's, a site's
         Assert.Null(Hud.RightClickWarp(null, vessel, 123.0)); // a vessel, the flown one's own included
         Assert.Null(Hud.RightClickWarp(null, null, null)); // off the path
+    }
+
+    [Theory]
+    [InlineData(5000.0)] // its clock long past the warp's time
+    [InlineData(-30.0)]  // and before it
+    public void A_world_loaded_mid_warp_drops_it_and_its_clock_never_goes_back(double clockFromNow)
+    {
+        var (sim, _) = Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
+        using var _s = sim;
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(WarpTo: flight.WorldTime + 300.0));
+        sim.Step(default);
+        Assert.NotNull(flight.WarpingTo);
+        var world = flight.Capture() with { Time = Math.Max(0.0, flight.WorldTime + clockFromNow) };
+        flight.Restore(world);
+        Assert.Null(flight.WarpingTo);
+        Assert.Equal(1f, flight.PlayerRate);
+        var loaded = flight.WorldTime;
+        sim.Step(default);
+        Assert.Equal(loaded + Simulation.FrameSeconds, flight.WorldTime, 5); // one frame on at normal speed, never back
+    }
+
+    [Fact]
+    public void A_landing_ends_it_at_normal_speed()
+    {
+        // A booster coming down slowly onto the moon (its weak pull: the path, to its middle meeting
+        // the ground, ends well after its feet touch down and it settles).
+        var at = MoonLandingTests.LandingSpot();
+        var moon = GroundBody.Moon;
+        var state = Drops.Placed(at, moon.East(at), 0.5f, clearance: 0.1f, mission: Mission.FreePlay, body: moon);
+        using var sim = new Simulation(Mission.FreePlay, world: new WorldState { Vessels = [state], NextVesselId = 1 }, body: moon);
+        var flown = sim.Flight.WorldVessels.Single(v => v.Id == 0);
+        sim.Step(new FlightInput(SwitchTo: flown));
+        var flight = sim.Flight;
+        var down = Patched.Ends(PathOf(flown, flight.WorldTime));
+        sim.Step(new FlightInput(WarpTo: flight.WorldTime + 1e6));
+        Assert.Equal(Fastest, flight.PlayerRate);
+        Assert.True(sim.Run((_, _) => default, f => f.WarpingTo is null, maxSeconds: 60));
+        output.WriteLine($"{flown.State} {down - flight.WorldTime:0.00} s before its path's end");
+        Assert.Equal(FlightState.Landed, flown.State);
+        Assert.True(flight.WorldTime < down - Flight.WarpStepSeconds, "ended by the landing, not by getting there");
+        Assert.Equal(1f, flight.PlayerRate);
+    }
+
+    [Fact]
+    public void A_near_miss_warning_ends_it_at_normal_speed()
+    {
+        // A pass 1,000 m/s beside the flown booster 25 s ahead, past the look ahead's horizon
+        // until the warp has run a few seconds.
+        var (sim, flown, other) = FastCollisionTests.Fly(NearMissTests.NearMissPass(1000f, seconds: 25f));
+        using var _ = sim;
+        var flight = sim.Flight;
+        var to = flight.WorldTime + 24.0;
+        sim.Step(new FlightInput(WarpTo: to, NearMisses: true));
+        Assert.Equal(Fastest, flight.PlayerRate);
+        Assert.True(sim.Run((_, _) => new FlightInput(NearMisses: true), f => f.WarpingTo is null, maxSeconds: 30));
+        output.WriteLine($"ended {to - flight.WorldTime:0.0} s short; near miss {flight.NearMissWarning}; warning {flight.Warning}");
+        Assert.NotNull(flight.NearMissWarning);
+        Assert.Same(other, flight.NearMissWarning!.Value.Other);
+        Assert.True(flight.WorldTime < to - 1.0);
+        Assert.Equal(1f, flight.PlayerRate);
+        Assert.Same(flown, flight.Controlled);
+    }
+
+    [Fact]
+    public void Under_a_slow_down_it_runs_at_the_slow_down_s_rate_and_still_stops_on_the_time()
+    {
+        // The near miss slowed for (its warning already given, and the warp it dropped), then a
+        // warp to a moment a little on: no faster than the slow-down allows, and stopped on it.
+        var (sim, _, _) = FastCollisionTests.Fly(NearMissTests.NearMissPass(1000f, seconds: 5f));
+        using var _s = sim;
+        var flight = sim.Flight;
+        Assert.True(sim.Run((_, _) => new FlightInput(NearMisses: true), f => f.Slowed is not null, maxSeconds: 10));
+        var to = flight.WorldTime + 0.05;
+        sim.Step(new FlightInput(WarpTo: to, NearMisses: true));
+        var frames = 0;
+        while (flight.WarpingTo is not null && frames++ < 5000)
+        {
+            Assert.True(flight.Slowed is null || flight.TimeScale <= flight.Slowed.Value.Scale, "no faster than the slow-down");
+            sim.Step(new FlightInput(NearMisses: true));
+        }
+        output.WriteLine($"{frames} frames; stopped {flight.WorldTime - to:+0.000000;-0.000000} s from the time asked");
+        Assert.Null(flight.WarpingTo);
+        Assert.InRange(flight.WorldTime, to - Flight.WarpStepSeconds, to + 1e-4);
+        Assert.Equal(1f, flight.PlayerRate);
+    }
+
+    [Fact]
+    public void While_it_burns_the_warp_is_held_to_where_its_path_now_comes_down()
+    {
+        // Round a low orbit, burning retrograde: its path comes down sooner and sooner, and the
+        // warp is held to where it does, never run on past it.
+        var (sim, flown) = Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
+        using var _ = sim;
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(ChooseHold: HoldMode.Retrograde));
+        sim.Run((_, _) => default, _ => false, maxSeconds: 5); // turned round
+        var to = flight.WorldTime + 1e6;
+        Assert.True(double.IsPositiveInfinity(Patched.Ends(PathOf(flown, flight.WorldTime))), "round for ever before the burn");
+        sim.Step(new FlightInput(WarpTo: to, FullThrottle: true));
+        Assert.Equal(to, flight.WarpingTo); // round for ever: nothing to hold it to yet
+        // Held once a frame, as the frame begins: to where the path, as the last frame left it, ends.
+        var (held, ending) = (false, double.PositiveInfinity);
+        for (var i = 0; i < 200 && flight.WarpingTo is not null && flown.State == FlightState.Flying; i++)
+        {
+            var burning = flight.EngineLit;
+            sim.Step(default);
+            if (flight.WarpingTo is { } now && burning)
+            {
+                held |= now < to;
+                Assert.True(now <= ending + 1e-6, $"warping to {now - flight.WorldTime:0.0} s on, past its path's end then, {ending - flight.WorldTime:0.0} s on");
+            }
+            ending = Patched.Ends(PathOf(flown, flight.WorldTime));
+        }
+        Assert.True(held, "never held to the path's end");
+    }
+
+    [Fact]
+    public void On_a_plan_it_reaches_only_the_first_node_and_a_right_press_that_deleted_a_node_warps_nowhere()
+    {
+        var chain = new ManoeuvreChain(default, [new ManoeuvreNode(0, Prograde: 5f)]);
+        var first = chain.TimeOf(0);
+        Assert.Equal(first, NodeEditor.FlownWithoutABurn(chain));
+        Assert.True(double.IsPositiveInfinity(NodeEditor.FlownWithoutABurn(null)));
+        Assert.True(double.IsPositiveInfinity(NodeEditor.FlownWithoutABurn(ManoeuvreChain.Empty)));
+        Assert.Equal(first - 1.0, NodeEditor.WarpTime(first - 1.0, first - 10.0, first));
+        Assert.Equal(first, NodeEditor.WarpTime(first, first - 10.0, first));
+        Assert.Null(NodeEditor.WarpTime(first + 1.0, first - 10.0, first)); // past the first node: the plan's, not flown without a burn
+        Assert.Null(NodeEditor.WarpTime(first - 20.0, first - 10.0, first)); // behind now
+
+        var press = new NodeEditor.RightPress();
+        Assert.False(press.WasANodes);
+        press.Pressed();
+        press.DeletedANode();
+        Assert.True(press.WasANodes); // its click, let go over the path, warps nowhere
+        press.Pressed();
+        Assert.False(press.WasANodes); // the next press, off the nodes, is the path's again
     }
 }

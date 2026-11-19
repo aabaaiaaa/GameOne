@@ -784,9 +784,10 @@ internal sealed class Hud : IDisposable
         }
         // The flight takes a frame picked on the selector only when it isn't paused, so one picked
         // just as a menu came up would wait, and land after the pause, or in the next flight past
-        // its start on Auto. While a menu is up the selector is off, and any such choice let go.
+        // its start on Auto. While a menu is up the selector is off, and any such choice let go; so is a
+        // right click on the path, which would warp whatever world is flown after the menu.
         if (MenuOpen)
-            (_frameChosen, _holdChosen) = (null, null);
+            (_frameChosen, _holdChosen, _warpTo) = (null, null, null);
         Instruments(flight);
         _openList = OpenListPlace(flight, display);
         MissionPanel(flight, display);

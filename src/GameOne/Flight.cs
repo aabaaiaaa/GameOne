@@ -971,8 +971,10 @@ internal sealed class Flight : IDisposable
     /// flown vessel's path), if it is: at the fastest of the <see cref="Rates"/> until the clock
     /// gets there, the last frame shortened so it stops there exactly, then at normal speed. It
     /// ends early, at normal speed, on a rate key, another vessel flown, a warning that drops the
-    /// warp (<see cref="Warning"/>, <see cref="NearMissWarning"/>), or the vessel wrecked or gone
-    /// from the solar system. What the path's mark shows while it runs.
+    /// warp (<see cref="Warning"/>, <see cref="NearMissWarning"/>), the vessel no longer flying
+    /// (landed, afloat, wrecked or gone from the solar system), or a world loaded or a flight
+    /// begun; while the engine burns its time is held to where the path then ends. What the path's
+    /// mark shows while it runs.
     /// </summary>
     public double? WarpingTo => _warpTo?.Time;
 
@@ -992,12 +994,32 @@ internal sealed class Flight : IDisposable
         var vessel = Controlled;
         if (vessel.State != FlightState.Flying || !(time > WorldTime))
             return;
-        Patched.Legs(vessel.Body, vessel.CentreOfMass, vessel.Body.AmongStars(vessel.CentreOfMass, vessel.Velocity), WorldTime, _warpLegs);
-        time = Math.Min(time, Patched.Ends(_warpLegs));
+        time = Math.Min(time, PathEnd(vessel));
         if (!(time > WorldTime))
             return;
         _warpTo = (time, vessel);
         _rate = Rates.Length - 1;
+    }
+
+    /// <summary>When <paramref name="vessel"/>'s path, with its engine off from now, ends (<see cref="Patched.Ends"/>): infinity for one that goes round for ever.</summary>
+    private double PathEnd(Vessel vessel)
+    {
+        Patched.Legs(vessel.Body, vessel.CentreOfMass, vessel.Body.AmongStars(vessel.CentreOfMass, vessel.Velocity), WorldTime, _warpLegs);
+        return Patched.Ends(_warpLegs);
+    }
+
+    /// <summary>
+    /// While the vessel warped for burns, the warp's time held again (once a frame) to where its
+    /// path now ends: a burn that brings it down sooner doesn't warp it on past that.
+    /// </summary>
+    private void HoldWarpToPath()
+    {
+        if (_warpTo is { } warp && warp.For == Controlled && Controlled.EngineLit)
+        {
+            var end = PathEnd(Controlled);
+            if (end < warp.Time)
+                _warpTo = (Math.Max(end, WorldTime), warp.For);
+        }
     }
 
     /// <summary>Drops the time warp to normal speed, ending a warp to a point (<see cref="WarpingTo"/>) with it.</summary>
@@ -1009,12 +1031,12 @@ internal sealed class Flight : IDisposable
 
     /// <summary>
     /// Ends a warp to a point at normal speed whose vessel is no longer the one flown, or is about
-    /// to be (a switch's link-up begun: the vessel is flown only once it is through), or is wrecked
-    /// or gone from the system.
+    /// to be (a switch's link-up begun: the vessel is flown only once it is through), or is no
+    /// longer flying: landed, settled afloat, wrecked or gone from the system.
     /// </summary>
     private void KeepWarpTo()
     {
-        if (_warpTo is { } warp && (warp.For != Controlled || LinkUp.Waiting || warp.For.State == FlightState.Crashed))
+        if (_warpTo is { } warp && (warp.For != Controlled || LinkUp.Waiting || warp.For.State != FlightState.Flying))
             DropWarp();
     }
 
@@ -1679,14 +1701,17 @@ internal sealed class Flight : IDisposable
         }
         if (input.WarpTo is { } warpTo)
             BeginWarpTo(warpTo);
+        HoldWarpToPath();
         // Slowed, the step is shortened by the slow-down's scale (see Slow): at that clock this is
         // the same steps a real second, each that much shorter; under the player's own slower
         // slow motion, fewer of them, as slow motion always is. Warping to a point, the frame that
         // gets there is cut short at it, and the warp ends once it has.
+        if (_warpTo is { } past && past.Time <= WorldTime)
+            DropWarp(); // there already (held to a path's end that came now): never a step back, nor one of no time
         var dt = realSeconds * TimeScale;
         var arriving = false;
         if (_warpTo is { } warp && warp.Time - WorldTime <= dt)
-            (dt, arriving) = ((float)(warp.Time - WorldTime), true); // (ahead: one is dropped once there)
+            (dt, arriving) = ((float)(warp.Time - WorldTime), true); // the warp ends below, once this frame's steps get there
         var asked = dt;
         if (TimeScale > 1f)
             dt = Advance(dt, given, budgetSeconds);
@@ -2663,6 +2688,9 @@ internal sealed class Flight : IDisposable
             Slowed = null;
             _worlds.StepScale = 1f;
         }
+        // Nor is a warp to a point on the last one's path going on: its time is the last world's clock's.
+        if (_warpTo is not null)
+            DropWarp();
         Restarted?.Invoke();
     }
 

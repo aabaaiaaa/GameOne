@@ -222,7 +222,7 @@ its drawn path.
    any rate key, a vessel switch, a collision or near-miss warning dropping the warp, or the flown
    vessel wrecked or left the system; an object under the pointer (a marker, a vessel, a body) wins
    over the path (right click there anchors the camera as now); the path is hit within a few pixels
-   (a `Scene` figure); it works in the chase view and the map alike, through `FlightInput` (so the
+   (a `Scene` figure); it works where the path is drawn (zoomed out: the chase view draws none), through `FlightInput` (so the
    tests and GameDriver can ask for it), and the readout shows it.
 - **Docs:** README's controls table (left, double and right click), CLAUDE.md (frames: paths drawn
   among the stars), the GameDriver CLAUDE.md where scripts click markers.

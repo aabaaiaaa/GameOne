@@ -54,7 +54,7 @@ internal sealed class NodeEditor
     private Vector2 _grabbedAt; // where the pointer was as a node was grabbed
     private bool _dragging;     // and whether it has since moved far enough to drag it
     private bool _pressed, _rightPressed, _held;
-    private bool _rightOnNode; // the last right press deleted a node: its click is the node's, not the path's
+    private RightPress _rightPress; // whose the last right press was: its click, once let go, is the node's if it deleted one
     private int _presses; // left presses so far, to tell which placed a node
     // The last node placed by a click: the chain before it and with it, and which press placed it
     // (see UndoInsert).
@@ -204,7 +204,7 @@ internal sealed class NodeEditor
         var (pressed, rightPressed) = (_pressed, _rightPressed);
         (_pressed, _rightPressed) = (false, false);
         if (rightPressed)
-            _rightOnNode = false; // until it is found on a node below
+            _rightPress.Pressed(); // the path's, until it is found on a node below
         PointerOver = false;
         _drawn.Clear();
         Selected = false;
@@ -339,7 +339,7 @@ internal sealed class NodeEditor
         if (rightClicked && hovered == Hover.Node)
         {
             Delete(hoveredIndex, flight.Controlled, now);
-            _rightOnNode = true; // its click, once let go, is no warp (see WarpPoint)
+            _rightPress.DeletedANode(); // its click, once let go, is no warp (see WarpPoint)
         }
         else if (clicked)
         {
@@ -509,10 +509,10 @@ internal sealed class NodeEditor
     /// </summary>
     public double? WarpPoint(Flight flight, Paths paths, Vector2 click)
     {
-        if (_rightOnNode || paths.Fade < 0.5f || flight.Controlled.State != FlightState.Flying)
+        if (_rightPress.WasANodes || paths.Fade < 0.5f || flight.Controlled.State != FlightState.Flying)
             return null;
         var now = flight.WorldTime;
-        var firstAt = Count > 0 ? _pending!.TimeOf(0) : double.PositiveInfinity;
+        var firstAt = FlownWithoutABurn(_pending);
         double? time = null;
         var best = Scene.PathPixels;
         var present = paths.Present;
@@ -520,12 +520,36 @@ internal sealed class NodeEditor
         {
             var leg = present[i];
             SampleLeg(leg, Math.Min(leg.End, firstAt) - leg.Start, flight.Body, now);
-            if (Nearest(paths, F2(click), best, out var distance) is { } point && leg.Start + point.Seconds > now)
-                (time, best) = (leg.Start + point.Seconds, distance);
+            if (Nearest(paths, F2(click), best, out var distance) is { } point && WarpTime(leg.Start + point.Seconds, now, firstAt) is { } at)
+                (time, best) = (at, distance);
         }
         return time;
     }
 
+    /// <summary>
+    /// Whose a right press was, for the click it makes once let go (<see cref="ChaseCamera.TakeRightClick"/>):
+    /// one that deleted a node is the node's, so its click warps nowhere; any other press is the
+    /// path's again. The press is taken as it goes down, the click only as it is let go.
+    /// </summary>
+    internal struct RightPress
+    {
+        /// <summary>Whether the last right press deleted a node.</summary>
+        public bool WasANodes { get; private set; }
+
+        /// <summary>A right press, not (yet) found on a node.</summary>
+        public void Pressed() => WasANodes = false;
+
+        /// <summary>The press just taken deleted a node.</summary>
+        public void DeletedANode() => WasANodes = true;
+    }
+
+    /// <summary>How far along the vessel's path, as a world time, it is flown without a burn: to the first node of <paramref name="chain"/>, or all of it with none.</summary>
+    internal static double FlownWithoutABurn(ManoeuvreChain? chain) =>
+        chain is { Nodes.Length: > 0 } ? chain.TimeOf(0) : double.PositiveInfinity;
+
+    /// <summary>A point of the path hit at world time <paramref name="time"/> as a time to warp to: one still ahead of <paramref name="now"/>, and no later than <paramref name="firstNode"/> (<see cref="FlownWithoutABurn"/>).</summary>
+    internal static double? WarpTime(double time, double now, double firstNode) =>
+        time > now && time <= firstNode ? time : null;
     /// <summary>A time as minutes and seconds (hours too, if it is that far off); before now, with a minus.</summary>
     public static string Clock(double seconds)
     {
