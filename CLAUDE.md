@@ -622,9 +622,14 @@ dotnet run --project src/GameOne
   `Scene.FrameOrbitMargin` (100 m) and surface again as it dips under the floor. The HUD's and the
   readout's numbers are that body's too (heights over its datum, its orbit, local time, the
   compass's north), never the planet's by assumption. The holds follow the frame in use (floor
-  5 m/s; 0.2 m/s in Target against a flying target or in orbit, `Flight.HoldFloor`), and the path, its marks and nodes are drawn in it
-  (`Paths.Build`, `Frames.OnLine`), predicted from the centre of mass. Each leg of a patched path
-  (the flown vessel's, a flying target's) is drawn round its own body as that body sees it
+  5 m/s; 0.2 m/s in Target against a flying target or in orbit, `Flight.HoldFloor`), as do the
+  speeds and the travel markers, but not the paths: every path (the flown vessel's, its plan's, a
+  flying target's, the map's other vessels') is drawn among the stars round the body it is at, in
+  every frame (`Paths.Build`, `LegPlace`), predicted from the centre of mass, so an orbit is its
+  own ellipse (or hyperbola) closed on itself, never the track over the turning ground. A landing
+  mark, and a later lap's, is the place on the ground it comes down on, as the ground is now
+  (`Orbit.Landing`), so it reads against the sites; the line's end is where that ground will have
+  turned to by then. Each leg of a patched path is drawn round its own body as that body sees it
   (`LegPlace`): placed whole by the change from its body's frame to the view's now, round that
   body as it is now (where it is drawn), so a pass by the moon is a hyperbola round it, an orbit
   round it a loop, or a line onto its ground, wherever the view is; and the other way about, flown

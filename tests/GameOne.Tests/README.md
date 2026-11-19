@@ -239,8 +239,8 @@ say) stalls frames and spoils the timing.
   turning orbital once, as the orbit clears the air, by the time its orbit step is ticked; the
   satellite mission's upper stage, put in orbit, brought home on Auto (orbital, then surface by the
   end of its burn) onto the landing zone; a rendezvous in the target frame, closing from 1 km to
-  under 50 m and holding there, under 0.5 m/s; and a hop from the pad onto the nearest test pad on
-  the surface frame's line.
+  under 50 m and holding there, under 0.5 m/s; and a hop from the pad onto the nearest test pad in
+  the surface frame, by its line's landing mark.
 - **`FreePlayTests`:** free play: the satellite launcher with no steps, its vessels of no run, so
   never won, failed or scored (on the pad, past 400 m, after staging), nothing its landing site; its booster flown down
   and landed, and still nothing won.

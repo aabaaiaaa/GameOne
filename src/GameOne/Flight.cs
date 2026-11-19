@@ -1880,9 +1880,6 @@ internal sealed class Flight : IDisposable
         _ => Controlled.AutoFrame,
     };
 
-    /// <summary>The frame the line is drawn in: the frame in use, or in Target the one Auto would use.</summary>
-    public Frame LineFrame => Frame == Frame.Target ? Controlled.AutoFrame : Frame;
-
     /// <summary>
     /// The flown vessel's velocity in the frame in use: over the ground, among the stars, or
     /// relative to its target (measured in its own <see cref="Vessel.AutoFrame"/>). The holds steer
@@ -1890,7 +1887,7 @@ internal sealed class Flight : IDisposable
     /// </summary>
     public Vector3 FrameVelocity => Frame == Frame.Target
         ? Frames.Relative(Controlled.Body, Controlled.AutoFrame, CentreOfMass, Velocity, _targetAt.Position, _targetAt.Velocity)
-        : Frames.VelocityIn(Controlled.Body, LineFrame, CentreOfMass, Velocity);
+        : Frames.VelocityIn(Controlled.Body, Frame, CentreOfMass, Velocity);
 
     /// <summary>
     /// Below this speed in the frame in use the holds leave the nose where it is: over the ground

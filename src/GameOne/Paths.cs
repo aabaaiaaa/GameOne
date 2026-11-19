@@ -132,12 +132,9 @@ internal sealed class Paths
     private int _workingLap = -1;
     private readonly float[] _coarse = new float[Encounters.WindowSteps];
     // The laps after this one the window reaches, worked out with it (each its own orbit, found
-    // against the ground as it will be: Orbit.NextLap), so not every frame: each lap's path among
-    // the stars, its points with their seconds on from the plan; where each lap's points end in
-    // the list; and where it comes down, if it does (on the ground, and among the stars). The
-    // working ones become the drawn ones as the window does.
-    private List<(Vector3 At, double Seconds)> _laterSamples = [], _workingLaterSamples = [];
-    private List<(int End, Vector3? Landing, Vector3 EndAt)> _laterLaps = [], _workingLaterLaps = [];
+    // against the ground as it will be: Orbit.NextLap), so not every frame: where each comes down
+    // on the ground, if it does. The working ones become the drawn ones as the window does.
+    private List<Vector3?> _laterLaps = [], _workingLaterLaps = [];
     private Matrix4x4 _view;
     private Vector3 _camera;
     private Vector2 _display;
@@ -148,10 +145,10 @@ internal sealed class Paths
     public float Fade => _fade;
 
     /// <summary>
-    /// The path the vessel is on now, as drawn in the flight's line frame (<see cref="Flight.LineFrame"/>),
-    /// from the last <see cref="Build"/>: each leg of it patched at the spheres of influence
-    /// (<see cref="Patched"/>) round its own body, one after the other (a lap, or to where it comes
-    /// down or out), or over the ground on round to a de-orbit window on a later lap.
+    /// The path the vessel is on now, as drawn (among the stars, in every frame: see
+    /// <see cref="LegPlace"/>), from the last <see cref="Build"/>: each leg of it patched at the
+    /// spheres of influence (<see cref="Patched"/>) round its own body, one after the other (a lap,
+    /// or to where it comes down or out).
     /// </summary>
     internal IReadOnlyList<Vector3> Line => _line;
 
@@ -234,15 +231,19 @@ internal sealed class Paths
     /// <summary>Where each node the plan reaches is drawn (see <see cref="NodeEditor"/>).</summary>
     internal IReadOnlyList<Vector3> Nodes => _nodes;
 
-    /// <summary>Where the path after the last node comes down, if it does: a place on the ground, the same in either frame (the end of the surface line).</summary>
+    /// <summary>
+    /// Where the path after the last node comes down, if it does: the place on the ground it comes
+    /// down on, on the ground as it is now (<see cref="Orbit.Landing"/>), which has turned on to
+    /// the line's end by the time the path gets there.
+    /// </summary>
     internal Vector3? LandingMark { get; private set; }
 
     /// <summary>
-    /// Where a later lap the line is drawn round to (for a de-orbit window on it) comes down, if it
-    /// does, as drawn: over the ground, the end of the surface line; among the stars, on the
-    /// ellipse, marked as the next lap's (<c>NextLap</c>).
+    /// Where a later lap the window reaches comes down, if it does (a de-orbit window on a lap
+    /// before it): the place on the ground, as <see cref="LandingMark"/> is, marked as a later
+    /// lap's.
     /// </summary>
-    internal (Vector3 At, bool NextLap)? LaterLanding { get; private set; }
+    internal Vector3? LaterLanding { get; private set; }
 
     /// <summary>
     /// Draws the path, its marks, and with nodes planned (<paramref name="plan"/>, worked out from
@@ -318,7 +319,7 @@ internal sealed class Paths
         if (LandingMark is { } ground)
             Cross(draw, ground, GroundColor, _landingLabel);
         if (LaterLanding is { } later)
-            Cross(draw, later.At, GroundColor, _laterLabel, later.NextLap ? Scene.NextLapWindowAlpha : 1f);
+            Cross(draw, later, GroundColor, _laterLabel, Scene.NextLapWindowAlpha);
         if (_closest is { } closest)
         {
             var shownMine = InView(closest.Mine, out var a);
@@ -367,23 +368,21 @@ internal sealed class Paths
         matched && leg > firstNodeLeg && leg <= secondNodeLeg ? Scene.NodeMatchedColor : PlanColor;
 
     /// <summary>
-    /// Works out everything <see cref="Draw"/> draws, where it is drawn in the flight's line frame
-    /// (<see cref="Flight.LineFrame"/>): over the ground, the vessel's real track over the turning
-    /// ground, at its height, ending where it comes down; among the stars, the orbit's ellipse.
-    /// Every point goes through its leg's <see cref="LegPlace"/> with its time from now, so the
-    /// marks and the nodes stay on the line in either, and a leg round another body (the moon's,
-    /// on a path from the planet) is drawn as that body sees it, round it as it is now; the line
-    /// breaks at each crossing (<see cref="LineStarts"/>).
+    /// Works out everything <see cref="Draw"/> draws, where it is drawn: among the stars round the
+    /// body each leg is at, in every frame (the frame in use sets the speeds, the holds and the
+    /// travel markers, not the line), so an orbit is its ellipse and a way down ends where it meets
+    /// the ground as that will have turned by then. Every point goes through its leg's
+    /// <see cref="LegPlace"/>, so the marks and the nodes stay on the line, and a leg round another
+    /// body (the moon's, on a path from the planet) is drawn as that body sees it, round it as it
+    /// is now; the line breaks at each crossing (<see cref="LineStarts"/>).
     /// </summary>
     internal void Build(Flight flight, ManoeuvrePlan plan)
     {
-        var frame = flight.LineFrame;
         var now = flight.WorldTime;
         var view = flight.Body; // the frame everything is drawn in: the flown vessel's body's
         _planned = plan.NodeLeg(0) is not null;
         var last = plan.Last;
         var final = last.Orbit;
-        var finalFrom = last.Start - now; // how far ahead the last leg starts
         _firstNodeLeg = plan.NodeLeg(0) ?? -1;
 
         // The path as it is, patched at the spheres of influence: without a chain, the plan's legs
@@ -404,7 +403,7 @@ internal sealed class Paths
         var firstNodeAt = _planned ? plan.Legs[_firstNodeLeg].End : double.NegativeInfinity;
         _lineGlowsFrom = 0;
         for (var i = 0; i < current.Count; i++)
-            _lineGlowsFrom += Fill(_line, _lineStarts, current[i], view, now, frame, firstNodeAt);
+            _lineGlowsFrom += Fill(_line, _lineStarts, current[i], view, now, firstNodeAt);
         _edgeMarks.Clear();
         EdgeMark(_line, current[^1]);
         // And its own path to the first node, drawn over the line as it is (the chain's own legs up to
@@ -412,7 +411,7 @@ internal sealed class Paths
         _toFirst.Clear();
         _toFirstStarts.Clear();
         for (var i = 0; i < current.Count && current[i].Start < firstNodeAt; i++)
-            Fill(_toFirst, _toFirstStarts, current[i] with { End = Math.Min(current[i].End, firstNodeAt) }, view, now, frame);
+            Fill(_toFirst, _toFirstStarts, current[i] with { End = Math.Min(current[i].End, firstNodeAt) }, view, now);
 
         // The target: on a path of its own (a body round its parent, a vessel flying round the
         // body it is at), or staying put (a place, or a vessel on the ground), as the body it is at
@@ -445,14 +444,14 @@ internal sealed class Paths
                     (planeNormal, planeBody) = (round.Normal, parent);
                     if (parent == view)
                         (theirs, within) = (round, found.Body.SphereRadius);
-                    Fill(_theirLine, _theirStarts, new PathLeg(parent, round, now, double.PositiveInfinity), view, now, frame);
+                    Fill(_theirLine, _theirStarts, new PathLeg(parent, round, now, double.PositiveInfinity), view, now);
                 }
             }
             else if (found.Flying)
             {
                 Patched.Legs(found.Body, own, found.Body.AmongStars(own, ownVelocity), now, _theirLegs);
                 for (var i = 0; i < _theirLegs.Count; i++)
-                    Fill(_theirLine, _theirStarts, _theirLegs[i], view, now, frame);
+                    Fill(_theirLine, _theirStarts, _theirLegs[i], view, now);
                 EdgeMark(_theirLine, _theirLegs[^1]);
                 (planeNormal, planeBody) = (_theirLegs[0].Orbit.Normal, found.Body);
                 if (found.Body == view)
@@ -473,7 +472,7 @@ internal sealed class Paths
                 if (_legPool.Count > 0)
                     _legPool.RemoveAt(_legPool.Count - 1);
                 points.Clear();
-                Fill(points, null, plan.Legs[i], view, now, frame);
+                Fill(points, null, plan.Legs[i], view, now);
                 _legs.Add(points);
             }
         if (_planned)
@@ -481,7 +480,7 @@ internal sealed class Paths
         // Each node, by its own index, at the end of the leg its burn is made at, placed as that leg
         // is.
         for (var i = 0; _planned && plan.NodeLeg(i) is { } leg; i++)
-            _nodes.Add(new LegPlace(plan.Legs[leg], view, now).Point(frame, plan.NodeAt(i)!.Value.Position, plan.Legs[leg].End - now));
+            _nodes.Add(new LegPlace(plan.Legs[leg], view, now).Point(plan.NodeAt(i)!.Value.Position));
 
         // The window (one burn there would take it to the target, or down by it), worked out on
         // the orbit as it is, a little each frame, and only when it needs to be: a plan is a
@@ -537,17 +536,11 @@ internal sealed class Paths
         }
         if (!stale)
             Work(_workMilliseconds);
-        // Over the ground each lap is a track of its own, west of the last, so a window on a later
-        // lap is only on the line if the line goes on round to it: then it does, each lap over the
-        // ground as it will be by then, as far as the furthest of the window still ahead (counted
-        // each frame, so once the vessel is round to the window's lap, the line is one lap again).
-        // Among the stars the ellipse is the same every lap, so the line stays one lap and the
-        // window is marked as the next lap's instead (LayWindow). A later lap that comes down on
-        // the ground (a peak it misses this lap) has its landing marked in either. This lap is
-        // from now, but the later laps as planned run on from the plan's lap's end, which the line
-        // is past by the time since the plan: so they join on where this lap ends (the points
-        // before that would take the line back to the plan's lap's end and over the ground again
-        // from there), and the line ends where they do. One that comes down this lap has none.
+        // Among the stars the ellipse is the same every lap, so the line stays one lap and a
+        // window on a later lap is marked as the next lap's on it (LayWindow). A later lap the
+        // window reaches that comes down on the ground (a peak it misses this lap, the ground
+        // having turned under it) has its landing marked, on the ground as LandingMark's is. One
+        // that comes down this lap has none.
         LaterLanding = null;
         var laps = 0;
         if (_windowAt.Count > 0 && mine.Closed && current.Count == 1)
@@ -555,24 +548,13 @@ internal sealed class Paths
             var furthest = _windowAt[^1].Seconds - (now - _plannedWorldTime); // seconds from now
             laps = Math.Clamp((int)(furthest / _plannedPeriod), 0, _laterLaps.Count);
         }
-        var lapEnds = now - _plannedWorldTime + mine.PathSeconds; // where this lap ends, in seconds from the plan
         for (var i = 0; i < laps; i++)
-        {
-            var (end, landing, endAt) = _laterLaps[i];
-            if (frame == Frame.Surface)
-                for (var k = i == 0 ? 0 : _laterLaps[i - 1].End; k < end; k++)
-                    if (_laterSamples[k].Seconds > lapEnds)
-                        _line.Add(WindowPoint(frame, _laterSamples[k].At, _laterSamples[k].Seconds, _plannedWorldTime, now, _plannedOrbit.Body));
-            if (landing is { } ground)
+            if (_laterLaps[i] is { } ground)
             {
-                LaterLanding = frame == Frame.Surface ? (ground, false) : (WindowPoint(frame, endAt, 0, _plannedWorldTime, now, _plannedOrbit.Body), true);
-                if (frame == Frame.Orbital)
-                    (_laterLabel, _laterLabelFor) = ("Next lap: Ground", double.NaN);
-                else
-                    GroundLabel(ref _laterLabel, ref _laterLabelFor, staysAt is { } site ? Vector3.Distance(ground, site) : null);
+                LaterLanding = ground;
+                GroundLabel(ref _laterLabel, ref _laterLabelFor, staysAt is { } site ? Vector3.Distance(ground, site) : null, "Next lap: ");
             }
-        }
-        LayWindow(frame, now);
+        LayWindow(now);
 
         // The marks, for the path after the last node (the path as it is, with none): each leg's
         // that it reaches before the next crossing, round its own body and placed as its leg is.
@@ -586,12 +568,12 @@ internal sealed class Paths
             if (orbit.Radial)
                 continue;
             var place = new LegPlace(leg, view, now);
-            var (startsIn, span, slot) = (leg.Start - now, leg.End - leg.Start, Math.Min(i - firstFinal, _apLabels.Length - 1));
+            var (span, slot) = (leg.End - leg.Start, Math.Min(i - firstFinal, _apLabels.Length - 1));
             if (orbit.NextApoapsis is { } apoapsis && orbit.TimeTo(apoapsis) <= span)
-                _marks.Add(new Mark(place.Point(frame, orbit.At(apoapsis), startsIn + orbit.TimeTo(apoapsis)), markColor,
+                _marks.Add(new Mark(place.Point(orbit.At(apoapsis)), markColor,
                     DistanceLabel(ref _apLabels[slot], ref _apLabelsFor[slot], "Ap ", MarkHeight(orbit, apoapsis))));
             if (orbit.NextPeriapsis is { } periapsis && orbit.TimeTo(periapsis) <= span)
-                _marks.Add(new Mark(place.Point(frame, orbit.At(periapsis), startsIn + orbit.TimeTo(periapsis)), markColor,
+                _marks.Add(new Mark(place.Point(orbit.At(periapsis)), markColor,
                     DistanceLabel(ref _peLabels[slot], ref _peLabelsFor[slot], "Pe ", MarkHeight(orbit, periapsis))));
             // Where it crosses a flying target's plane, only while the target is round the same body
             // as this leg (information: the angle between the planes, never when to burn).
@@ -599,27 +581,25 @@ internal sealed class Paths
             {
                 var degrees = inclination * 180f / MathF.PI;
                 if (orbit.Ahead(ascending) && orbit.TimeTo(ascending) <= span)
-                    _marks.Add(new Mark(place.Point(frame, orbit.At(ascending), startsIn + orbit.TimeTo(ascending)), TargetColor,
+                    _marks.Add(new Mark(place.Point(orbit.At(ascending)), TargetColor,
                         AngleLabel(ref _anLabels[slot], ref _anLabelsFor[slot], "AN ", degrees)));
                 if (orbit.Ahead(descending) && orbit.TimeTo(descending) <= span)
-                    _marks.Add(new Mark(place.Point(frame, orbit.At(descending), startsIn + orbit.TimeTo(descending)), TargetColor,
+                    _marks.Add(new Mark(place.Point(orbit.At(descending)), TargetColor,
                         AngleLabel(ref _dnLabels[slot], ref _dnLabelsFor[slot], "DN ", degrees)));
             }
             var body = leg.Body;
             if (body.HasAir && body.Altitude(orbit.PositionAfter(0)) > Scene.AtmosphereHeight
                 && orbit.Descending(body.SeaRadius + Scene.AtmosphereHeight) is { } air && orbit.TimeTo(air) <= span)
-                _marks.Add(new Mark(place.Point(frame, orbit.At(air), startsIn + orbit.TimeTo(air)), AirColor, "Air"));
+                _marks.Add(new Mark(place.Point(orbit.At(air)), AirColor, "Air"));
         }
-        // Where it comes down is a place on the ground, as it will have turned by then: marked
-        // there, on the ground as it is now, not at the path's end among the stars (where the
-        // surface line ends). On another body's ground it is where the line drawn round that body
-        // comes down, placed as its leg is.
+        // Where it comes down is a place on the ground: marked there, on the ground as it is now
+        // (which turns on under the path meanwhile, to the line's end among the stars by the time
+        // it gets there), so it can be read against the sites and the target where they are. On
+        // another body's ground, placed as its leg is.
         LandingMark = null;
         if (final.EndsOnGround)
         {
-            var place = new LegPlace(last, view, now);
-            var down = final.From + final.SecondsToEnd;
-            LandingMark = place.Same ? final.Landing : place.Point(frame, final.Body.Turned(final.Landing, down), down);
+            LandingMark = new LegPlace(last, view, now).Point(final.Landing);
             // From a target staying put on the ground it comes down on (a place, or a landed vessel), how far.
             GroundLabel(ref _landingLabel, ref _landingLabelFor,
                 flight.TargetAt is { Flying: false } && targetBody == last.Body ? Vector3.Distance(final.Landing, targetOwn) : null);
@@ -634,25 +614,25 @@ internal sealed class Paths
         if (_targetIsBody && targetBody is { } targeted)
         {
             if (Encounters.BodyApproach(targeted, plan.Legs, now, firstFinal) is { } approach)
-                _closest = Placed(plan, approach, view, now, frame, approach.Distance - targeted.SeaRadius);
+                _closest = Placed(plan, approach, view, now, approach.Distance - targeted.SeaRadius);
         }
         else if (_theirLegs.Count > 0 && Encounters.VesselApproach(_theirLegs[0].Orbit, plan.Legs, now, firstFinal) is { } closest)
-            _closest = Placed(plan, closest, view, now, frame, closest.Distance);
+            _closest = Placed(plan, closest, view, now, closest.Distance);
 
-        BuildCollisions(flight, frame, now);
+        BuildCollisions(flight, now);
     }
 
     /// <summary>A closest approach on one of <paramref name="plan"/>'s legs (its places in that leg's frame) as drawn: each place as its leg is placed, and the distance shown.</summary>
-    private static (Vector3 Mine, Vector3 Theirs, float Distance) Placed(ManoeuvrePlan plan, in Encounters.Approach approach, GroundBody view, double now, Frame frame, float shown)
+    private static (Vector3 Mine, Vector3 Theirs, float Distance) Placed(ManoeuvrePlan plan, in Encounters.Approach approach, GroundBody view, double now, float shown)
     {
         var place = new LegPlace(plan.Legs[approach.Leg], view, now);
-        return (place.Point(frame, approach.Mine, approach.Seconds), place.Point(frame, approach.Theirs, approach.Seconds), shown);
+        return (place.Point(approach.Mine), place.Point(approach.Theirs), shown);
     }
 
     /// <summary>
     /// The predicted collisions between any two vessels in the world (<see cref="Flight.MapCollisions"/>,
-    /// kept coming while the map is drawn: <see cref="Flight.LookForCollisions"/>), as drawn in
-    /// <paramref name="frame"/>: a cross where each is, and the stretch of each moving vessel's
+    /// kept coming while the map is drawn: <see cref="Flight.LookForCollisions"/>), as drawn among
+    /// the stars: a cross where each is, and the stretch of each moving vessel's
     /// path it covers in the <see cref="Scene.CollisionLeadSeconds"/> before (from now, if that is
     /// sooner), so a faster pair's line is longer. Only the soonest <see cref="Scene.CollisionsShown"/>,
     /// each laid once a pass (<see cref="LayCollisions"/>) and only turned to where it is drawn each
@@ -665,7 +645,7 @@ internal sealed class Paths
     /// (0.55), any other's, whose path isn't drawn otherwise, fainter (<see cref="Scene.OtherPathAlpha"/>).
     /// Information only, as every mark on the map: where and when, never what to do about it.
     /// </summary>
-    private void BuildCollisions(Flight flight, Frame frame, double now)
+    private void BuildCollisions(Flight flight, double now)
     {
         foreach (var lead in _leadIns)
             _leadPool.Add(lead.Points);
@@ -702,14 +682,14 @@ internal sealed class Paths
                 {
                     var (at, seconds) = _laidPoints[k];
                     if (!Passed(seconds, askedAt, now))
-                        points.Add(toView.Point(WindowPoint(frame, at, seconds, askedAt, now, laid.Body)).ToSingle());
+                        points.Add(toView.Point(WindowPoint(at, askedAt, now, laid.Body)).ToSingle());
                 }
                 var alpha = v == flight.Controlled ? 0.9f
                     : flight.Target is { Kind: TargetKind.Vessel } target && target.Id == v.Id ? 0.55f
                     : Scene.OtherPathAlpha;
                 _leadIns.Add(new LeadIn(v.Id, alpha, points));
             }
-            _collisionMarks.Add(new CollisionMark(toView.Point(WindowPoint(frame, collision.Where, collision.At - askedAt, askedAt, now, laid.Body)).ToSingle(),
+            _collisionMarks.Add(new CollisionMark(toView.Point(WindowPoint(collision.Where, askedAt, now, laid.Body)).ToSingle(),
                 CollisionLabel(n, a, b, ahead, collision.ClosingSpeed)));
         }
     }
@@ -794,14 +774,14 @@ internal sealed class Paths
 
     /// <summary>
     /// Adds to <paramref name="points"/> <paramref name="leg"/>'s path, from its start to its end
-    /// (the last leg's a lap, or to where it comes down or out), as drawn in <paramref name="frame"/>
-    /// in <paramref name="view"/>'s frame at <paramref name="now"/>: round its own body, as that
-    /// body is now (<see cref="LegPlace"/>). With <paramref name="starts"/>, where it starts in
+    /// (the last leg's a lap, or to where it comes down or out), as drawn among the stars in
+    /// <paramref name="view"/>'s frame at <paramref name="now"/>: round its own body, as that body
+    /// is now (<see cref="LegPlace"/>). With <paramref name="starts"/>, where it starts in
     /// <paramref name="points"/> if a leg is there before it, so the line breaks at the crossing
     /// between them (each leg of a patched path ends at one). How many of the points it adds are
     /// for world times before <paramref name="before"/>.
     /// </summary>
-    private int Fill(List<Vector3> points, List<int>? starts, in PathLeg leg, GroundBody view, double now, Frame frame, double before = double.NegativeInfinity)
+    private int Fill(List<Vector3> points, List<int>? starts, in PathLeg leg, GroundBody view, double now, double before = double.NegativeInfinity)
     {
         var earlier = 0;
         var orbit = leg.Orbit;
@@ -811,25 +791,21 @@ internal sealed class Paths
         var startsIn = leg.Start - now;
         if (orbit.Radial)
         {
-            // Straight up and down among the stars: its few points, each over the ground as it
-            // will be by the time it is there: where it starts, its top (if it is still rising
-            // to one), and down where it lands. (An escaping one's far end, which it never
-            // reaches, is over the ground as it is when it starts.)
+            // Straight up and down among the stars: its few points on its one line, where it
+            // starts, its top (if it is still rising to one), and down where it lands.
             orbit.Path(_radial);
             if (leg.LeavesSystem)
             {
                 // Out along its line to the solar system's edge, where it ends.
-                points.Add(place.Point(frame, _radial[0], startsIn));
-                points.Add(place.Point(frame, orbit.PlaceAfter(leg.End - leg.Start).ToSingle(), leg.End - now));
+                points.Add(place.Point(_radial[0]));
+                points.Add(place.Point(orbit.PlaceAfter(leg.End - leg.Start).ToSingle()));
                 return leg.Start < before ? 1 : 0;
             }
             var top = orbit.TopSeconds; // then the second point is the top
             for (var i = 0; i < _radial.Count; i++)
             {
                 var seconds = startsIn + (i == 1 && top is { } t ? t : 0);
-                points.Add(frame == Frame.Surface && orbit.EndsOnGround && i == _radial.Count - 1
-                    ? place.Ground(orbit.Landing)
-                    : place.Point(frame, _radial[i], seconds));
+                points.Add(place.Point(_radial[i]));
                 var reached = i == _radial.Count - 1 && i > 0 ? orbit.SecondsToEnd : seconds - startsIn; // when it is there, on from the leg's start
                 if (leg.Start + reached < before)
                     earlier++;
@@ -839,7 +815,7 @@ internal sealed class Paths
         orbit.Samples(_samples, 0, leg.End - leg.Start);
         foreach (var (at, seconds) in _samples)
         {
-            points.Add(place.Point(frame, at, startsIn + seconds));
+            points.Add(place.Point(at));
             if (leg.Start + seconds < before)
                 earlier++;
         }
@@ -847,16 +823,16 @@ internal sealed class Paths
     }
 
     /// <summary>
-    /// A landing mark's label, "Ground", or with <paramref name="metres"/> from a target, how far:
-    /// built again only when what it shows changes (<paramref name="shownFor"/>, see
-    /// <see cref="ShownAs"/> and <see cref="StillShows"/>; infinity for none), not as a new string
-    /// every frame.
+    /// A landing mark's label, "Ground" after <paramref name="prefix"/> (a later lap's: always the
+    /// same for one label), or with <paramref name="metres"/> from a target, how far: built again
+    /// only when what it shows changes (<paramref name="shownFor"/>, see <see cref="ShownAs"/> and
+    /// <see cref="StillShows"/>; infinity for none), not as a new string every frame.
     /// </summary>
-    private static void GroundLabel(ref string label, ref double shownFor, float? metres)
+    private static void GroundLabel(ref string label, ref double shownFor, float? metres, string prefix = "")
     {
         if (metres is { } m ? StillShows(shownFor, InSteps(m)) : double.IsPositiveInfinity(shownFor))
             return;
-        label = metres is { } d ? $"Ground  {Markers.Distance(d)} from target" : "Ground";
+        label = metres is { } d ? $"{prefix}Ground  {Markers.Distance(d)} from target" : $"{prefix}Ground";
         shownFor = metres is { } k ? ShownAs(k) : double.PositiveInfinity;
     }
 
@@ -911,7 +887,6 @@ internal sealed class Paths
         _windowAt.Clear();
         _windowLap = -1;
         _laterLaps.Clear();
-        _laterSamples.Clear();
         _published = false;
     }
 
@@ -984,7 +959,6 @@ internal sealed class Paths
         _working = null;
         (_workingOrbit, _workingTheirs, _workingStaysAt, _workingWorldTime, _workingLap) = (mine, theirs, staysAt, now, -1);
         _workingLaterLaps.Clear();
-        _workingLaterSamples.Clear();
         _workingWithin = theirs is not null ? within : Scene.DeorbitWithin;
         if (!mine.Radial && theirs is { } orbit)
             _working = PlanSteps(Encounters.TransferSteps(mine, orbit, _workingWithin, _window, _coarse, until)).GetEnumerator();
@@ -1013,10 +987,7 @@ internal sealed class Paths
         for (var i = 0; i < _workingLap && lap.Closed; i++)
         {
             lap = lap.NextLap();
-            lap.Samples(_samples, 0, double.PositiveInfinity);
-            foreach (var (at, seconds) in _samples)
-                _workingLaterSamples.Add((at, lap.From + seconds)); // seconds on from the plan, as the window's are
-            _workingLaterLaps.Add((_workingLaterSamples.Count, lap.EndsOnGround ? lap.Landing : null, lap.At(lap.EndAnomaly)));
+            _workingLaterLaps.Add(lap.EndsOnGround ? lap.Landing : null);
             yield return Encounters.Working;
         }
     }
@@ -1107,7 +1078,6 @@ internal sealed class Paths
     {
         var mine = _workingOrbit;
         (_laterLaps, _workingLaterLaps) = (_workingLaterLaps, _laterLaps);
-        (_laterSamples, _workingLaterSamples) = (_workingLaterSamples, _laterSamples);
         _windowAt.Clear();
         (_windowLap, _plannedWorldTime, _plannedOrbit) = (_workingLap, _workingWorldTime, mine);
         (_plannedTheirs, _plannedStaysAt, _published) = (_workingTheirs, _workingStaysAt, true);
@@ -1213,30 +1183,28 @@ internal sealed class Paths
     }
 
     /// <summary>
-    /// Where a point of the window, worked out at world time <paramref name="plannedAt"/> and
-    /// <paramref name="secondsFromPlan"/> on from then, is drawn at <paramref name="now"/> in
-    /// <paramref name="frame"/>. Among the stars the orbit stays put, but the ground's frame the
-    /// line is drawn in each frame has turned since (by hundreds of metres between plans in a fast
-    /// warp): so the point is turned back by that. Over the ground it is the place under it then,
-    /// which stays put however long ago it was planned. It isn't found again on the orbit as it is
-    /// now, as a nearly round orbit's anomalies are measured from a periapsis that wanders. In
-    /// <paramref name="body"/>'s frame (the body the orbit is round; the planet's by default), turned by its turn.
+    /// Where a point among the stars, worked out at world time <paramref name="plannedAt"/> (a point
+    /// of the window, or a collision's), is drawn at <paramref name="now"/>. The orbit stays put
+    /// among the stars, but the ground's frame the line is drawn in each frame has turned since (by
+    /// hundreds of metres between plans in a fast warp): so the point is turned back by that. It
+    /// isn't found again on the orbit as it is now, as a nearly round orbit's anomalies are
+    /// measured from a periapsis that wanders. In <paramref name="body"/>'s frame (the body the
+    /// orbit is round; the planet's by default), turned by its turn.
     /// </summary>
-    internal static Vector3 WindowPoint(Frame frame, Vector3 at, double secondsFromPlan, double plannedAt, double now, GroundBody? body = null) =>
-        (body ?? GroundBody.Planet).Turned(at, frame == Frame.Surface ? -secondsFromPlan : -(now - plannedAt));
+    internal static Vector3 WindowPoint(Vector3 at, double plannedAt, double now, GroundBody? body = null) =>
+        (body ?? GroundBody.Planet).Turned(at, -(now - plannedAt));
 
     /// <summary>
-    /// Where the last worked-out window is drawn at <paramref name="now"/> in <paramref name="frame"/>:
-    /// only what is still ahead. Under a fast warp the vessel goes a long way between plans, and a
-    /// point it has passed would be drawn over the ground behind it, off the line (which starts now).
-    /// A stretch the vessel is part way through starts now, where the vessel is, between the
-    /// points either side (not at the next point on, up to a point's gap ahead). Among the stars,
-    /// each point a lap or more ahead now is marked as the next lap's: a window across the lap's
-    /// end is marked from there on, and one the vessel has come round to (under a fast warp,
-    /// between plans) is this lap's again. Over the ground the line goes on round to it, so it
-    /// needs no mark.
+    /// Where the last worked-out window is drawn at <paramref name="now"/>: only what is still
+    /// ahead. Under a fast warp the vessel goes a long way between plans, and a point it has passed
+    /// would be drawn behind it, off the line (which starts now). A stretch the vessel is part way
+    /// through starts now, where the vessel is, between the points either side (not at the next
+    /// point on, up to a point's gap ahead). Each point a lap or more ahead now is marked as the
+    /// next lap's (the ellipse is the same every lap): a window across the lap's end is marked from
+    /// there on, and one the vessel has come round to (under a fast warp, between plans) is this
+    /// lap's again.
     /// </summary>
-    internal void LayWindow(Frame frame, double now)
+    internal void LayWindow(double now)
     {
         _windowLine.Clear();
         var since = now - _plannedWorldTime;
@@ -1252,11 +1220,11 @@ internal sealed class Paths
                 // orbit by metres), shaded as between the two.
                 var (_, beforeSeconds, beforeQuality, _) = _windowAt[i - 1];
                 var t = (float)((since - beforeSeconds) / (seconds - beforeSeconds));
-                _windowLine.Add((WindowPoint(frame, _plannedOrbit.StateAfter(since).Position, since, _plannedWorldTime, now, _plannedOrbit.Body),
+                _windowLine.Add((WindowPoint(_plannedOrbit.StateAfter(since).Position, _plannedWorldTime, now, _plannedOrbit.Body),
                     float.Lerp(beforeQuality, quality, t), false, false));
             }
-            var nextLap = frame == Frame.Orbital && seconds - since >= _plannedPeriod;
-            _windowLine.Add((WindowPoint(frame, at, seconds, _plannedWorldTime, now, _plannedOrbit.Body), quality, joined, nextLap));
+            var nextLap = seconds - since >= _plannedPeriod;
+            _windowLine.Add((WindowPoint(at, _plannedWorldTime, now, _plannedOrbit.Body), quality, joined, nextLap));
         }
     }
 
