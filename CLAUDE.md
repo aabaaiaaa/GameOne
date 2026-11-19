@@ -634,16 +634,13 @@ dotnet run --project src/GameOne
   readout's numbers are that body's too (heights over its datum, its orbit, local time, the
   compass's north), never the planet's by assumption. The holds follow the frame in use (floor
   5 m/s; 0.2 m/s in Target against a flying target or in orbit, `Flight.HoldFloor`), as do the
-  speeds and the travel markers, and the path, its marks and nodes are drawn in it, so the line
-  starts along the prograde marker (`Flight.LineFrame`, `Frames.OnLine`, `Paths.Build`, predicted
-  from the centre of mass): in Surface over the ground, each point the place under it on its
-  body's ground by then (the real track over the turning ground, ending where it comes down, the
-  landing cross at its end); in Orbit (and Auto once orbital) among the stars, an orbit its own
-  ellipse closed on itself, the landing cross on the ground as it is now; Target draws in what Auto
-  would. The flown path, its plan, a flying target's, the warp-to mark, the node editor's clicks
-  and the map's patched paths of vessels in the physics all go by it; the map's laps of vessels
-  under formula are among the stars. Each leg of a patched path
-  (the flown vessel's, a flying target's) is drawn round its own body as that body sees it
+  speeds and the travel markers, but not the paths: every path (the flown vessel's, its plan's, a
+  flying target's, the map's other vessels') is drawn among the stars round the body it is at, in
+  every frame (`Paths.Build`, `LegPlace`), predicted from the centre of mass, so an orbit is its
+  own ellipse (or hyperbola) closed on itself, never the track over the turning ground. A landing
+  mark, and a later lap's, is the place on the ground it comes down on, as the ground is now
+  (`Orbit.Landing`), so it reads against the sites; the line's end is where that ground will have
+  turned to by then. Each leg of a patched path is drawn round its own body as that body sees it
   (`LegPlace`): placed whole by the change from its body's frame to the view's now, round that
   body as it is now (where it is drawn), so a pass by the moon is a hyperbola round it, an orbit
   round it a loop, or a line onto its ground, wherever the view is; and the other way about, flown

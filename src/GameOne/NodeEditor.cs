@@ -220,7 +220,6 @@ internal sealed class NodeEditor
         _drawn.Clear();
         Selected = false;
         var now = flight.WorldTime;
-        var frame = flight.LineFrame;
         if (paths.Fade < 0.5f || flight.Controlled.State != FlightState.Flying)
         {
             _grab = Grab.None;
@@ -248,7 +247,7 @@ internal sealed class NodeEditor
                 for (var i = 0; i < paths.Present.Count; i++)
                 {
                     var leg = paths.Present[i];
-                    SampleLeg(leg, leg.End - leg.Start, frame, flight.Body, now);
+                    SampleLeg(leg, leg.End - leg.Start, flight.Body, now);
                     if (Nearest(paths, pointer, best, out var distance) is { } nearest)
                         (time, best) = (leg.Start + nearest.Seconds, distance);
                 }
@@ -256,7 +255,7 @@ internal sealed class NodeEditor
             {
                 // On along that path past the node too, as far as its orbit goes: the later nodes move with it.
                 var leg = plan.Legs[nodeLeg];
-                SampleLeg(leg, double.PositiveInfinity, frame, flight.Body, now);
+                SampleLeg(leg, double.PositiveInfinity, flight.Body, now);
                 if (Nearest(paths, pointer, best, out _) is { } nearest)
                     time = leg.Start + nearest.Seconds;
             }
@@ -286,13 +285,12 @@ internal sealed class NodeEditor
         {
             var (prograde, radial, normal) = Manoeuvres.Frame(plan.Legs[selectedLeg].Body, selected.Position, selected.Velocity);
             ReadOnlySpan<Vector3> ways = [prograde, -prograde, radial, -radial, normal, -normal];
-            // Pointing the burn's ways (among the stars) from the node as drawn, turned and placed as its leg is.
-            var seconds = plan.Legs[selectedLeg].End - now;
+            // Pointing the burn's ways (among the stars) from the node as drawn, placed as its leg is.
             var place = new LegPlace(plan.Legs[selectedLeg], flight.Body, now);
             var scale = Vector3.Distance(camera.Position, paths.Nodes[_selected]) * 0.05f;
             for (var k = 0; k < 6; k++)
             {
-                handleShown[k] = paths.InView(place.Point(frame, selected.Position + ways[k] * scale, seconds), out var tip)
+                handleShown[k] = paths.InView(place.Point(selected.Position + ways[k] * scale), out var tip)
                     && Vector2.Distance(V2(tip), V2(onScreen[_selected])) > 2f;
                 if (!handleShown[k])
                     continue;
@@ -334,14 +332,14 @@ internal sealed class NodeEditor
             for (var i = 0; i < present.Count && ghost is null && present[i].Start < firstAt; i++)
             {
                 var leg = present[i];
-                SampleLeg(leg, Math.Min(leg.End, firstAt) - leg.Start, frame, flight.Body, now);
+                SampleLeg(leg, Math.Min(leg.End, firstAt) - leg.Start, flight.Body, now);
                 if (Nearest(paths, pointer, Scene.PathPixels) is { } point && leg.Start + point.Seconds > now + ManoeuvreChain.MinimumGap)
                     ghost = (point.At, leg.Start + point.Seconds);
             }
             for (var i = plan.NodeLeg(0) is { } firstLeg ? firstLeg + 1 : plan.Legs.Count; i < plan.Legs.Count && ghost is null; i++)
             {
                 var leg = plan.Legs[i];
-                SampleLeg(leg, leg.End - leg.Start, frame, flight.Body, now);
+                SampleLeg(leg, leg.End - leg.Start, flight.Body, now);
                 if (Nearest(paths, pointer, Scene.PathPixels) is { } point && leg.Start + point.Seconds > now + ManoeuvreChain.MinimumGap)
                     ghost = (point.At, leg.Start + point.Seconds);
             }
@@ -454,17 +452,17 @@ internal sealed class NodeEditor
 
     /// <summary>
     /// Fills <see cref="_samples"/> with <paramref name="leg"/>'s path, up to <paramref name="to"/>
-    /// seconds along it, where <see cref="Paths"/> draws it in <paramref name="frame"/>, each with
-    /// its seconds along the leg: so a click on the line, over the ground or among the stars, maps
-    /// back to the moment on the orbit it was drawn for. A leg round another body than
-    /// <paramref name="view"/>'s (the flown vessel's) is placed as the path draws it (<see cref="LegPlace"/>).
+    /// seconds along it, where <see cref="Paths"/> draws it, each with its seconds along the leg:
+    /// so a click on the line maps back to the moment on the orbit it was drawn for. A leg round
+    /// another body than <paramref name="view"/>'s (the flown vessel's) is placed as the path draws
+    /// it (<see cref="LegPlace"/>).
     /// </summary>
-    private void SampleLeg(in PathLeg leg, double to, Frame frame, GroundBody view, double now)
+    private void SampleLeg(in PathLeg leg, double to, GroundBody view, double now)
     {
         var place = new LegPlace(leg, view, now);
         leg.Orbit.Samples(_samples, 0, to);
         for (var i = 0; i < _samples.Count; i++)
-            _samples[i] = (place.Point(frame, _samples[i].At, leg.Start - now + _samples[i].Seconds), _samples[i].Seconds);
+            _samples[i] = (place.Point(_samples[i].At), _samples[i].Seconds);
     }
 
     /// <summary>The sample (of <see cref="_samples"/>) nearest <paramref name="pointer"/> on the screen, if within <paramref name="within"/> pixels, and how far it is.</summary>
@@ -533,7 +531,7 @@ internal sealed class NodeEditor
         for (var i = 0; i < present.Count && present[i].Start < firstAt; i++)
         {
             var leg = present[i];
-            SampleLeg(leg, Math.Min(leg.End, firstAt) - leg.Start, flight.LineFrame, flight.Body, now);
+            SampleLeg(leg, Math.Min(leg.End, firstAt) - leg.Start, flight.Body, now);
             if (Nearest(paths, F2(click), best, out var distance) is { } point && WarpTime(leg.Start + point.Seconds, now, firstAt) is { } at)
                 (time, best) = (at, distance);
         }

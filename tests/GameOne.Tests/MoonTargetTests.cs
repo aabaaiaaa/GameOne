@@ -225,7 +225,6 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
         {
             var flight = sim.Flight;
             sim.Step(new FlightInput(SetTarget: NavTarget.OfBody(Moon)));
-            Assert.Equal(Frame.Orbital, flight.LineFrame);
             var now = flight.WorldTime;
             var (paths, plan) = Built(flight);
             var legs = plan.Legs;
@@ -383,7 +382,6 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
         {
             var flight = sim.Flight;
             Assert.Same(Moon, flight.Body);
-            Assert.Equal(Frame.Orbital, flight.LineFrame);
             var (paths, _) = Built(flight);
             var line = paths.Line;
             var ends = Vector3.Distance(line[0], line[^1]);

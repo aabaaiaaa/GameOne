@@ -240,17 +240,17 @@ say) stalls frames and spoils the timing.
   air), before its orbit step is ticked; the
   satellite mission's upper stage, put in orbit, brought home on Auto (orbital through its burn above
   the air, surface once down in it) onto the landing zone; a rendezvous in the target frame, closing from 1 km to
-  under 50 m and holding there, under 0.5 m/s; and a hop from the pad onto the nearest test pad on
-  the surface frame's line.
+  under 50 m and holding there, under 0.5 m/s; and a hop from the pad onto the nearest test pad in
+  the surface frame, by its line's landing mark.
 - **`FrameTests`:** the frames of reference one rule at a time: Auto by height, not by the orbit
   (a booster above the air with its periapsis under the ground orbital, 400 m up surface; a
   frame picked by hand kept as a booster thrown up through the floor passes both switches); the
-  line among them: over the
-  ground in Surface (a hop's and a de-orbit's real track above the air on it, its end where it
-  comes down; a lap drifting west by the ground's turn; a window on a later lap with the line
-  going round to it), among the stars in Orbit (the ellipse, closed round the planet and round the
-  moon; a later lap's window and landing marked as the next lap's); and a suborbital hop's line
-  starting along the prograde of the frame in use, within 3°, in Surface and in Orbit alike.
+  line among the stars round its body in every frame (a hop's and a de-orbit's real path above the
+  air on it, its landing mark on the ground it comes down on; the straight-up top among the stars;
+  an orbit the same closed ellipse in every frame, round the planet and round the moon; a later
+  lap's window and landing marked as the next lap's); a suborbital hop's line starting along
+  orbital prograde, within 3°, in Orbit, and in Surface still along the velocity among the stars
+  while the travel marker's way is the ground's.
 - **`FreePlayTests`:** free play: the satellite launcher with no steps, its vessels of no run, so
   never won, failed or scored (on the pad, past 400 m, after staging), nothing its landing site; its booster flown down
   and landed, and still nothing won.
