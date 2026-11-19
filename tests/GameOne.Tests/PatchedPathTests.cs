@@ -11,7 +11,8 @@ namespace GameOne.Tests;
 /// than a sample) still patched in and out; the patched path against a fine march of the same
 /// pulls; a node after the crossing measured round the moon, prograde and not (radial and normal
 /// too), in the plan and in the burn guide of a vessel on that path; and none of it allocating,
-/// the plan with a node on the moon's leg included.
+/// the plan with a node on the moon's leg included; and a hyperbola coming in from far out and
+/// going out again followed to the edge in milliseconds.
 /// </summary>
 public sealed class PatchedPathTests(ITestOutputHelper output)
 {
@@ -469,6 +470,36 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
             Assert.Same(Moon, legs[0].Body);
             Assert.Same(GroundBody.Planet, legs[1].Body);
             Assert.InRange(legs[0].End, when!.Value - 1e-3, when.Value + 1e-3);
+        }
+    }
+
+    [Theory]
+    [InlineData(600f)]
+    [InlineData(10_000f)]
+    public void A_hyperbola_coming_in_from_far_out_and_escaping_again_is_followed_to_the_edge_in_milliseconds(float meetIn)
+    {
+        // The head-on pairs of FormulaCollisionTests, put back meetIn seconds along their paths:
+        // hundreds or thousands of km out, coming in past the moon's distance on hyperbolas that go
+        // out again for good. Past the moon's distance on the way out it can't be in its sphere, so
+        // that stretch isn't sampled for it: a sample every 2 s out to the edge would be millions of them.
+        var world = FormulaCollisionTests.Meeting(2000f, meetIn: meetIn);
+        var legs = new List<PathLeg>();
+        foreach (var s in world.Vessels)
+        {
+            var at = s.CentreOfMass.ToSingle();
+            var stars = Planet.AmongStars(at, s.Velocity.ToSingle());
+            Patched.Legs(Planet, at, stars, world.Time, legs); // warm
+            foreach (var horizon in new[] { world.Time + Scene.CollisionHorizonSeconds, world.Time + Scene.MapCollisionHorizonSeconds, double.PositiveInfinity })
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                Patched.Legs(Planet, at, stars, world.Time, legs, horizon);
+                var ms = watch.Elapsed.TotalMilliseconds;
+                output.WriteLine($"{(at - Planet.Centre).Length() / 1000:0} km out, to {horizon - world.Time:0} s: {ms:0.00} ms, {legs.Count} leg to {legs[^1].End - world.Time:0} s{(legs[^1].LeavesSystem ? ", leaving the solar system" : "")}");
+                Assert.InRange(ms, 0, 50);
+                Assert.Single(legs);
+                Assert.Same(Planet, legs[0].Body);
+                Assert.Equal(!double.IsFinite(horizon), legs[0].LeavesSystem);
+            }
         }
     }
 }

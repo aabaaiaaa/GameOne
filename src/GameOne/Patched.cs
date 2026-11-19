@@ -206,9 +206,11 @@ internal static class Patched
                 (r, w) = Relative(leg, child, reference, t);
                 inside = r.Length() < radius;
                 // A closed orbit goes out there again each lap: the next time it goes up through it.
-                gapFrom = orbit.Closed && double.IsFinite(up)
-                    ? up + Math.Ceiling(Math.Max(0, t - up) / orbit.Period) * orbit.Period
-                    : double.PositiveInfinity;
+                // One that doesn't go round (a hyperbola come in from out there) goes up through
+                // it once more, out for good.
+                gapFrom = !double.IsFinite(up) ? double.PositiveInfinity
+                    : orbit.Closed ? up + Math.Ceiling(Math.Max(0, t - up) / orbit.Period) * orbit.Period
+                    : up >= t ? up : double.PositiveInfinity;
                 gapTo = gapFrom + across;
                 continue;
             }
@@ -239,8 +241,10 @@ internal static class Patched
     /// orbit is out past <paramref name="far"/> from its body's centre: from where it goes up
     /// through it (<paramref name="start"/>, if it is out there already) to where it comes back
     /// down (infinite, if it never does); and, for an orbit that goes round, when it first goes up
-    /// through it and how long each stretch out there lasts, as it does again each lap. None
-    /// (infinite) if it never gets that far.
+    /// through it and how long each stretch out there lasts, as it does again each lap; for one
+    /// out there now that doesn't go round (a hyperbola coming in), when it goes up through it
+    /// again, if it does before its end, out there for good from then. None (infinite) if it never
+    /// gets that far.
     /// </summary>
     private static (double From, double To, double Up, double Across) Gap(in Orbit orbit, double start, double far)
     {
@@ -251,9 +255,9 @@ internal static class Patched
         var down = Falling(orbit, far) is { } d ? start + d : Never;
         if (r0 >= far)
         {
-            if (!orbit.Closed)
-                return (start, down, Never, 0);
             var up = Rising(orbit, far) is { } u ? start + u : Never;
+            if (!orbit.Closed)
+                return (start, down, up, Never);
             return (start, down, up, double.IsFinite(up) ? down + orbit.Period - up : 0);
         }
         if (Rising(orbit, far) is not { } rising)

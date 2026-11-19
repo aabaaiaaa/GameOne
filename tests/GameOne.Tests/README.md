@@ -806,7 +806,11 @@ say) stalls frames and spoils the timing.
   on the moon's leg, the plan's burn round the moon changed into the planet's frame (within
   0.01 m/s; on the planet's orbit alone, as though it never crossed, metres a second off), and
   allocating nothing asked every frame; the plan with nodes on the moon's leg, worked out again
-  each frame, allocating nothing; and patching allocating nothing once warm.
+  each frame, allocating nothing; patching allocating nothing once warm; and the head-on pairs'
+  hyperbolas (`FormulaCollisionTests.Meeting`, put back 600 s and 10,000 s: some 500 to 11,000 km
+  out, coming in past the moon's distance and out again for good) followed to 20 s, 3,600 s and
+  the solar system's edge in under 50 ms a call (about 0.3 ms: the way out past the moon's
+  distance isn't sampled for its sphere; sampled every 2 s to the edge, it took some 32 s).
 - **`SolarEdgeTests`:** the solar system's edge (`Scene.SolarSystemEdge`, round the sun): a path
   escaping the planet at 1,500 m/s from 20 km up, sideways and straight up, and a bound ellipse
   whose apoapsis is 2e10 m out, each ending at the edge (`PathLeg.LeavesSystem`), its end within
