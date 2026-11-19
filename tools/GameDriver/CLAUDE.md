@@ -95,7 +95,7 @@ Landing spot` (from the planet as well as round the moon), a target as a site is
 What is drawn over the view to click or drag that isn't a marker reads out the same way, only
 while it is on the screen (`Hud.PointsDrawn`): the flown vessel's path's marks, `Marker Path Ap`,
 `Path Pe`, `Path AN`, `Path DN`, `Path Air` (the point on the path each marks: a click there,
-zoomed out, places a node); the nodes, `Marker Node 1`, `Node 2`... (dragged with `drag marker
+zoomed out, places a node, and `rclick marker "Path Ap"` warps to it: `Warp to` = `1234.56 in 210.3 s`, the world time it stops at and how long to go, while it runs, with `Marker Path Warp` on the mark where it stops, and `World seconds` the world's clock in seconds to read the stop by); the nodes, `Marker Node 1`, `Node 2`... (dragged with `drag marker
 "Node 1" 40 0`); each body's path on the map, `Marker Moon line` (a point on the line away from
 the body: a double click there targets it); and, while the steering rings show, `Marker Heading ring`
 and `Marker Pitch ring` (a point on each, clear of the other: `move marker "Flown vessel"` shows

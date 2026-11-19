@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Brutal.GlfwApi;
 using Brutal.ImGuiApi;
 using Brutal.Numerics;
@@ -30,8 +31,6 @@ internal sealed class NodeEditor
     }
 
     private const float NodePixels = 6f, GrabPixels = 9f;
-    /// <summary>How near the pointer must be to a path, in pixels, to be on it.</summary>
-    internal const float PathPixels = 8f;
     /// <summary>How far the pointer must move from where a node was grabbed, in pixels, before it is dragged: a click to select it (to use its handles) leaves it where it is.</summary>
     internal const float DragPixels = 4f;
     internal const float HandleRest = 44f;     // how far out the handles sit, in pixels
@@ -55,6 +54,7 @@ internal sealed class NodeEditor
     private Vector2 _grabbedAt; // where the pointer was as a node was grabbed
     private bool _dragging;     // and whether it has since moved far enough to drag it
     private bool _pressed, _rightPressed, _held;
+    private bool _rightOnNode; // the last right press deleted a node: its click is the node's, not the path's
     private int _presses; // left presses so far, to tell which placed a node
     // The last node placed by a click: the chain before it and with it, and which press placed it
     // (see UndoInsert).
@@ -203,6 +203,8 @@ internal sealed class NodeEditor
         _last = System.Diagnostics.Stopwatch.GetTimestamp();
         var (pressed, rightPressed) = (_pressed, _rightPressed);
         (_pressed, _rightPressed) = (false, false);
+        if (rightPressed)
+            _rightOnNode = false; // until it is found on a node below
         PointerOver = false;
         _drawn.Clear();
         Selected = false;
@@ -321,21 +323,24 @@ internal sealed class NodeEditor
             {
                 var leg = present[i];
                 SampleLeg(leg, Math.Min(leg.End, firstAt) - leg.Start, flight.Body, now);
-                if (Nearest(paths, pointer, PathPixels) is { } point && leg.Start + point.Seconds > now + ManoeuvreChain.MinimumGap)
+                if (Nearest(paths, pointer, Scene.PathPixels) is { } point && leg.Start + point.Seconds > now + ManoeuvreChain.MinimumGap)
                     ghost = (point.At, leg.Start + point.Seconds);
             }
             for (var i = plan.NodeLeg(0) is { } firstLeg ? firstLeg + 1 : plan.Legs.Count; i < plan.Legs.Count && ghost is null; i++)
             {
                 var leg = plan.Legs[i];
                 SampleLeg(leg, leg.End - leg.Start, flight.Body, now);
-                if (Nearest(paths, pointer, PathPixels) is { } point && leg.Start + point.Seconds > now + ManoeuvreChain.MinimumGap)
+                if (Nearest(paths, pointer, Scene.PathPixels) is { } point && leg.Start + point.Seconds > now + ManoeuvreChain.MinimumGap)
                     ghost = (point.At, leg.Start + point.Seconds);
             }
         }
         PointerOver = interact && (_grab != Grab.None || hovered != Hover.None || ghost is not null);
 
         if (rightClicked && hovered == Hover.Node)
+        {
             Delete(hoveredIndex, flight.Controlled, now);
+            _rightOnNode = true; // its click, once let go, is no warp (see WarpPoint)
+        }
         else if (clicked)
         {
             switch (hovered)
@@ -453,29 +458,72 @@ internal sealed class NodeEditor
 
     private (Vector3 At, double Seconds)? Nearest(Paths paths, float2 pointer, float within, out float bestDistance)
     {
-        (Vector3 At, double Seconds)? best = null;
-        bestDistance = within;
-        var hasLast = false;
-        var last = default(float2);
-        var lastSample = default((Vector3 At, double Seconds));
+        _onScreen.Clear();
+        _shownSamples.Clear();
         foreach (var sample in _samples)
         {
-            var visible = paths.InView(sample.At, out var at);
-            if (visible && hasLast)
-            {
-                // Along the piece from the last point: how far, and where (its time in between).
-                var ab = V2(at) - V2(last);
-                var t = ab.LengthSquared() > 1e-6f ? Math.Clamp(Vector2.Dot(V2(pointer) - V2(last), ab) / ab.LengthSquared(), 0f, 1f) : 0f;
-                var distance = Vector2.Distance(V2(pointer), V2(last) + ab * t);
-                if (distance < bestDistance)
-                {
-                    bestDistance = distance;
-                    best = (Vector3.Lerp(lastSample.At, sample.At, t), lastSample.Seconds + (sample.Seconds - lastSample.Seconds) * t);
-                }
-            }
-            (hasLast, last, lastSample) = (visible, at, sample);
+            _shownSamples.Add(paths.InView(sample.At, out var at));
+            _onScreen.Add(V2(at));
+        }
+        var piece = NearestPiece(CollectionsMarshal.AsSpan(_onScreen), CollectionsMarshal.AsSpan(_shownSamples), V2(pointer), within, out var t, out bestDistance);
+        if (piece < 0)
+            return null;
+        var (from, to) = (_samples[piece - 1], _samples[piece]);
+        return (Vector3.Lerp(from.At, to.At, t), from.Seconds + (to.Seconds - from.Seconds) * t);
+    }
+
+    private readonly List<Vector2> _onScreen = [];
+    private readonly List<bool> _shownSamples = [];
+
+    /// <summary>
+    /// The piece of a line drawn through <paramref name="points"/> (on the screen, each drawn if
+    /// <paramref name="shown"/>: a piece is drawn between two shown points one after the other)
+    /// nearest <paramref name="pointer"/>, within <paramref name="within"/> pixels: the index of its
+    /// far end (-1 for none), how far along it the nearest point is (<paramref name="t"/>, 0 to 1)
+    /// and how far that is from the pointer. Only what is drawn is hit, and only within the figure.
+    /// </summary>
+    internal static int NearestPiece(ReadOnlySpan<Vector2> points, ReadOnlySpan<bool> shown, Vector2 pointer, float within, out float t, out float distance)
+    {
+        var best = -1;
+        (t, distance) = (0f, within);
+        for (var i = 1; i < points.Length; i++)
+        {
+            if (!shown[i] || !shown[i - 1])
+                continue;
+            // Along the piece from the last point: how far, and where.
+            var ab = points[i] - points[i - 1];
+            var along = ab.LengthSquared() > 1e-6f ? Math.Clamp(Vector2.Dot(pointer - points[i - 1], ab) / ab.LengthSquared(), 0f, 1f) : 0f;
+            var off = Vector2.Distance(pointer, points[i - 1] + ab * along);
+            if (off < distance)
+                (best, t, distance) = (i, along, off);
         }
         return best;
+    }
+
+    /// <summary>
+    /// The moment the point of the flown vessel's path under <paramref name="click"/> is flown (a
+    /// world time, after now), for a right click there to warp to (<see cref="FlightInput.WarpTo"/>):
+    /// the nearest within <see cref="Scene.PathPixels"/> on its path as it is, with its engine off,
+    /// across its legs and up to its first node (as much as is flown without a burn). None while
+    /// the path doesn't show, nor for the right click that deleted a node: that press was the node's.
+    /// </summary>
+    public double? WarpPoint(Flight flight, Paths paths, Vector2 click)
+    {
+        if (_rightOnNode || paths.Fade < 0.5f || flight.Controlled.State != FlightState.Flying)
+            return null;
+        var now = flight.WorldTime;
+        var firstAt = Count > 0 ? _pending!.TimeOf(0) : double.PositiveInfinity;
+        double? time = null;
+        var best = Scene.PathPixels;
+        var present = paths.Present;
+        for (var i = 0; i < present.Count && present[i].Start < firstAt; i++)
+        {
+            var leg = present[i];
+            SampleLeg(leg, Math.Min(leg.End, firstAt) - leg.Start, flight.Body, now);
+            if (Nearest(paths, F2(click), best, out var distance) is { } point && leg.Start + point.Seconds > now)
+                (time, best) = (leg.Start + point.Seconds, distance);
+        }
+        return time;
     }
 
     /// <summary>A time as minutes and seconds (hours too, if it is that far off); before now, with a minus.</summary>

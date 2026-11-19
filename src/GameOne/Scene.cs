@@ -1279,6 +1279,12 @@ internal static class Scene
     // shorter than this is a click (the menu), not a drag (the camera's turn); the length moved, so
     // a drag out and back is still a drag.
     public const float RightClickSlopPixels = 4f;
+    // How near the pointer must be to a path on the screen, in pixels, to be on it: a click there
+    // places a node, a right click warps to that point (Flight.WarpingTo), and a press on a body's
+    // line on the map is on it.
+    public const float PathPixels = 8f;
+    // The mark on the flown vessel's path where a warp to a point stops, while it runs.
+    public static readonly (byte R, byte G, byte B) WarpToColor = (255, 225, 120);
     // A click is on the flown vessel within its radius of its axis on the screen, or within this if
     // that is smaller (a vessel far off, a pixel or two across).
     public const float ActionMenuMinPixels = 12f;

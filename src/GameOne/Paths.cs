@@ -245,6 +245,32 @@ internal sealed class Paths
     /// </summary>
     internal Vector3? LaterLanding { get; private set; }
 
+    /// <summary>Where a warp to a point (<see cref="Flight.WarpingTo"/>) stops on the path as it is, as drawn by the last <see cref="Draw"/>; none while there is none.</summary>
+    internal Vector3? WarpMark { get; private set; }
+
+    /// <summary>The warp's mark's label: where it stops, nothing more.</summary>
+    internal const string WarpLabel = "Warp to";
+
+    /// <summary>
+    /// Where the path as it is (<see cref="Present"/>) is at world time <paramref name="time"/>, as
+    /// drawn in <paramref name="view"/>'s frame at <paramref name="now"/>: on the leg it is flown on
+    /// then (the last, past them all).
+    /// </summary>
+    internal Vector3? PresentAt(double time, GroundBody view, double now)
+    {
+        if (_present.Count == 0)
+            return null;
+        var leg = _present[^1];
+        for (var i = 0; i < _present.Count; i++)
+            if (time <= _present[i].End)
+            {
+                leg = _present[i];
+                break;
+            }
+        var at = leg.Orbit.PositionAfter(Math.Max(0.0, time - leg.Start));
+        return float.IsFinite(at.X) && float.IsFinite(at.Y) && float.IsFinite(at.Z) ? new LegPlace(leg, view, now).Point(at) : null;
+    }
+
     /// <summary>
     /// Draws the path, its marks, and with nodes planned (<paramref name="plan"/>, worked out from
     /// where the vessel is now), the path they plan: the marks then are for that, after the last
@@ -254,6 +280,7 @@ internal sealed class Paths
     {
         var vessel = flight.Controlled;
         CollisionsDrawn = 0;
+        WarpMark = null;
         (_view, _camera, _display, _frames) = (camera.ViewProjection(display), camera.Position, display, frames);
         (_glowEvery, _glowPhase) = (GlowEvery(display), GlowPhase(RealSeconds));
         // The map's system, zoomed out, whatever the flown vessel is doing: faded in as the camera
@@ -316,6 +343,13 @@ internal sealed class Paths
         }
         foreach (var mark in _marks)
             DrawMark(draw, mark.At, mark.Color, mark.Label);
+        WarpMark = flight.WarpingTo is { } warpTo ? PresentAt(warpTo, flight.Body, flight.WorldTime) : null;
+        if (WarpMark is { } stop && InView(stop, out var stopAt))
+        {
+            draw.AddCircle(stopAt, 6f, Color(Scene.WarpToColor, 1f), 0, 2f);
+            draw.AddCircleFilled(stopAt, 2f, Color(Scene.WarpToColor, 1f));
+            Label(stopAt + new float2(9f, -8f), stopAt, Scene.WarpToColor, WarpLabel);
+        }
         if (LandingMark is { } ground)
             Cross(draw, ground, GroundColor, _landingLabel);
         if (LaterLanding is { } later)

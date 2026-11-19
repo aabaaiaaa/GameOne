@@ -328,7 +328,7 @@ internal sealed class Markers
         // path in the map, or on a body's disc (whether its marker shows or not: one filling the
         // screen has faded its ring), if that is what it is on; never the flown vessel's own body.
         var elsewhere = pressedComing is null && pressedOn is null && !ringsInUse && !pressOnPile;
-        var onLine = elsewhere && map?.BodyLineAt(pressAt, NodeEditor.PathPixels) is { } line ? NavTarget.OfBody(line) : (NavTarget?)null;
+        var onLine = elsewhere && map?.BodyLineAt(pressAt, Scene.PathPixels) is { } line ? NavTarget.OfBody(line) : (NavTarget?)null;
         var onDisc = elsewhere && onLine is null && Hud.BodyDisc(frames, camera.Position, camera.ViewProjection(display), display, pressAt) is { } disc
             && Bodies.All[disc.Id] != flight.Body
             ? NavTarget.OfBody(Bodies.All[disc.Id])

@@ -180,7 +180,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
                 Slower = controls.Take(ControlAction.Slower), Faster = controls.Take(ControlAction.Faster), Watched = watched,
                 // Last frame's: what the main view showed, at the body what the camera is on is at, and the vessel it is on.
                 Camera = view.CameraPlace.Position, CameraBody = view.CameraPlace.Body, CameraVelocity = view.CameraVelocity, Watching = view.WatchingNow(flight),
-                NearMisses = hud.Settings.SlowNearMisses,
+                NearMisses = hud.Settings.SlowNearMisses, WarpTo = hud.TakeWarpTo(),
                 View = view.Camera.View,
             };
             // In warp, as many normal steps as fit in the budget, and however fast that turned out to be.

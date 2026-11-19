@@ -68,11 +68,9 @@ internal sealed record ManoeuvreChain(ChainAnchor Anchor, ImmutableArray<Manoeuv
         Patched.Legs(body, position, starsVelocity, now, legs, horizon: time);
         var last = legs[^1];
         // No later than its path goes (down to the ground, or out to the range escaping, or the
-        // last crossing patched): past that a state worked out from its orbit is no place at all.
+        // last crossing patched).
         var orbit = last.Orbit;
-        var ends = orbit.Closed ? double.PositiveInfinity
-            : last.Start + (orbit.Radial && !orbit.EndsOnGround ? orbit.RisingTo(Orbit.MaxRange) ?? 0 : orbit.SecondsToEnd);
-        time = Math.Min(time, Math.Min(ends, last.End));
+        time = Math.Min(time, Patched.Ends(legs));
         var (at, moving) = orbit.StateAfter(time - last.Start);
         if (!Finite(at) || !Finite(moving))
             (last, time, at, moving) = (legs[0], now, position, starsVelocity); // where it is, if not even that

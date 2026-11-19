@@ -132,6 +132,7 @@ internal readonly record struct Coming(Vessel Watched, SolidKind With, Vessel? O
 /// <param name="ChooseFrame">The frame of reference the player picks on the selector (see <see cref="Flight.FrameChoice"/>).</param>
 /// <param name="Slower">Run time a rate slower (see <see cref="Flight.Rates"/>): taken by <see cref="Flight.RunFrame"/>.</param>
 /// <param name="Faster">Run time a rate faster: taken by <see cref="Flight.RunFrame"/>.</param>
+/// <param name="WarpTo">Warp to this world time (a right click on the flown vessel's path: the moment that point of it is flown): the fastest rate at once, back to normal speed as the clock reaches it, and no later than the path ends (see <see cref="Flight.WarpingTo"/>). Taken by <see cref="Flight.RunFrame"/>.</param>
 /// <param name="Watched">The vessels the player is watching besides the one flown (those in the small views).</param>
 /// <param name="Camera">Where the main view's camera is, in the frame of <paramref name="CameraBody"/>, which the vessels near it in that view are witnessed by (see <see cref="Scene.MainViewWitnessed"/>); without it, the flown vessel, which the camera follows.</param>
 /// <param name="NearMisses">Whether near misses past the flown vessel and the watched are slowed for and shown ahead (the player's setting, <see cref="Settings.SlowNearMisses"/>): see <see cref="Flight.NearMissWarning"/>.</param>
@@ -177,7 +178,8 @@ internal readonly record struct FlightInput(
     CameraView? View = null,
     Vessel? Watching = null,
     GroundBody? CameraBody = null,
-    Vector3? CameraVelocity = null);
+    Vector3? CameraVelocity = null,
+    double? WarpTo = null);
 
 /// <summary>
 /// Something the player can carry on flying where it is (<see cref="Flight.CarryOnChoices"/>):
@@ -965,6 +967,58 @@ internal sealed class Flight : IDisposable
     public float TimeScale => Slowed is { } slowed ? MathF.Min(PlayerRate, slowed.Scale) : PlayerRate;
 
     /// <summary>
+    /// The world time the flight is warping to (<see cref="FlightInput.WarpTo"/>: a point on the
+    /// flown vessel's path), if it is: at the fastest of the <see cref="Rates"/> until the clock
+    /// gets there, the last frame shortened so it stops there exactly, then at normal speed. It
+    /// ends early, at normal speed, on a rate key, another vessel flown, a warning that drops the
+    /// warp (<see cref="Warning"/>, <see cref="NearMissWarning"/>), or the vessel wrecked or gone
+    /// from the solar system. What the path's mark shows while it runs.
+    /// </summary>
+    public double? WarpingTo => _warpTo?.Time;
+
+    private (double Time, Vessel For)? _warpTo;
+    private readonly List<PathLeg> _warpLegs = new(Scene.PatchedLegs);
+
+    /// <summary>How near the time warped to the clock must be to have got there: far within a step, as the frame's steps' float sum misses it by.</summary>
+    private const double ArrivedSeconds = 1e-4;
+
+    /// <summary>
+    /// Begins warping to <paramref name="time"/> (see <see cref="WarpingTo"/>), no later than the
+    /// flown vessel's path goes with its engine off (down to the ground, out to the edge), and only
+    /// for a time still ahead of a vessel flying.
+    /// </summary>
+    private void BeginWarpTo(double time)
+    {
+        var vessel = Controlled;
+        if (vessel.State != FlightState.Flying || !(time > WorldTime))
+            return;
+        Patched.Legs(vessel.Body, vessel.CentreOfMass, vessel.Body.AmongStars(vessel.CentreOfMass, vessel.Velocity), WorldTime, _warpLegs);
+        time = Math.Min(time, Patched.Ends(_warpLegs));
+        if (!(time > WorldTime))
+            return;
+        _warpTo = (time, vessel);
+        _rate = Rates.Length - 1;
+    }
+
+    /// <summary>Drops the time warp to normal speed, ending a warp to a point (<see cref="WarpingTo"/>) with it.</summary>
+    private void DropWarp()
+    {
+        _rate = NormalRate;
+        _warpTo = null;
+    }
+
+    /// <summary>
+    /// Ends a warp to a point at normal speed whose vessel is no longer the one flown, or is about
+    /// to be (a switch's link-up begun: the vessel is flown only once it is through), or is wrecked
+    /// or gone from the system.
+    /// </summary>
+    private void KeepWarpTo()
+    {
+        if (_warpTo is { } warp && (warp.For != Controlled || LinkUp.Waiting || warp.For.State == FlightState.Crashed))
+            DropWarp();
+    }
+
+    /// <summary>
     /// The flown vessel's soonest fast collision (see <see cref="Collisions"/>), once it is within its
     /// lead (<see cref="Collisions.WarningSeconds"/>: in time to dodge it, or at once with no dodge
     /// possible), and until it has hit or is no longer one: what the HUD warns of. Looked for every
@@ -1265,7 +1319,7 @@ internal sealed class Flight : IDisposable
             }
             known = count++;
             if (PlayerRate > 1f && IndexOf(also, alsoCount, now) < 0)
-                _rate = NormalRate;
+                DropWarp();
         }
         list[known] = now;
     }
@@ -1612,19 +1666,35 @@ internal sealed class Flight : IDisposable
             else
                 WatchLink.Cancel();
         }
-        // Slowed, the game's rate is the slow-down's, not the player's to change.
-        if (input.Slower && Slowed is null)
-            _rate = Math.Max(0, _rate - 1);
-        if (input.Faster && Slowed is null)
-            _rate = Math.Min(Rates.Length - 1, _rate + 1);
+        // Slowed, the game's rate is the slow-down's, not the player's to change. Warping to a
+        // point, either key ends it, at normal speed.
+        if ((input.Slower || input.Faster) && _warpTo is not null)
+            DropWarp();
+        else
+        {
+            if (input.Slower && Slowed is null)
+                _rate = Math.Max(0, _rate - 1);
+            if (input.Faster && Slowed is null)
+                _rate = Math.Min(Rates.Length - 1, _rate + 1);
+        }
+        if (input.WarpTo is { } warpTo)
+            BeginWarpTo(warpTo);
         // Slowed, the step is shortened by the slow-down's scale (see Slow): at that clock this is
         // the same steps a real second, each that much shorter; under the player's own slower
-        // slow motion, fewer of them, as slow motion always is.
+        // slow motion, fewer of them, as slow motion always is. Warping to a point, the frame that
+        // gets there is cut short at it, and the warp ends once it has.
         var dt = realSeconds * TimeScale;
+        var arriving = false;
+        if (_warpTo is { } warp && warp.Time - WorldTime <= dt)
+            (dt, arriving) = ((float)(warp.Time - WorldTime), true); // (ahead: one is dropped once there)
+        var asked = dt;
         if (TimeScale > 1f)
             dt = Advance(dt, given, budgetSeconds);
         else
             Update(dt, given);
+        // There: the frame's steps all run, or within a hair of it (their sum is a float's).
+        if (_warpTo is { } to && (arriving && dt >= asked || to.Time - WorldTime <= ArrivedSeconds))
+            DropWarp();
         // The lights (the places' and each vessel's landing lights) fade by the frame's real
         // seconds, whatever the warp, and are lit as the frame's own end has the sun.
         Lights.Step(WorldTime, realSeconds);
@@ -1831,6 +1901,7 @@ internal sealed class Flight : IDisposable
         Unwatched.Update(dt, witnessed, camera, cameraBody, cameraVelocity);
         LogLosses(); // after the formula's wrecks and collisions too, not only the physics'
         UpdateRuns();
+        KeepWarpTo(); // another vessel flown, or this one lost: the rest of a warped frame not run on at its rate
         Timings.EndStep(_worlds.TileCount); // charges the rules after the physics
     }
 

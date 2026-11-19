@@ -216,6 +216,9 @@ internal sealed class Readout
         }
         if (flight.Slowed is { } slowed)
             Show("Slowed", $"{slowed.Scale:0.###}x, {slowed.Reason}"); // the forced slow-down: how slow, and what for
+        if (flight.WarpingTo is { } warpTo) // a right click on the path: the world time it stops at (as "World seconds" counts), and how long to go
+            Show("Warp to", $"{warpTo:0.00} in {warpTo - flight.WorldTime:0.0} s");
+        Show("World seconds", $"{flight.WorldTime:0.00}"); // the world's clock in seconds, to read a warp's stop by
         Show("Altitude", $"{flight.Altitude:0} m"); // above the sea
         Show("Ground", $"{flight.Ground:0} m"); // over what is under it
         Show("Vertical", $"{flight.VerticalSpeed:0.0} m/s");

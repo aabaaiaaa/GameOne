@@ -389,7 +389,8 @@ internal sealed class Hud : IDisposable
     /// What a script clicks or drags on the main view that is drawn rather than a marker, by name
     /// and where it is (pixels from the middle of the screen), this frame: the flown vessel's path's
     /// marks ("Path Ap", "Path Pe", "Path AN", "Path DN", "Path Air": the point on the path each
-    /// marks, so a click there places a node), the nodes ("Node 1" on), each body's path on the map
+    /// marks, so a click there places a node and a right click warps to it), the mark where a warp
+    /// to a point stops ("Path Warp", while it runs), the nodes ("Node 1" on), each body's path on the map
     /// ("Moon line": a point on the line, away from the body) and the steering rings ("Heading
     /// ring", "Pitch ring": a point on each, clear of the other). Gathered only for the readout.
     /// </summary>
@@ -408,6 +409,8 @@ internal sealed class Hud : IDisposable
             foreach (var mark in _paths.Marks)
                 if (_paths.InView(mark.At, out var at) && Point($"Path {mark.Label.Split(' ')[0]}", new Vector2(at.X, at.Y)))
                     _pathMarks.Add(mark.Label);
+        if (_paths.Fade >= 0.5f && _paths.WarpMark is { } stop && _paths.InView(stop, out var stopAt))
+            Point("Path Warp", new Vector2(stopAt.X, stopAt.Y));
         foreach (var (index, at) in _nodes.Drawn)
             Point($"Node {index + 1}", new Vector2(at.X, at.Y));
         foreach (var body in Bodies.All)
@@ -876,6 +879,27 @@ internal sealed class Hud : IDisposable
     }
 
     /// <summary>
+    /// What a right click warps to (<see cref="FlightInput.WarpTo"/>): the moment the point of the
+    /// flown vessel's path under it is flown (<paramref name="onPath"/>), unless a marker
+    /// (<paramref name="onMarker"/>, a body's among them) or a vessel (<paramref name="onVessel"/>)
+    /// is under it too, which wins, as without the path (the camera's centre, or the flown
+    /// vessel's actions). A body's disc doesn't: the path is drawn only where no body hides it, so
+    /// where it crosses a disc it is in front of it.
+    /// </summary>
+    internal static double? RightClickWarp(CameraCentre? onMarker, Vessel? onVessel, double? onPath) =>
+        onMarker is null && onVessel is null ? onPath : null;
+
+    private double? _warpTo;
+
+    /// <summary>The time a right click on the flown vessel's path asked to warp to since the last call, if one did: for the flight's input.</summary>
+    public double? TakeWarpTo()
+    {
+        var time = _warpTo;
+        _warpTo = null;
+        return time;
+    }
+
+    /// <summary>
     /// Whether the strip (the small views' row and its buttons) is shown: once there is more than one
     /// vessel in the world (<paramref name="vessels"/>), or while the main camera is on something other than
     /// the flown vessel (<paramref name="cameraOff"/>), for its "Reset camera".
@@ -969,8 +993,14 @@ internal sealed class Hud : IDisposable
         {
             var viewProjection = camera.ViewProjection(display);
             var onVessel = VesselClicked(flight, camera.Position, viewProjection, display, click, frames);
-            var onMarker = camera.ZoomedOut ? _markers.At(click) ?? BodyDisc(frames, camera.Position, viewProjection, display, click) : null;
-            if (RightClickCentre(camera.ZoomedOut, camera.Centre, onMarker, onVessel, vessel) is { } centre)
+            var marker = _markers.At(click);
+            var onMarker = camera.ZoomedOut ? marker ?? BodyDisc(frames, camera.Position, viewProjection, display, click) : null;
+            if (RightClickWarp(marker, onVessel, _nodes.WarpPoint(flight, _paths, click)) is { } time)
+            {
+                _warpTo = time;
+                _actions.Close();
+            }
+            else if (RightClickCentre(camera.ZoomedOut, camera.Centre, onMarker, onVessel, vessel) is { } centre)
             {
                 camera.CentreOn(centre);
                 _actions.Close();
@@ -2993,7 +3023,7 @@ internal sealed class Hud : IDisposable
     }
 
     /// <summary>How many lines the open controls list has (see <see cref="ControlLine"/>).</summary>
-    internal const int ControlLineCount = 24;
+    internal const int ControlLineCount = 25;
 
     /// <summary>The open controls list's line <paramref name="i"/>: the controls, the same for every mission.</summary>
     internal static ReadOnlySpan<byte> ControlLine(int i) => i switch
@@ -3013,15 +3043,16 @@ internal sealed class Hud : IDisposable
         12 => "Double click    a marker: make it your target (again: none; one click: no change)"u8,
         13 => "Double click    a body: target it, by its path round in the map or its disc"u8,
         14 => "Click the path  plan a burn there (zoomed out); pull its handles"u8,
-        15 => "Space           launch, then drop a stage (any time)"u8,
-        16 => "G               landing legs"u8,
-        17 => "Hold buttons    Prograde, Retrograde, Manoeuvre: keep the nose that way (again: off)"u8,
-        18 => "Frame buttons   Auto, Surface, Orbit, Target: what speeds and holds go by"u8,
-        19 => "Tab             fly another vessel (or click its view)"u8,
-        20 => ", / .           time: slower / faster (1/4x to 32x warp)"u8,
-        21 => "H               this list: open or fold it (over the small views)"u8,
-        22 => "F2              hide the HUD, for a screenshot (and back)"u8,
-        23 => "Esc             pause: restart, missions, worlds, quit"u8,
+        15 => "Right click     the path: warp to that point (zoomed out; any rate key: stop)"u8,
+        16 => "Space           launch, then drop a stage (any time)"u8,
+        17 => "G               landing legs"u8,
+        18 => "Hold buttons    Prograde, Retrograde, Manoeuvre: keep the nose that way (again: off)"u8,
+        19 => "Frame buttons   Auto, Surface, Orbit, Target: what speeds and holds go by"u8,
+        20 => "Tab             fly another vessel (or click its view)"u8,
+        21 => ", / .           time: slower / faster (1/4x to 32x warp)"u8,
+        22 => "H               this list: open or fold it (over the small views)"u8,
+        23 => "F2              hide the HUD, for a screenshot (and back)"u8,
+        24 => "Esc             pause: restart, missions, worlds, quit"u8,
         _ => throw new ArgumentOutOfRangeException(nameof(i)),
     };
 

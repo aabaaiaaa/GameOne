@@ -782,6 +782,16 @@ say) stalls frames and spoils the timing.
   in no capture), written once, and gone from the world once Tab flies its run's booster; and
   `Flight.EdgeAsked` counting only the vessel 1,000 km inside, never the one in orbit or on the
   pad, at warp too.
+- **`WarpToTests`:** warping to a point on the flown vessel's path (`FlightInput.WarpTo`,
+  `Flight.WarpingTo`, a right click on the path in the game): 40 s on round a low orbit at 32x at
+  once and at normal speed within a step of the time asked (the last frame cut short there), the
+  vessel within metres of where the path had it; a rate key (either), a switch to another vessel,
+  the ground's collision warning and the vessel wrecked (driven nose down into the ground, under
+  a fast collision's speed, so unwarned) each ending it early at normal speed; a time past the
+  path's end held to it, where it comes down and at the solar system's edge; none for a time
+  behind or a vessel on its pad; the hit on the drawn line (`NodeEditor.NearestPiece`: the
+  nearest point within `Scene.PathPixels`, nothing beyond, nothing on a piece to or from a point
+  not drawn); and a marker or a vessel under the pointer winning over it (`Hud.RightClickWarp`).
 - **`TopSpeedTests`:** no speed cap in open space, one low over the ground: the upper stage
   1,000 km from the planet's axis, escaping at about 5,800 m/s over the ground, flown in the physics
   for 20 s on the path drawn at its start (`Patched.Legs`), within half as much again as the

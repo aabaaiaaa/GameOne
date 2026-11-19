@@ -69,6 +69,20 @@ internal static class Patched
     }
 
     /// <summary>
+    /// When (in world time) the path of <paramref name="legs"/> ends: down on the ground, out at
+    /// its orbit's range escaping, at the solar system's edge or its last leg's end; infinity for
+    /// one that goes round for ever. Past it a state worked out from its orbit is no place at all.
+    /// </summary>
+    public static double Ends(IReadOnlyList<PathLeg> legs)
+    {
+        var last = legs[^1];
+        var orbit = last.Orbit;
+        var ends = orbit.Closed ? double.PositiveInfinity
+            : last.Start + (orbit.Radial && !orbit.EndsOnGround ? orbit.RisingTo(Orbit.MaxRange) ?? 0 : orbit.SecondsToEnd);
+        return Math.Min(ends, last.End);
+    }
+
+    /// <summary>
     /// When (in world time) <paramref name="leg"/>'s orbit first crosses into a child's sphere of
     /// influence or out of its own body's, between its start and its end (and no further than its
     /// orbit's path ahead goes: a lap, down to the ground, or out to its range); null if it doesn't.

@@ -282,6 +282,11 @@ dotnet run --project src/GameOne
   `Worlds.StepScale`, every body's at once, directly to check the shortened step on its own).
   Slowed, the steps a real second are the same, each shorter, so the frame rate holds (checked
   paced, `A_fast_pass_holds_60_fps`: see the tests' [`CLAUDE.md`](tests/GameOne.Tests/CLAUDE.md)).
+  A right click on the flown vessel's path warps to that point (`FlightInput.WarpTo`, from
+  `NodeEditor.WarpPoint`, a marker or a vessel under the pointer winning: `Hud.RightClickWarp`):
+  `Flight.WarpingTo` runs at the fastest rate and `RunFrame` cuts the frame that gets there short
+  at it, so it stops at normal speed on that moment; a rate key, a switch, a warning dropping the
+  warp (`DropWarp`) or the vessel lost ends it early at normal speed.
 - **Vessels nobody watches:** each vessel is at one body (`Vessel.Body`), and everything it
   exposes is in that body's frame; each body in use has its own physics (`Physics/Worlds.cs`, one
   `RocketPhysics` a body, `Vessel.Physics` a vessel's own body's), made as a vessel there first
