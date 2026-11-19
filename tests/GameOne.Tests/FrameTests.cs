@@ -499,6 +499,24 @@ public sealed class FrameTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void In_Auto_low_down_the_line_starts_along_surface_prograde()
+    {
+        // The same booster low in the air, its periapsis under the ground: Auto picks Surface by its
+        // height, so the line is drawn over the ground and starts along surface prograde (the travel
+        // marker and the holds' way), well apart from the way it goes among the stars.
+        using var sim = Drops.At(Vector3.Zero, Planet.North(Vector3.Zero), -60f, sideways: Planet.North(Vector3.Zero) * 150f, clearance: 600f);
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(ChooseFrame: FrameChoice.Auto));
+        Assert.Equal(Frame.Surface, flight.Frame);
+        var line = Built(flight).Line;
+        var off = Degrees(line[1] - line[0], flight.FrameVelocity);
+        var apart = Degrees(flight.Velocity, Planet.AmongStars(flight.CentreOfMass, flight.Velocity));
+        output.WriteLine($"Auto low down: the line's first piece {off:0.00}° off surface prograde (the two progrades {apart:0.0}° apart)");
+        Assert.True(apart > 10f, $"the two progrades should be well apart ({apart:0.0}°)");
+        Assert.InRange(off, 0f, 3f);
+    }
+
+    [Fact]
     public void Round_the_moon_the_path_among_the_stars_closes_on_itself()
     {
         // A stage in a low round orbit of the moon, flown there in Orbit (and in Auto, orbital): its
