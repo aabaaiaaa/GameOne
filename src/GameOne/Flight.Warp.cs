@@ -330,14 +330,13 @@ internal sealed partial class Flight
     }
 
     /// <summary>
-    /// The other vessels whose collision or near miss coming at a witnessed one has dropped the warp
-    /// (see <see cref="ComingCut"/>), each only once, so raising the warp again by hand isn't undone;
-    /// with the witnessed vessel each was coming at (<see cref="_warpWarnedFor"/>). Each is
-    /// forgotten as it is over (<see cref="ForgetWarpWarned"/>). Room for a few, the oldest going,
-    /// as <see cref="_warned"/>'s, so no window allocates.
+    /// Each other vessel whose collision or near miss coming at a witnessed one has dropped the warp
+    /// (see <see cref="ComingCut"/>), with the witnessed vessel it came at: each pair only once, so
+    /// raising the warp again by hand isn't undone, while the same other coming at another witnessed
+    /// vessel still drops it. Each is forgotten as it is over (<see cref="ForgetWarpWarned"/>). Room
+    /// for a few, the oldest going, as <see cref="_warned"/>'s, so no window allocates.
     /// </summary>
-    private readonly Vessel?[] _warpWarned = new Vessel?[4];
-    private readonly Vessel?[] _warpWarnedFor = new Vessel?[4];
+    private readonly (Vessel? Of, Vessel? Other)[] _warpWarned = new (Vessel?, Vessel?)[4];
     private int _warpWarnedCount;
 
     /// <summary>Keeps <paramref name="other"/> as having dropped the warp coming at <paramref name="of"/> (see <see cref="_warpWarned"/>).</summary>
@@ -346,32 +345,32 @@ internal sealed partial class Flight
         if (_warpWarnedCount == _warpWarned.Length) // the oldest goes
         {
             Array.Copy(_warpWarned, 1, _warpWarned, 0, _warpWarned.Length - 1);
-            Array.Copy(_warpWarnedFor, 1, _warpWarnedFor, 0, _warpWarnedFor.Length - 1);
             _warpWarnedCount--;
         }
-        (_warpWarned[_warpWarnedCount], _warpWarnedFor[_warpWarnedCount]) = (other, of);
-        _warpWarnedCount++;
+        _warpWarned[_warpWarnedCount++] = (of, other);
     }
 
     /// <summary>
-    /// Forgets, as every frame begins and whatever the rate, each other vessel that dropped the warp
-    /// (<see cref="_warpWarned"/>) whose coming is over: it or the vessel it came at wrecked or gone
-    /// from the world, the two at different bodies, or moving apart (passed, or turned away), so one
-    /// coming again later drops it again.
+    /// Forgets, as every frame begins and whatever the rate, each pair that dropped the warp
+    /// (<see cref="_warpWarned"/>) whose coming is over: either wrecked or gone from the world, the
+    /// two at different bodies, or moving apart beyond the reach it was found within
+    /// (<see cref="Collisions.WarpReach"/>: passed, or turned away), so one coming again later drops
+    /// it again. Two drifting side by side within their reach stay one coming however their
+    /// closing wavers about nothing, so it drops the warp once.
     /// </summary>
     private void ForgetWarpWarned()
     {
         for (var i = _warpWarnedCount - 1; i >= 0; i--)
         {
-            var (other, of) = (_warpWarned[i]!, _warpWarnedFor[i]!);
+            var (of, other) = (_warpWarned[i].Of!, _warpWarned[i].Other!);
             var over = !_world.Contains(other) || !_world.Contains(of) || GameOne.Comings.Lost(other) || GameOne.Comings.Lost(of)
-                || other.Body != of.Body || Vector3.Dot(other.CentreOfMass - of.CentreOfMass, other.Velocity - of.Velocity) > 0f;
+                || other.Body != of.Body
+                || (Vector3.Distance(Collisions.Middle(other), Collisions.Middle(of)) > Collisions.WarpReach(of, other)
+                    && Vector3.Dot(other.CentreOfMass - of.CentreOfMass, other.Velocity - of.Velocity) > 0f);
             if (!over)
                 continue;
             Array.Copy(_warpWarned, i + 1, _warpWarned, i, _warpWarnedCount - i - 1);
-            Array.Copy(_warpWarnedFor, i + 1, _warpWarnedFor, i, _warpWarnedCount - i - 1);
-            _warpWarnedCount--;
-            (_warpWarned[_warpWarnedCount], _warpWarnedFor[_warpWarnedCount]) = (null, null); // holding no vessel no longer warned of
+            _warpWarned[--_warpWarnedCount] = default; // holding no vessel no longer warned of
         }
     }
 

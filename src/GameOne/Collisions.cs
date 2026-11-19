@@ -566,23 +566,26 @@ internal sealed class Collisions
     /// <summary>
     /// What is coming soonest at <paramref name="watched"/> (a witnessed vessel) within
     /// <paramref name="horizon"/> game seconds of <paramref name="now"/> (the world's time: the
-    /// world's snapshot is taken then), from another vessel at its body not in
-    /// <paramref name="passed"/> (those already dropped the warp for), asked at a formula's rate,
+    /// world's snapshot is taken then), from another vessel at its body not dropped the warp for
+    /// already as it comes at <paramref name="watched"/> (<paramref name="passed"/>: the witnessed
+    /// vessel each other came at, and that other), asked at a formula's rate,
     /// where no look ahead runs: a collision by their sizes, at any speed (the formula would pass a
     /// slow one through, where the physics bumps it), or with <paramref name="nearMisses"/> a near
     /// miss by <see cref="NearestMiss"/>'s rule; with when their middles come closest (world time),
     /// or null. Two both held where they stand are never one. Allocates nothing.
     /// </summary>
     /// <remarks>
-    /// Each other is first ruled out by distance against its closing bound: among the stars their
-    /// gap is <c>r + u t</c> bent by the pull between them, which is no more than the sum of each
-    /// one's (its fall, the air's drag and its thrust), so one with
-    /// <c>|r| − |u| h − ½ (|a_w| + |a_o|) h² &gt; reach</c> (the reach their sizes, or the near
-    /// misses' with the setting on) can't come within it by the horizon. The rest are flown ahead by
-    /// <see cref="Closest"/>'s march, with their present thrust.
+    /// Each other is first ruled out as <see cref="NearestMiss"/> and <see cref="Pairs"/> rule them
+    /// out: among the stars their gap is <c>r + u t</c> bent by the pull between them, at present
+    /// the difference of their falls (each with the air's drag) and at most each one's thrust, so
+    /// one whose straight lines come no nearer than <c>|r + u t*|</c> (<c>t*</c> their closest,
+    /// held to the horizon) less <c>½ (|a_o − a_w| + |thrust_w| + |thrust_o|) h²</c> than the reach
+    /// (their sizes, or the near misses' with the setting on) is taken, at present pulls, as not
+    /// coming within it by the horizon. The rest are flown ahead by <see cref="Closest"/>'s march,
+    /// with their present thrust.
     /// </remarks>
     internal (Vessel Other, double At, bool NearMiss)? AheadOfTheWarp(Vessel watched, IReadOnlyList<Vessel> world, double now, double horizon, bool nearMisses,
-        ReadOnlySpan<Vessel?> passed = default)
+        ReadOnlySpan<(Vessel? Of, Vessel? Other)> passed = default)
     {
         var started = Timings.Start();
         try
@@ -596,7 +599,7 @@ internal sealed class Collisions
     }
 
     private (Vessel Other, double At, bool NearMiss)? Ahead(Vessel watched, IReadOnlyList<Vessel> world, double now, double horizon, bool nearMisses,
-        ReadOnlySpan<Vessel?> passed)
+        ReadOnlySpan<(Vessel? Of, Vessel? Other)> passed)
     {
         if (watched.State == FlightState.Crashed)
             return null; // a wreck is gone
@@ -611,7 +614,7 @@ internal sealed class Collisions
         var atW = watched.CentreOfMass;
         var starsW = watched.Body.AmongStars(atW, velocity);
         var fallW = Fall(watched.Body, heldW, atW) - velocity * Drag(watched.Body, heldW, atW);
-        var pulledW = fallW.Length() + thrust.Length();
+        var pushW = thrust.Length();
         var size = Size(watched);
         var reachW = Reach(watched);
         var (bottomW, topW, widthW) = Unwatched.Body(watched);
@@ -619,16 +622,16 @@ internal sealed class Collisions
         for (var i = 0; i < _count; i++)
         {
             ref readonly var other = ref _world[i];
-            if (other.Vessel == watched || other.Crashed || other.Body != watched.Body || (heldW && other.Held) || Among(passed, other.Vessel))
+            if (other.Vessel == watched || other.Crashed || other.Body != watched.Body || (heldW && other.Held) || Passed(passed, watched, other.Vessel))
                 continue; // two at different bodies never meet, nor two standing where they are
             var hits = size + other.Size;
             var near = nearMisses ? MathF.Max(hits, within + reachW + other.Reach) : hits;
             var r = other.Middle - middle;
             var u = other.Stars - starsW;
-            if (r.Length() - u.Length() * h - (pulledW + other.Fall.Length() + other.Push) * h * h / 2f > near)
-                continue;
             var uu = u.LengthSquared();
             var line = uu > 1e-6f ? Math.Clamp(-Vector3.Dot(r, u) / uu, 0f, h) : 0f;
+            if ((r + u * line).Length() - ((other.Fall - fallW).Length() + pushW + other.Push) * h * h / 2f > near)
+                continue;
             var t = Closest(watched.Body, middle, starsW, heldW, thrust, other.Middle, other.Stars, other.Held, other.Thrust, line, h,
                 out var apart, out var passing, out _);
             if (t > h || t < 0f || (soonest is { } s && now + t >= s.At))
@@ -649,14 +652,23 @@ internal sealed class Collisions
         return soonest;
     }
 
-    /// <summary>Whether <paramref name="v"/> is one of <paramref name="vessels"/>, by reference.</summary>
-    private static bool Among(ReadOnlySpan<Vessel?> vessels, Vessel v)
+    /// <summary>Whether <paramref name="other"/> coming at <paramref name="watched"/> is one of <paramref name="passed"/>, by reference.</summary>
+    private static bool Passed(ReadOnlySpan<(Vessel? Of, Vessel? Other)> passed, Vessel watched, Vessel other)
     {
-        foreach (var each in vessels)
-            if (each == v)
+        foreach (var (of, each) in passed)
+            if (of == watched && each == other)
                 return true;
         return false;
     }
+
+    /// <summary>
+    /// How near <paramref name="a"/> and <paramref name="b"/> count as coming at each other at a
+    /// formula's rate (<see cref="AheadOfTheWarp"/>), middle to middle: the larger of their sizes
+    /// and a near miss's reach from each (within a length of <paramref name="a"/>'s, outline to
+    /// outline).
+    /// </summary>
+    internal static float WarpReach(Vessel a, Vessel b) =>
+        MathF.Max(Size(a) + Size(b), Scene.NearMissLengths * a.Height + Reach(a) + Reach(b));
 
     /// <summary>
     /// When two moving among the stars, from <paramref name="pW"/> at <paramref name="vW"/> and

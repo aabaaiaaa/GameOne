@@ -32,6 +32,20 @@ public sealed class WarpPerfTests(ITestOutputHelper output)
     [PerfFact] public void Where_a_frame_at_the_physics_top_rate_goes_on_a_moon_transfer() => Report("Moon transfer", WarpScenes.MoonTransfer(), Scene.PhysicsTopRate);
     [PerfFact] public void Where_a_frame_at_32x_goes_in_a_low_orbit() => Report("Low orbit", WarpScenes.LowOrbit(), 32f);
     [PerfFact] public void Where_a_frame_at_32x_goes_among_a_hundred_satellites() => Report("Hundred satellites", WarpScenes.HundredSatellites(), 32f);
+    [PerfFact] public void Where_a_frame_at_the_top_rate_goes_among_a_hundred_satellites() => Report("Hundred satellites", WarpScenes.HundredSatellites(), Scene.TopRate);
+
+    [PerfFact]
+    public void Where_a_frame_at_the_top_rate_goes_in_a_full_world()
+    {
+        // The preset's four a copy, crossing each other's orbits (so collisions do come among them,
+        // which would drop the warp), and the one flown 500 m over the highest of them, across
+        // all their planes: every window asks after the whole world (Collisions), with nothing
+        // coming. Room is left for free play's rocket.
+        var ring = WorldTests.ManySatellites(Flight.Capacity / 4 - 1);
+        var flown = UnwatchedTests.Satellite(ring.NextVesselId, 10500f, 45f, 0f);
+        var world = ring with { Vessels = [.. ring.Vessels, flown], NextVesselId = ring.NextVesselId + 1 };
+        Report("A full world", WarpScenes.Flying(world, flown.Id), Scene.TopRate);
+    }
 
     private void Report(string name, (Simulation Sim, Vessel Flown) scene, float rate)
     {

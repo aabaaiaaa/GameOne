@@ -17,7 +17,7 @@ public sealed class FormulaCollisionTests(ITestOutputHelper output)
     private const float MeetIn = 150f;
 
     /// <summary>How high over the sea the pairs here meet: high enough that at the slowest (250 m/s each) the meeting is the lowest of their orbits, all of it above the air.</summary>
-    private const float MeetHeight = 20000f;
+    internal const float MeetHeight = 20000f;
 
     /// <summary>Where the pairs here meet: over <see cref="UnwatchedTests.Opposite"/>, <see cref="MeetHeight"/> up.</summary>
     private static readonly Vector3 HitPoint = Planet.Centre + Planet.Up(UnwatchedTests.Opposite) * (Planet.SeaRadius + MeetHeight);
@@ -40,7 +40,7 @@ public sealed class FormulaCollisionTests(ITestOutputHelper output)
     /// its Kepler orbit: flown on that long the other way and turned round, in the ground's frame
     /// as it was then, its attitude kept among the stars.
     /// </summary>
-    private static VesselState Back(GroundBody body, VesselState s, double seconds)
+    internal static VesselState Back(GroundBody body, VesselState s, double seconds)
     {
         var at = s.CentreOfMass.ToSingle();
         var (place, moving) = new Orbit(body, at, -body.AmongStars(at, s.Velocity.ToSingle()), findEnd: false).StateAfter(seconds);

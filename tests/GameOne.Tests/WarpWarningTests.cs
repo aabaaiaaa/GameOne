@@ -122,6 +122,61 @@ public sealed class WarpWarningTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void An_other_dropped_for_coming_at_one_witnessed_vessel_is_still_asked_of_for_another()
+    {
+        // The two head on, and a satellite far off: the other dropped for as it came at the
+        // satellite is still found coming at the booster; dropped for coming at the booster, it isn't.
+        var meeting = FormulaCollisionTests.Meeting(Closing, 0f, MeetIn);
+        var world = meeting with { Vessels = [.. meeting.Vessels, UnwatchedTests.Satellite(2, 10000f, 0f, 240f)], NextVesselId = 3 };
+        var (sim, flown, other) = FastCollisionTests.Fly(world);
+        using var _ = sim;
+        var flight = sim.Flight;
+        var far = flight.WorldVessels.Single(v => v.Id == 2);
+        FormulaRateTests.ToTheTop(flight);
+        Assert.True(UntilDropped(sim)); // in the physics, its look ahead's horizon from the meeting
+        var collisions = new Collisions(flight);
+        var (now, horizon) = (flight.WorldTime, MeetIn - flight.WorldTime + 1.0);
+        (Vessel?, Vessel?)[] forTheFar = [(far, other)], forTheFlown = [(flown, other)];
+        var found = collisions.AheadOfTheWarp(flown, flight.WorldVessels, now, horizon, false, forTheFar);
+        output.WriteLine($"dropped for the satellite: {found}");
+        Assert.Same(other, found?.Other);
+        Assert.Null(collisions.AheadOfTheWarp(flown, flight.WorldVessels, now, horizon, false, forTheFlown));
+    }
+
+    [Fact]
+    public void Two_drifting_side_by_side_within_their_sizes_drop_it_once_however_often_it_is_raised()
+    {
+        // Two satellites on one circle, their middles closer than their sizes reach (their bodies
+        // clear of each other), going alike: closing at next to nothing, now a little, now not.
+        const float Altitude = 9000f;
+        var first = UnwatchedTests.Satellite(0, Altitude, 0f, 60f);
+        var (sim, flown) = WarpScenes.Flying(first);
+        var (sizes, clear) = (2f * Collisions.Size(flown), 2f * flown.Width + 0.5f);
+        sim.Dispose();
+        var apart = (sizes + clear) / 2f;
+        output.WriteLine($"middles {apart:0.00} m apart: sizes {sizes:0.00} m, bodies clear past {clear:0.00} m");
+        Assert.True(apart < sizes && apart > clear, "within their sizes, their bodies clear of each other");
+        var second = UnwatchedTests.Satellite(1, Altitude, 0f, 60f + UnwatchedTests.DegreesApart(Altitude, apart));
+        // Nudged up by 2 mm/s: its gap to the first wavers by a third of a metre each lap, closing then opening.
+        second = second with { Velocity = second.Velocity.ToSingle() + GroundBody.Planet.Up(second.Position.ToSingle()) * 0.002f };
+        (sim, flown) = WarpScenes.Flying(first, second);
+        using var _ = sim;
+        var flight = sim.Flight;
+        var drops = 0;
+        WarpDropped? last = null;
+        for (var cycle = 0; cycle < 8; cycle++)
+        {
+            for (var k = 0; k < Flight.Rates.Length; k++)
+                flight.RunFrame(0f, new FlightInput(Faster: true));
+            sim.Step(default);
+            if (flight.LastDrop is { } drop && drop != last)
+                (drops, last) = (drops + 1, drop);
+        }
+        output.WriteLine($"{drops} drops in 8 raises; {flight.WorldTime:0} s on at {flight.PlayerRate}x");
+        Assert.True(drops <= 1, $"dropped {drops} times");
+    }
+
+    [Fact]
     public void Two_satellites_side_by_side_on_one_orbit_never_drop_it()
     {
         const float Altitude = 9000f;

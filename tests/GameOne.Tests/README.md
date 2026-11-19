@@ -847,7 +847,10 @@ say) stalls frames and spoils the timing.
   least scale as both are wrecked; the same pass a little wider than their sizes dropping it
   (`NearMiss`) only with the setting on, the warning there naming the other; the warp raised
   again after the drop not dropped again by the same vessel, the collision then the formula's;
-  and two satellites 300 m apart on one orbit never dropping it in 120 frames at the top rate.
+  an other dropped for as it came at one witnessed vessel still found coming at another; two
+  satellites drifting side by side within their sizes, their gap wavering, dropping it once in
+  eight raises; and two satellites 300 m apart on one orbit never dropping it in 120 frames at
+  the top rate.
 - **`WarpToTests`:** warping to a point on the flown vessel's path (`FlightInput.WarpTo`,
   `Flight.WarpingTo`, a right click on the path in the map): 40 s on round a low orbit at the top
   rate, there in one frame and at normal speed on the time asked (its last window cut there), the
