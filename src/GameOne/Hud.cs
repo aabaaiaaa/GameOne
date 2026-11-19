@@ -626,9 +626,6 @@ internal sealed class Hud : IDisposable
     /// <summary>The flight's real seconds (<see cref="Flight.RealTime"/>), given each frame, by which <see cref="WarpDropped"/> is timed.</summary>
     public double RealTime { get; set; }
 
-    /// <summary>The warp's last drop, while the time line says it (see <see cref="TimeLine"/>), for the <see cref="Readout"/>.</summary>
-    public WarpDropped? DropShown(float playerRate) => WarpDropped is { } d && d.ShownAt(RealTime, playerRate) ? d : null;
-
     /// <summary>The big message in the middle of the screen last frame, if any: its title and lines (for the <see cref="Readout"/>).</summary>
     public (string? Title, List<(string Text, float4 Color)>? Lines) LastMessage { get; private set; }
 

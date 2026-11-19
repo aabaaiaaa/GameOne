@@ -1598,22 +1598,29 @@ internal sealed partial class Flight : IDisposable
             else
                 WatchLink.Cancel();
         }
-        // Who holds the warp to the physics' top rate, before the keys are taken (see Gate).
-        Gate(input.Watched, watching, given);
+        // Who holds the warp to the physics' top rate, and what drops it there, before the keys
+        // are taken (see Gate, DropFor): dropped, the frame runs in the physics, its input taken there.
+        Gate(input.Watched, watching);
+        var dropped = false;
+        if (_rate > PhysicsTopIndex && DropFor(given) is { } drop)
+        {
+            DropToPhysics(drop, WarpHeldBy ?? Controlled);
+            dropped = true;
+        }
         // Slowed, the game's rate is the slow-down's, not the player's to change. Warping to a
         // point, either key ends it, at normal speed. Held, faster goes no further than the
-        // physics' top rate.
+        // physics' top rate; nor, in the frame it dropped there, back past it.
         if ((input.Slower || input.Faster) && _warpTo is not null)
             DropWarp();
         else
         {
             if (input.Slower && Slowed is null)
                 _rate = Math.Max(0, _rate - 1);
-            if (input.Faster && Slowed is null && (WarpHeldBy is null || _rate < PhysicsTopIndex))
+            if (input.Faster && Slowed is null && (WarpHeldBy is null && !dropped || _rate < PhysicsTopIndex))
                 _rate = Math.Min(Rates.Length - 1, _rate + 1);
         }
         if (input.WarpTo is { } warpTo)
-            BeginWarpTo(warpTo);
+            BeginWarpTo(warpTo, held: WarpHeldBy is not null || dropped);
         HoldWarpToPath();
         // Slowed, the step is shortened by the slow-down's scale (see Slow): at that clock this is
         // the same steps a real second, each that much shorter; under the player's own slower

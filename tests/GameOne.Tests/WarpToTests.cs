@@ -120,9 +120,11 @@ public sealed class WarpToTests(ITestOutputHelper output)
         Assert.Null(flight.Warning);
         Assert.Equal(FlightState.Flying, flown.State);
 
-        // Asked again, at the physics' top rate in the air: the ground ahead is warned of, which
-        // drops the warp, and so ends it, before it is reached.
+        // Asked again, at the physics' top rate in the air (the drop came its lead ahead of the
+        // air, so on into it first): the ground ahead is warned of, which drops the warp, and so
+        // ends it, before it is reached.
         sim.RealFrame = Simulation.FrameSeconds;
+        Assert.True(sim.Run((_, _) => default, _ => !flown.AboveTheAir, maxSeconds: 2 * Scene.WarpDropLeadSeconds));
         sim.Step(new FlightInput(WarpTo: down));
         Assert.Equal(InTheAir, flight.PlayerRate);
         Assert.True(sim.Run((_, _) => default, f => f.WarpingTo is null, maxSeconds: 300));

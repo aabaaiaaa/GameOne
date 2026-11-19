@@ -82,9 +82,10 @@ internal sealed partial class Flight
     /// <summary>
     /// Begins warping to <paramref name="time"/> (see <see cref="WarpingTo"/>), no later than the
     /// flown vessel's path goes with its engine off (down to the ground, out to the edge), and only
-    /// for a time still ahead of a vessel flying.
+    /// for a time still ahead of a vessel flying: at the physics' top rate if <paramref name="held"/>
+    /// (a witnessed vessel holds the warp, or it dropped there as this frame began).
     /// </summary>
-    private void BeginWarpTo(double time)
+    private void BeginWarpTo(double time, bool held)
     {
         var vessel = Controlled;
         if (vessel.State != FlightState.Flying || !(time > WorldTime))
@@ -93,7 +94,7 @@ internal sealed partial class Flight
         if (!(time > WorldTime))
             return;
         _warpTo = (time, vessel);
-        _rate = WarpHeldBy is null ? Rates.Length - 1 : PhysicsTopIndex;
+        _rate = held ? PhysicsTopIndex : Rates.Length - 1;
     }
 
     /// <summary>When <paramref name="vessel"/>'s path, with its engine off from now, ends (<see cref="Patched.Ends"/>): infinity for one that goes round for ever.</summary>
@@ -143,16 +144,13 @@ internal sealed partial class Flight
     }
 
     /// <summary>
-    /// The gate, as a frame begins (<see cref="WarpHeldBy"/>, of the flown vessel, the small views'
-    /// <paramref name="watched"/> and the main camera's <paramref name="watching"/>, each counted
-    /// from the frame it is watched in, its link-up still waiting or not), and the warp dropped to
-    /// the physics' top rate if it is at a formula's while a vessel holds it: into the air, or near
-    /// the ground of a body with none. The flown vessel at rest set moving by <paramref name="input"/>
-    /// (launched, or its engine lit, with fuel to light it) drops it too, so no frame at a formula's
-    /// rate runs its take-off; flying, the throttle drops nothing (a lit engine holds it, as the
-    /// formula doesn't fly a witnessed vessel's burn).
+    /// The gate, as a frame begins: who holds the warp (<see cref="WarpHeldBy"/>), of the flown
+    /// vessel, the small views' <paramref name="watched"/> and the main camera's
+    /// <paramref name="watching"/>, each counted from the frame it is watched in (a view opened, the
+    /// camera moved, a switch flown: each takes effect between frames), its link-up still waiting or
+    /// not. What drops the warp for it, and for the input, is <see cref="DropFor"/>'s.
     /// </summary>
-    private void Gate(IReadOnlyList<Vessel>? watched, Vessel? watching, in FlightInput input)
+    private void Gate(IReadOnlyList<Vessel>? watched, Vessel? watching)
     {
         var flown = Controlled;
         WarpHeldBy = Holds(flown) ? flown : null;
@@ -161,11 +159,34 @@ internal sealed partial class Flight
                 WarpHeldBy = watched[i];
         if (WarpHeldBy is null && watching is not null && Holds(watching))
             WarpHeldBy = watching;
-        if (WarpHeldBy is { } held)
-            DropToPhysics(held.Body.HasAir ? WarpDrop.Air : WarpDrop.Ground, held);
-        else if (flown.AtRest && flown.Fuel > 0f && (input.Launch || input.FullThrottle || input.Throttle > 0f))
-            DropToPhysics(WarpDrop.SetMoving, flown);
     }
+
+    /// <summary>
+    /// What drops the warp as a frame begins, after the gate (<see cref="Gate"/>) and before the rate
+    /// keys and the frame's advance, so the input is then taken in the physics: a witnessed vessel
+    /// holding it (<see cref="WarpHeldBy"/>: into the air, or near the ground of a body with none);
+    /// any of the flown vessel's actions (launched, staged, its legs or bay doors moved), whatever
+    /// it is doing, as the formula stages nothing and moves no legs; its throttle raised while it is
+    /// at rest with fuel to light it, so no frame at a formula's rate runs its take-off (flying, the
+    /// throttle drops nothing); and a steering key, so the keys always steer as in the physics. Null
+    /// for none. The drop is for <see cref="WarpHeldBy"/>'s vessel if it is that, else the flown one.
+    /// </summary>
+    private WarpDrop? DropFor(in FlightInput input)
+    {
+        if (WarpHeldBy is { } held)
+            return held.Body.HasAir ? WarpDrop.Air : WarpDrop.Ground;
+        var flown = Controlled;
+        if (input.Launch || input.Stage || input.ToggleLegs || input.ToggleBayDoors)
+            return WarpDrop.SetMoving;
+        if (flown.AtRest && flown.Fuel > 0f && (input.FullThrottle || input.Throttle > 0f))
+            return WarpDrop.SetMoving;
+        if (input.Lean.LengthSquared() > SteeringLean * SteeringLean)
+            return WarpDrop.Steering;
+        return null;
+    }
+
+    /// <summary>How long a lean (<see cref="FlightInput.Lean"/>) must be to be a steering key's (see <see cref="DropFor"/>): any at all, past a float's noise.</summary>
+    private const float SteeringLean = 1e-4f;
 
     /// <summary>Whether <paramref name="v"/>, witnessed, holds the warp (see <see cref="WarpHeldBy"/>).</summary>
     private static bool Holds(Vessel v) =>
@@ -203,13 +224,22 @@ internal sealed partial class Flight
         // window of no time: the world it leaves (one brought back, a new rocket on its pad) is in
         // the physics, back at normal speed, and no window's rules may run on it unstepped.
         var choice = input.Choose is not null || input.CarryOn is not null || input.StartAgain || input.Rewind;
+        var watching = input.Watching is { } on && _world.Contains(on) ? on : null;
         do
         {
-            var to = windows == 0 && choice ? WorldTime : NextCut(WorldTime, WorldTime + Math.Min(Scene.FormulaWindowSeconds, dt - done));
+            _cutFor = null;
+            var to = windows == 0 && choice ? WorldTime : NextCut(WorldTime, WorldTime + Math.Min(Scene.FormulaWindowSeconds, dt - done), input.Watched, watching);
             var each = (float)(to - WorldTime);
             FormulaStep(each, windows == 0 ? input : held);
             done += each;
             windows++;
+            // Cut at a drop's moment: dropped there, and the rest of the frame not run.
+            if (_cutFor is { } cut)
+            {
+                if (cut.Node is { } node)
+                    NodeDropped(node);
+                DropToPhysics(cut.Reason, cut.Of);
+            }
             if (!ByFormula)
             {
                 LeaveFormula(input);
@@ -230,9 +260,13 @@ internal sealed partial class Flight
     /// and the earliest crossing of a sphere's edge by a vessel on its orbit
     /// (<see cref="FormulaMotion.CrossesAt"/>), so it is handed across then (<see cref="Cross"/>, at
     /// the window's end), never a window late; else <paramref name="to"/>. (A stepped vessel's
-    /// crossing is asked at each window's end.)
+    /// crossing is asked at each window's end.) And a drop's moment (<see cref="DropCut"/>,
+    /// <see cref="NodeCut"/>), for each witnessed vessel (the flown one, the small views'
+    /// <paramref name="watched"/> and the main camera's <paramref name="watching"/>, as the gate
+    /// counts them), kept as <see cref="_cutFor"/> if the cut is there: <paramref name="from"/>
+    /// itself for one already due, a window of no time.
     /// </summary>
-    private double NextCut(double from, double to)
+    private double NextCut(double from, double to, IReadOnlyList<Vessel>? watched, Vessel? watching)
     {
         if (_warpTo is { } warp && warp.Time > from && warp.Time < to)
             to = warp.Time;
@@ -242,7 +276,80 @@ internal sealed partial class Flight
             if (v.OnFormula && v.State == FlightState.Flying && v.Motion.CrossesAt is var crosses && crosses > from && crosses < to)
                 to = crosses;
         }
+        var flown = Controlled;
+        DropCut(flown, from, ref to);
+        for (var i = 0; watched is not null && i < watched.Count; i++) // by index: a foreach over the interface would box its enumerator
+            DropCut(watched[i], from, ref to);
+        if (watching is not null)
+            DropCut(watching, from, ref to);
+        NodeCut(flown, from, ref to);
         return to;
+    }
+
+    /// <summary>The drop a frame at a formula's rate is cut for in the window being run (see <see cref="NextCut"/>): why, for which vessel, and the node it is for, if one is.</summary>
+    private (WarpDrop Reason, Vessel Of, ManoeuvreChain? Node)? _cutFor;
+
+    /// <summary>
+    /// Cuts the frame <see cref="Scene.WarpDropLeadSeconds"/> ahead of witnessed <paramref name="v"/>'s
+    /// way, on its orbit, coming down to its floor (<see cref="Formula.FloorRadius"/>: into the air,
+    /// or within reach of an airless body's ground), if that is by <paramref name="to"/>.
+    /// </summary>
+    private void DropCut(Vessel v, double from, ref double to)
+    {
+        if (!v.OnFormula || v.State != FlightState.Flying || v.Motion.Stepping || v.Motion.Held || v.EngineLit)
+            return; // stepped (in the air, or burning) it holds the warp at the frame's start: no way on its orbit to cut at
+        if (Formula.ComesDownAt(v.Motion.OnOrbit, Formula.FloorRadius(v)) is not { } down)
+            return;
+        var at = Math.Max(from, down - Scene.WarpDropLeadSeconds);
+        if (at <= to)
+            (to, _cutFor) = (at, (v.Body.HasAir ? WarpDrop.Air : WarpDrop.Ground, v, null));
+    }
+
+    /// <summary>The nodes that have dropped the warp once (see <see cref="NodeCut"/>), each forgotten as its chain changes.</summary>
+    private readonly List<ManoeuvreChain> _nodesDropped = [];
+
+    /// <summary>The next node's drop moment, worked out once for its chain (see <see cref="NodeCut"/>).</summary>
+    private (ManoeuvreChain Chain, double At)? _nodeCutAt;
+
+    /// <summary>
+    /// Cuts the frame for the flown vessel <paramref name="v"/>'s next node, still to come and not
+    /// yet dropped for: <see cref="Scene.WarpDropLeadSeconds"/> ahead of half its burn before its
+    /// time (the burn's length as its guide works it out, <see cref="NodeGuide.BurnSeconds"/>; none
+    /// for an engine that can't burn it), if that is by <paramref name="to"/>.
+    /// </summary>
+    private void NodeCut(Vessel v, double from, ref double to)
+    {
+        if (v.Chain is not { } chain || _nodesDropped.Contains(chain))
+            return;
+        var time = chain.TimeOf(0);
+        if (!(time > from))
+            return; // its time has come: nothing coming up to drop for
+        if (_nodeCutAt is not { } kept || !kept.Chain.Equals(chain))
+        {
+            var burn = v.Guide(from)?.BurnSeconds ?? 0f;
+            kept = (chain, time - (float.IsFinite(burn) ? burn / 2.0 : 0.0) - Scene.WarpDropLeadSeconds);
+            _nodeCutAt = kept;
+        }
+        var at = Math.Max(from, kept.At);
+        if (at <= to)
+            (to, _cutFor) = (at, (WarpDrop.Node, v, chain));
+    }
+
+    /// <summary>
+    /// Keeps <paramref name="chain"/>'s next node as dropped for, so it drops the warp once; those of
+    /// chains no vessel has any more (changed, or flown) are forgotten.
+    /// </summary>
+    private void NodeDropped(ManoeuvreChain chain)
+    {
+        for (var i = _nodesDropped.Count - 1; i >= 0; i--)
+        {
+            var still = false;
+            for (var k = 0; !still && k < _world.Count; k++)
+                still = _nodesDropped[i].Equals(_world[k].Chain);
+            if (!still)
+                _nodesDropped.RemoveAt(i);
+        }
+        _nodesDropped.Add(chain);
     }
 
     /// <summary>
