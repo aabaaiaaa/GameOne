@@ -222,6 +222,18 @@ internal sealed class Worlds : IDisposable
         }
     }
 
+    /// <summary>
+    /// Puts every world in use at the world time itself, no leftover of a step behind it
+    /// (<see cref="Lag"/> 0): as the formula's rates take every craft out (none is left behind the
+    /// clock to be stepped on to it), so what comes back as they drop is at the clock's moment.
+    /// </summary>
+    public void ResetLag()
+    {
+        _lag = 0f;
+        for (var i = 0; i < _inUse.Count; i++)
+            _inUse[i].Lag = 0f;
+    }
+
     /// <summary>Takes every craft out of every world in use (a world being loaded).</summary>
     public void Clear()
     {

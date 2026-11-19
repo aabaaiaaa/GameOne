@@ -9,7 +9,7 @@ namespace GameOne.Tests;
 /// The warning of a fast collision (<see cref="Flight.Warning"/>): the flown vessel's soonest one,
 /// shown in time to dodge it (its lead, <see cref="Collisions.WarningSeconds"/>, ahead), or at once
 /// with no fuel to dodge with, and gone once it has hit or is none; and the time warp dropped once
-/// for it, even in the middle of a 32x frame. A vessel only watched in a small view is never
+/// for it, even in the middle of a warped frame. A vessel only watched in a small view is never
 /// warned of. The worlds are <see cref="FastCollisionTests"/>' builders, in the vacuum (5 km up);
 /// "N s apart" is their centres coming together in N s.
 /// </summary>
@@ -288,13 +288,13 @@ public sealed class CollisionWarningTests(ITestOutputHelper output)
     [Fact]
     public void Warping_into_a_collision_drops_out_of_warp_in_time()
     {
-        // At 32x a frame is 32 steps of game time: the warning must stop the frame at its own
-        // step, not after the rest of the frame (half a second of game time) has run past it.
+        // At the physics' top rate a frame is eight steps of game time: the warning must stop the
+        // frame at its own step, not after the rest of the frame has run past it.
         // 15 km up: set off a minute before at 5 km, the one going west (slower among the stars)
         // falls from far out through the air on its way and is lost to the ground first.
         var (sim, flown, _) = FastCollisionTests.Fly(FastCollisionTests.Pair(1000f, 15000f, 60f));
         using var _ = sim;
-        WarpTo(sim, 32f);
+        WarpTo(sim, Scene.PhysicsTopRate);
         Assert.True(sim.Run(Nobody, f => f.Warning is not null, maxSeconds: 60), "never warned of");
         var warning = sim.Flight.Warning!.Value;
         var lead = Collisions.WarningSeconds(flown, warning);

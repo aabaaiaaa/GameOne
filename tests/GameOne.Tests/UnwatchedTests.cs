@@ -487,21 +487,21 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Two_unwatched_vessels_collide_head_on_at_8000_under_32x_warp()
+    public void Two_unwatched_vessels_collide_head_on_at_8000_at_the_physics_top_rate()
     {
-        // At 32x each frame is over half a second of game time, two checks' intervals or more,
-        // each 8,000 m/s closing a 2 km stretch: none may be skipped, nor any part of one.
+        // At the physics' top rate each frame is eight steps, each 8,000 m/s closing a 2 km
+        // stretch: no check's interval may be skipped, nor any part of one.
         const float HitsIn = 8f;
         var hitPoint = Opposite;
         var (sim, a, b) = Unflown(FastCollisionTests.Pair(8000f, 5000f, HitsIn, over: hitPoint), hitPoint);
         using var _ = sim;
         var faster = new FlightInput(Faster: true);
-        while (sim.Flight.TimeScale < 32f)
+        while (sim.Flight.TimeScale < Scene.PhysicsTopRate)
             sim.Step(faster);
-        Assert.Equal(32f, sim.Flight.TimeScale);
-        output.WriteLine($"at 32x from {sim.Time:0.00} s");
+        Assert.Equal(Scene.PhysicsTopRate, sim.Flight.TimeScale);
+        output.WriteLine($"at {Scene.PhysicsTopRate}x from {sim.Time:0.00} s");
         RunUnwatched(sim, a, b, HitsIn + 3f - sim.Time);
-        Assert.Equal(32f, sim.Flight.TimeScale); // never slowed, nor dropped out of the warp, for them
+        Assert.Equal(Scene.PhysicsTopRate, sim.Flight.TimeScale); // never slowed, nor dropped out of the warp, for them
         BothWrecked(a, b, hitPoint);
     }
 

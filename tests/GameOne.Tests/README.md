@@ -416,6 +416,18 @@ say) stalls frames and spoils the timing.
   frozen ones waking them by its touch alone and freezing on them; a chain of them
   freezing together; stages and fairing halves parting without a hit; a wreck left in the world, undrawn,
   while its hit plays out; and touching another's foot touching it (Jolt's live contacts).
+- **`FormulaRateTests`:** a frame at a formula's rate as one advance by formula, in windows
+  (`Scene.FormulaWindowSeconds`): a low orbit coasted 60 frames at the top rate ending within a
+  metre of where Kepler puts it, the clock 60 frames' worth on; nothing in the physics then (its
+  world kept), 34 windows or more a frame; the new rocket on its pad and a lander on the moon each
+  standing where they stood, and the launch (or throttle) dropping the warp to the physics' top
+  rate as set moving, flown in the physics from that frame; the drop bringing the flown vessel
+  and a small view's back into the physics where the formula had them; a slow frame (0.1 s, a
+  millisecond's budget, the hundred satellites) stopped at a window's end; only the witnessed
+  vessel's bodies asked ahead on a moon transfer (no moon physics made while the crossing is
+  further than a frame and the physics' top rate's horizon); a world saved at the top rate coming
+  back within a millimetre of where the formula had each vessel; starting again coming back at
+  normal speed in the physics; and a frame allocating nothing.
 - **`FormulaTests`:** a vessel out of the physics, moved by formula: one going straight up above the air rising to its top when its orbit says and falling back into the air, never standing still; a satellite on its
   orbit by Kepler (60 s; 600 s as a long test), coming back into the physics where the formula
   had it with no jump and flying on there on the same orbit (after 30 s out; 300 s as a long
@@ -438,7 +450,7 @@ say) stalls frames and spoils the timing.
   nothing; and a parting stage and a booster settling in the sea kept in the physics until
   parted, or at rest afloat. Collisions between two under formula (`Unwatched.FindCollisions`), 5 km
   over the far side of the planet, nobody near: head on at 500, 2,000 and 8,000 m/s (and at
-  8,000 under 32x warp) and crossing at 5,657 m/s, both wrecked "Hit another vessel" within 50 m
+  8,000 at the physics' top rate) and crossing at 5,657 m/s, both wrecked "Hit another vessel" within 50 m
   of where they collide, under formula throughout and the game never slowed (and two leaving the
   physics just before they collide, the collision inside what the last check looked at without them);
   a pair passing 10 m apart, within their sizes but clear of each other's bodies, untouched; two
@@ -494,7 +506,7 @@ say) stalls frames and spoils the timing.
   been none for longer than `Scene.WarnedGraceSeconds`); two masts in a row each a collision of
   its own, each dropping the warp, and solids told apart by `Scene.SameSolidRadius`, under half
   the closest two masts' or towers' spacing; a switch of vessel forgetting what was warned
-  of; dropping 32x warp at the step it is due, not a frame later; never for a vessel only watched
+  of; dropping the physics' top rate's warp at the step it is due, not a frame later; never for a vessel only watched
   in a small view; and looking ahead allocating nothing.
 - **`NearMissTests`:** near misses predicted (`Collisions.NearestMiss`): a booster passing another
   within a length outline to outline at 1,000 m/s found, with its time, gap, pass speed, the
@@ -801,8 +813,8 @@ say) stalls frames and spoils the timing.
   `Flight.EdgeAsked` counting only the vessel 1,000 km inside, never the one in orbit or on the
   pad, at warp too.
 - **`WarpToTests`:** warping to a point on the flown vessel's path (`FlightInput.WarpTo`,
-  `Flight.WarpingTo`, a right click on the path in the map): 40 s on round a low orbit at 32x at
-  once and at normal speed within a step of the time asked (the last frame cut short there), the
+  `Flight.WarpingTo`, a right click on the path in the map): 40 s on round a low orbit at the top
+  rate, there in one frame and at normal speed on the time asked (its last window cut there), the
   vessel within metres of where the path had it; a rate key (either), a switch to another vessel,
   the ground's collision warning, a near miss's warning (the setting on), a landing (a booster
   settling on the moon before its path's end) and the vessel wrecked (driven nose down into the

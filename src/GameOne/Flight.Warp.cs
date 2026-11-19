@@ -172,6 +172,155 @@ internal sealed partial class Flight
         v.State != FlightState.Crashed && !v.AtRest && !(v.AboveTheAir && !v.EngineLit);
 
     /// <summary>
+    /// Whether every vessel has been taken out of the physics for the formula's rates
+    /// (<see cref="EnterFormula"/>), and not yet given back to it (<see cref="LeaveFormula"/>).
+    /// </summary>
+    private bool _underFormula;
+
+    /// <summary>How many windows the last frame at a formula's rate was cut into (<see cref="AdvanceByFormula"/>).</summary>
+    internal int FormulaWindows { get; private set; }
+
+    /// <summary>
+    /// A frame at a formula's rate: <paramref name="dt"/> seconds of game time, every vessel (the
+    /// flown one too) moved by formula, nothing of Jolt's stepped, in windows of at most
+    /// <see cref="Scene.FormulaWindowSeconds"/> (<see cref="FormulaStep"/>), each cut short at the
+    /// earliest event in it (<see cref="NextCut"/>). One-off inputs are taken in the first window
+    /// only, held ones in every window, as <see cref="Advance"/> takes them; a frame of no time is
+    /// still one window, of no time, so its inputs are taken. It stops early at a window's end once
+    /// <paramref name="budgetSeconds"/> of real time has gone, and once the rate is no longer a
+    /// formula's (a drop, a menu's choice, a warp to a point there): the vessels are given back to
+    /// the physics then (<see cref="LeaveFormula"/>), and the rest of the frame isn't run. Returns
+    /// the game time it advanced.
+    /// </summary>
+    private float AdvanceByFormula(float dt, in FlightInput input, double budgetSeconds)
+    {
+        _sounds.Clear();
+        var start = System.Diagnostics.Stopwatch.GetTimestamp();
+        var held = HeldOf(input);
+        var (done, windows) = (0.0, 0);
+        do
+        {
+            var to = NextCut(WorldTime, WorldTime + Math.Min(Scene.FormulaWindowSeconds, dt - done));
+            var each = (float)(to - WorldTime);
+            FormulaStep(each, windows == 0 ? input : held);
+            done += each;
+            windows++;
+            if (!ByFormula)
+            {
+                LeaveFormula(input);
+                break;
+            }
+        }
+        while (dt - done > LeftOverSeconds && System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalSeconds < budgetSeconds);
+        FormulaWindows = windows;
+        return (float)done;
+    }
+
+    /// <summary>What of a frame at a formula's rate may be left unrun, as the windows' float lengths sum to it within a hair: far within <see cref="ArrivedSeconds"/>.</summary>
+    private const double LeftOverSeconds = 1e-5;
+
+    /// <summary>
+    /// The earliest moment in (<paramref name="from"/>, <paramref name="to"/>] a frame at a formula's
+    /// rate must be cut at, so what comes then is taken at its moment: the warp to a point's time;
+    /// else <paramref name="to"/>.
+    /// </summary>
+    private double NextCut(double from, double to)
+    {
+        if (_warpTo is { } warp && warp.Time > from && warp.Time < to)
+            to = warp.Time;
+        return to;
+    }
+
+    /// <summary>
+    /// One window of a frame at a formula's rate (<see cref="AdvanceByFormula"/>): what a step does
+    /// after the input (<see cref="Step"/>), but that every vessel is moved by formula and nothing of
+    /// Jolt's is stepped: the vessels' rules once, their legs and doors, their moves, then their
+    /// crossings, the edge, the bodies asked ahead, the target, the losses and the runs. Not the look
+    /// ahead nor the handover (nothing is in the physics to hand over), nor the collisions under
+    /// formula (the look over a window is their own).
+    /// </summary>
+    private void FormulaStep(float dt, in FlightInput input)
+    {
+        Timings.BeginStep();
+        WorldTime += dt;
+        _bodiesAt = WorldTime; // nothing in the physics is behind: it isn't stepped
+        TakeChoices(input);
+        RunVessels(dt, input);
+        Timings.Lap(StepPart.Rules);
+        Rafts.Time = WorldTime; // the rafts' poses, which the physics sets as it steps, at the window's end
+        Unwatched.Move();
+        foreach (var vessel in _world)
+            vessel.AfterPhysics(dt, WorldTime);
+        Cross(WorldTime);
+        LeaveTheSystem(WorldTime);
+        var watching = input.Watching is { } on && _world.Contains(on) ? on : null;
+        AskAhead(WorldTime, Witnessed(input.Watched, watching));
+        ResolveTarget();
+        KeepFrame();
+        LogLosses();
+        UpdateRuns();
+        KeepWarpTo();
+        Timings.EndStep(_worlds.TileCount);
+    }
+
+    /// <summary>
+    /// Takes every vessel out of the physics for the formula's rates, each under formula from the
+    /// moment its motion is at (its world's, <see cref="Worlds.Lag"/> behind the clock), and every
+    /// wreck's body out at once (nothing is stepped to play it out); then nothing is behind the
+    /// clock (<see cref="Worlds.ResetLag"/>). The worlds themselves are kept, not stepped, so not
+    /// released: the drop finds them made.
+    /// </summary>
+    private void EnterFormula()
+    {
+        var at = WorldTime - _worlds.Lag;
+        _worlds.FlushWrecks();
+        for (var i = 0; i < _world.Count; i++)
+            _world[i].LeavePhysics(at);
+        _worlds.ResetLag();
+        _underFormula = true;
+    }
+
+    /// <summary>Whether anything not wrecked is in the physics (at a formula's rate, to be taken out of it: <see cref="EnterFormula"/>).</summary>
+    private bool AnyInPhysics()
+    {
+        for (var i = 0; i < _world.Count; i++)
+            if (!_world[i].OnFormula && _world[i].State != FlightState.Crashed)
+                return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Gives the vessels back to the physics as the rate drops from a formula's: the flown vessel
+    /// first, then each witnessed (by <paramref name="input"/>: the small views' and the main
+    /// camera's), each where the formula has it now; the rest come back as the handover
+    /// (<see cref="Unwatched.Update"/>) wants them, as at the physics' rates. The collisions under
+    /// formula carry on from now (<see cref="Unwatched.CarryOnFrom"/>), not afresh.
+    /// </summary>
+    private void LeaveFormula(in FlightInput input)
+    {
+        _underFormula = false;
+        _bodiesAt = WorldTime;
+        Unwatched.Return(Controlled, WorldTime);
+        var watching = input.Watching is { } on && _world.Contains(on) ? on : null;
+        var witnessed = Witnessed(input.Watched, watching);
+        for (var i = 0; witnessed is not null && i < witnessed.Count; i++) // by index: a foreach over the interface would box its enumerator
+            if (_world.Contains(witnessed[i]))
+                Unwatched.Return(witnessed[i], WorldTime);
+        Unwatched.CarryOnFrom(WorldTime);
+    }
+
+    /// <summary>
+    /// A flight begun, a world brought back or a vessel carried on at a formula's rate comes back
+    /// at normal speed, flown in the physics; at the physics' rates the rate is kept, as it is
+    /// from flight to flight.
+    /// </summary>
+    private void BackToThePhysics()
+    {
+        if (_rate > PhysicsTopIndex)
+            DropWarp();
+    }
+
+    /// <summary>
     /// Ends a warp to a point at normal speed whose vessel is no longer the one flown, or is about
     /// to be (a switch's link-up begun: the vessel is flown only once it is through), or is no
     /// longer flying: landed, settled afloat, wrecked or gone from the system.

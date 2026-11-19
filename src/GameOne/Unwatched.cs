@@ -223,14 +223,24 @@ internal sealed class Unwatched(Flight flight)
     /// </summary>
     public void Advance(float dt)
     {
+        Move();
+        FindCollisions(_flight.WorldTime);
+    }
+
+    /// <summary>
+    /// Moves every vessel under formula on to the flight's world time (each from the last time it
+    /// was moved to), with no look for their collisions: <see cref="Advance"/>'s first half, and
+    /// the whole of a window at a formula's rate. Timed as <see cref="StepDetail.Formula"/>.
+    /// </summary>
+    public void Move()
+    {
         var started = Timings.Start();
         var world = _flight.WorldVessels;
         var now = _flight.WorldTime;
         for (var i = 0; i < world.Count; i++)
             if (world[i].OnFormula)
-                Formula.Advance(world[i], dt, now); // at its own body, by that body's ground, air and pull
+                Formula.Advance(world[i], 0f, now); // at its own body, by that body's ground, air and pull
         Timings.Stop(StepDetail.Formula, started);
-        FindCollisions(now);
     }
 
     /// <summary>
@@ -380,6 +390,20 @@ internal sealed class Unwatched(Flight flight)
     // it, so its other touches from then on are looked for again (at once, back to then). None:
     // infinity.
     private double _againFrom = double.PositiveInfinity;
+
+    /// <summary>
+    /// The collisions under formula carry on from world time <paramref name="time"/>, as the
+    /// formula's rates give way to the physics' (<see cref="Flight.LeaveFormula"/>): the next check
+    /// looks from there, with nothing from before it kept (what came in the formula's windows was
+    /// theirs), and not afresh as after a world loaded, however long the jump in the clock.
+    /// </summary>
+    internal void CarryOnFrom(double time)
+    {
+        for (var k = _collisionCount - 1; k >= 0; k--)
+            if (_collisions[k].At <= time)
+                _collisions[k] = _collisions[--_collisionCount];
+        (_checkedTo, _lastFound, _joined, _againFrom) = (time, time, true, double.PositiveInfinity);
+    }
 
     /// <summary>The longest a check looks back (game seconds): a jump in the world's time past this (a world loaded) starts afresh from now, not from far back.</summary>
     private const double MostBehind = 1.0;

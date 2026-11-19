@@ -102,6 +102,14 @@ internal static class Scene
     public const float WarpDropShownSeconds = 3f;
 
     /// <summary>
+    /// The longest window (game seconds) a frame at a formula's rate is cut into
+    /// (<see cref="Flight.FormulaWindows"/>): every vessel's rules once a window, and every vessel
+    /// moved by formula to its end. Short enough that a window's rules (the holds' turn, the fuel)
+    /// are near enough smooth; long enough that a frame at the top rate (273 s) is a few dozen.
+    /// </summary>
+    public const float FormulaWindowSeconds = 8f;
+
+    /// <summary>
     /// How far ahead (game seconds) a body's physics is asked for before a vessel is to need it
     /// there (<see cref="Physics.Worlds.Ahead"/>: made on the tile worker's idle time, so the step
     /// never waits on one being made).

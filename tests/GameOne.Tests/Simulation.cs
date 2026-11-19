@@ -27,9 +27,9 @@ internal sealed class Simulation : IDisposable
 
     /// <summary>
     /// The real frame <see cref="Step"/> and <see cref="Run"/> run (<see cref="FrameSeconds"/>, unless a
-    /// test shortens it): a test of a warp at the formula's rates whose frame would otherwise run
-    /// minutes of game time, in physics steps, shortens it so each frame runs what one at the
-    /// physics' top rate does.
+    /// test shortens it): a test of a warp at the formula's rates that needs many frames on the way
+    /// (a frame at the top rate is minutes of game time) shortens it so each frame runs what one at
+    /// the physics' top rate does.
     /// </summary>
     public float RealFrame { get; set; } = FrameSeconds;
 

@@ -378,6 +378,7 @@ internal sealed partial class Flight : IDisposable
         if (rewindHere)
             _rewind = new RewindPoint(Capture(), Resumed: true, vessel.Id, RunOf(vessel)?.Mission ?? vessel.Mission, vessel.Site);
         _shownEnded = null; // a choice, as a switch is: a run ended shows no more
+        BackToThePhysics();
         if (vessel == Controlled)
         {
             // Already flown: in its physics now, and its link-up shown all the same, as for any switch.
@@ -838,6 +839,7 @@ internal sealed partial class Flight : IDisposable
     {
         _placeholder = null; // it was the last world's
         _worlds.Clear();
+        _underFormula = false; // every vessel comes back as the world has it, nothing behind the clock
         _world.Clear();
         _worldChanges++;
         _runs.Clear(); // the runs were the last world's
@@ -1537,8 +1539,9 @@ internal sealed partial class Flight : IDisposable
     /// <summary>
     /// A frame of <paramref name="realSeconds"/> of real time: takes the rate keys, then runs that
     /// times <see cref="TimeScale"/> of game time, frame by frame (<see cref="Update"/>) at normal
-    /// speed or slower, in normal steps in warp (<see cref="Advance"/>, within
-    /// <paramref name="budgetSeconds"/> of real time). Returns the game seconds it advanced.
+    /// speed or slower, in normal steps in warp at the physics' rates (<see cref="Advance"/>), and
+    /// at a formula's as one advance by formula (<see cref="AdvanceByFormula"/>), either within
+    /// <paramref name="budgetSeconds"/> of real time. Returns the game seconds it advanced.
     /// </summary>
     public float RunFrame(float realSeconds, in FlightInput input, double budgetSeconds = double.PositiveInfinity)
     {
@@ -1552,8 +1555,7 @@ internal sealed partial class Flight : IDisposable
             var vessel = LinkUp.Vessel!;
             if (CanFly(vessel) && _world.Contains(vessel))
             {
-                if (_worlds.At(vessel.Body) is null)
-                    _worlds.Need(vessel.Body);
+                MakeFor(vessel.Body);
                 Fly(vessel);
                 LinkUp.Ready(_realTime);
                 given = ForTheVesselLeft(input);
@@ -1570,7 +1572,7 @@ internal sealed partial class Flight : IDisposable
                 var vessel = link.Vessel!;
                 if (vessel.State != FlightState.Crashed && _world.Contains(vessel))
                 {
-                    _worlds.Need(vessel.Body);
+                    MakeFor(vessel.Body);
                     BringIn(vessel);
                     link.Ready(_realTime);
                 }
@@ -1588,7 +1590,7 @@ internal sealed partial class Flight : IDisposable
             var vessel = WatchLink.Vessel!;
             if (vessel.State != FlightState.Crashed && _world.Contains(vessel))
             {
-                _worlds.Need(vessel.Body);
+                MakeFor(vessel.Body);
                 BringIn(vessel);
                 WatchLink.Ready(_realTime);
             }
@@ -1623,13 +1625,29 @@ internal sealed partial class Flight : IDisposable
         if (_warpTo is { } warp && warp.Time - WorldTime <= dt)
             (dt, arriving) = ((float)(warp.Time - WorldTime), true); // the warp ends below, once this frame's steps get there
         var asked = dt;
-        if (TimeScale > 1f)
-            dt = Advance(dt, given, budgetSeconds);
+        if (ByFormula)
+        {
+            // At a formula's rate, one advance by formula, everything out of the physics.
+            if (AnyInPhysics())
+                EnterFormula();
+            dt = AdvanceByFormula(dt, given, budgetSeconds);
+        }
         else
-            Update(dt, given);
+        {
+            // Dropped from a formula's rate as the frame began (or by the last frame's end): the
+            // flown and the witnessed back in the physics before it steps.
+            if (_underFormula)
+                LeaveFormula(given);
+            if (TimeScale > 1f)
+                dt = Advance(dt, given, budgetSeconds);
+            else
+                Update(dt, given);
+        }
         // There: the frame's steps all run, or within a hair of it (their sum is a float's).
         if (_warpTo is { } to && (arriving && dt >= asked || to.Time - WorldTime <= ArrivedSeconds))
             DropWarp();
+        if (_underFormula && !ByFormula)
+            LeaveFormula(given); // there at normal speed: back in the physics as the frame ends
         // The lights (the places' and each vessel's landing lights) fade by the frame's real
         // seconds, whatever the warp, and are lit as the frame's own end has the sun.
         Lights.Step(WorldTime, realSeconds);
@@ -1687,14 +1705,7 @@ internal sealed partial class Flight : IDisposable
         var scale = TimeScale;
         var steps = Math.Max(1, (int)MathF.Ceiling(dt / WarpStepSeconds - 1e-4f));
         var each = dt / steps;
-        var held = input with
-        {
-            Launch = false, Stage = false, ToggleLegs = false, FullThrottle = false, CutThrottle = false,
-            ChooseHold = null, RingHeading = null, RingPitch = null, StartAgain = false, Rewind = false, Choose = null, From = null,
-            SwitchVessel = false, SwitchTo = null, SetTarget = null, ClearTarget = false, Plan = null, ChooseFrame = null,
-            Slower = false, Faster = false, ToggleBayDoors = false, CarryOn = null, CompleteRun = false, AbandonRun = false,
-            View = null, // taken once, in the first step, before a switch there changes which vessel is flown
-        };
+        var held = HeldOf(input);
         for (var i = 0; i < steps; i++)
         {
             Step(each, i == 0 ? input : held);
@@ -1706,19 +1717,81 @@ internal sealed partial class Flight : IDisposable
         return dt;
     }
 
+    /// <summary><paramref name="input"/> as the steps of a frame after its first take it: its held inputs (the throttle, the steering) alone, its one-off ones taken in the first.</summary>
+    private static FlightInput HeldOf(in FlightInput input) => input with
+    {
+        Launch = false, Stage = false, ToggleLegs = false, FullThrottle = false, CutThrottle = false,
+        ChooseHold = null, RingHeading = null, RingPitch = null, StartAgain = false, Rewind = false, Choose = null, From = null,
+        SwitchVessel = false, SwitchTo = null, SetTarget = null, ClearTarget = false, Plan = null, ChooseFrame = null,
+        Slower = false, Faster = false, ToggleBayDoors = false, CarryOn = null, CompleteRun = false, AbandonRun = false,
+        View = null, // taken once, in the first step, before a switch there changes which vessel is flown
+    };
+
     /// <summary>One step of <see cref="Update"/>, adding to <see cref="Sounds"/>.</summary>
     private void Step(float dt, in FlightInput input)
     {
         Timings.BeginStep();
         _bodiesAt = WorldTime; // until the physics steps them on to the step's end
         WorldTime += dt;
+        TakeChoices(input);
+        RunVessels(dt, input);
 
+        _controls.Clear();
+        foreach (var vessel in _world)
+            if (vessel.Control is { } control)
+                _controls.Add(control);
+        Timings.Lap(StepPart.Rules);
+        // Each body's physics with a craft in it, in turn: each takes its own crafts' controls, and
+        // the flown vessel's place only at its own body.
+        _worlds.Step(dt, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_controls), Controlled.Body, Controlled.Position, WorldTime);
+        _bodiesAt = WorldTime;
+        // Those under formula moved on to now too, so everything after (their rules, the target,
+        // the look ahead) sees every vessel where it is at this time.
+        Unwatched.Advance(dt);
+
+        foreach (var vessel in _world)
+            vessel.AfterPhysics(dt, WorldTime);
+        // Across a sphere's edge, each handed to the body it is at now (its touches judged first
+        // in the world it was in), and the bodies those in the physics will soon be at asked for ahead.
+        Cross(WorldTime);
+        LeaveTheSystem(WorldTime); // where each is now, at the body it is at
+        AskAhead(WorldTime);
+        ResolveTarget(); // where it has moved to, or whether it has been destroyed or removed
+        KeepFrame(); // and Auto may have switched
+        // The vessel the main camera is on, if it is still in the world (one from before a rewind or
+        // a carry-on can be handed in for a frame after it).
+        var watching = input.Watching is { } on && _world.Contains(on) ? on : null;
+        var witnessed = Witnessed(input.Watched, watching);
+        // The main camera, at the body what it is on is at, moving as that does (the flown vessel,
+        // at its body, if it isn't given); while its link-up waits, as at the flown vessel, so
+        // nothing near it is brought into a physics made in the step before its static is on the
+        // screen (see Watch).
+        var (camera, cameraBody, cameraVelocity) = input.Camera is { } at && WatchLink is not { Waiting: true }
+            ? (at, input.CameraBody ?? Controlled.Body, input.CameraVelocity ?? ((input.CameraBody ?? Controlled.Body) == Controlled.Body ? Controlled.Velocity : Vector3.Zero))
+            : (Controlled.CentreOfMass, Controlled.Body, Controlled.Velocity);
+        LookAhead(witnessed, camera, input.NearMisses, cameraBody); // charged to the rules, as everything after the physics is
+        // Who is in the physics for the next step, once the look ahead has chosen the main view's
+        // witnessed: handed out and in.
+        Unwatched.Update(dt, witnessed, camera, cameraBody, cameraVelocity);
+        LogLosses(); // after the formula's wrecks and collisions too, not only the physics'
+        UpdateRuns();
+        KeepWarpTo(); // another vessel flown, or this one lost: the rest of a warped frame not run on at its rate
+        Timings.EndStep(_worlds.TileCount); // charges the rules after the physics
+    }
+
+    /// <summary>
+    /// A step's choices from <paramref name="input"/>, before its vessels' rules: the view kept,
+    /// a menu's choice (a mission begun, one carried on, started again or rewound), a run
+    /// completed or abandoned, a switch, the target and the plan, and the frame of reference.
+    /// </summary>
+    private void TakeChoices(in FlightInput input)
+    {
         if (input.View is { } view && _viewShown)
             Controlled.View = view; // the vessel it was seen as, before a switch or a carry-on below changes which is flown
 
         if (input.Choose is { } chosen)
             LaunchFrom(input.From ?? Site, chosen);
-        else if (input.CarryOn is { } carried && _world.Find(v => v.Id == carried) is { } carriedOn)
+        else if (input.CarryOn is { } carried && Numbered(carried) is { } carriedOn)
             CarryOn(carriedOn);
         else if (input.StartAgain)
             StartAgain();
@@ -1745,7 +1818,24 @@ internal sealed partial class Flight : IDisposable
         if (input.ChooseFrame is { } choice && (choice != FrameChoice.Target || Target is not null))
             FrameChoice = choice;
         KeepFrame(); // a vessel switched to without a target of its own, or its target let go
+    }
 
+    /// <summary>The vessel in the world numbered <paramref name="id"/>, if there is one: a plain search, so a step that asks makes no closure.</summary>
+    private Vessel? Numbered(int id)
+    {
+        for (var i = 0; i < _world.Count; i++)
+            if (_world[i].Id == id)
+                return _world[i];
+        return null;
+    }
+
+    /// <summary>
+    /// A step's rules for every vessel over <paramref name="dt"/> (the flown one by
+    /// <paramref name="input"/>, the rest as they were left), room made for any it added, and
+    /// their legs and bay doors swung.
+    /// </summary>
+    private void RunVessels(float dt, in FlightInput input)
+    {
         // Every vessel in the world flies: the controlled one as the pilot asks, the rest as they
         // were left. (Staging adds a vessel to the lists as it goes; it starts flying next frame.)
         for (int i = 0, count = _world.Count; i < count; i++)
@@ -1796,48 +1886,6 @@ internal sealed partial class Flight : IDisposable
             vessel.MoveLegs(dt);
             vessel.MoveDoors(dt);
         }
-
-        _controls.Clear();
-        foreach (var vessel in _world)
-            if (vessel.Control is { } control)
-                _controls.Add(control);
-        Timings.Lap(StepPart.Rules);
-        // Each body's physics with a craft in it, in turn: each takes its own crafts' controls, and
-        // the flown vessel's place only at its own body.
-        _worlds.Step(dt, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_controls), Controlled.Body, Controlled.Position, WorldTime);
-        _bodiesAt = WorldTime;
-        // Those under formula moved on to now too, so everything after (their rules, the target,
-        // the look ahead) sees every vessel where it is at this time.
-        Unwatched.Advance(dt);
-
-        foreach (var vessel in _world)
-            vessel.AfterPhysics(dt, WorldTime);
-        // Across a sphere's edge, each handed to the body it is at now (its touches judged first
-        // in the world it was in), and the bodies those in the physics will soon be at asked for ahead.
-        Cross(WorldTime);
-        LeaveTheSystem(WorldTime); // where each is now, at the body it is at
-        AskAhead(WorldTime);
-        ResolveTarget(); // where it has moved to, or whether it has been destroyed or removed
-        KeepFrame(); // and Auto may have switched
-        // The vessel the main camera is on, if it is still in the world (one from before a rewind or
-        // a carry-on can be handed in for a frame after it).
-        var watching = input.Watching is { } on && _world.Contains(on) ? on : null;
-        var witnessed = Witnessed(input.Watched, watching);
-        // The main camera, at the body what it is on is at, moving as that does (the flown vessel,
-        // at its body, if it isn't given); while its link-up waits, as at the flown vessel, so
-        // nothing near it is brought into a physics made in the step before its static is on the
-        // screen (see Watch).
-        var (camera, cameraBody, cameraVelocity) = input.Camera is { } at && WatchLink is not { Waiting: true }
-            ? (at, input.CameraBody ?? Controlled.Body, input.CameraVelocity ?? ((input.CameraBody ?? Controlled.Body) == Controlled.Body ? Controlled.Velocity : Vector3.Zero))
-            : (Controlled.CentreOfMass, Controlled.Body, Controlled.Velocity);
-        LookAhead(witnessed, camera, input.NearMisses, cameraBody); // charged to the rules, as everything after the physics is
-        // Who is in the physics for the next step, once the look ahead has chosen the main view's
-        // witnessed: handed out and in.
-        Unwatched.Update(dt, witnessed, camera, cameraBody, cameraVelocity);
-        LogLosses(); // after the formula's wrecks and collisions too, not only the physics'
-        UpdateRuns();
-        KeepWarpTo(); // another vessel flown, or this one lost: the rest of a warped frame not run on at its rate
-        Timings.EndStep(_worlds.TileCount); // charges the rules after the physics
     }
 
     // The flown vessel's target and where it is, looked up once a step (see ResolveTarget): the
@@ -2123,18 +2171,31 @@ internal sealed partial class Flight : IDisposable
     /// Asks for the physics of each body a vessel flying in the physics (the witnessed, and what is
     /// in it near them: a stage let go, a fairing half) will be at within
     /// <see cref="Scene.PhysicsAheadSeconds"/> along its path (times the rate in warp,
-    /// <see cref="TimeScale"/>, so the worker has as long in real time), across every sphere it crosses
-    /// (<see cref="Patched.Legs"/>), ahead of need (<see cref="Worlds.Ahead"/>: made on the tile
-    /// worker's idle time), so the crossing finds it made and the step never waits on one. Every
-    /// <see cref="AheadAskSeconds"/> of world time (<paramref name="now"/>); allocates nothing but
-    /// as a body is first asked for. One under formula crosses under formula, needing no physics there.
+    /// <see cref="TimeScale"/>, so the worker has as long in real time, but no more than the
+    /// physics' top rate's: at a formula's rate nothing crosses in the physics), across every sphere
+    /// it crosses (<see cref="Patched.Legs"/>), ahead of need (<see cref="Worlds.Ahead"/>: made on
+    /// the tile worker's idle time), so the crossing finds it made and the step never waits on one.
+    /// At a formula's rate, where nothing is in the physics, the flown vessel's and each of
+    /// <paramref name="witnessed"/>'s body and those along their paths within that, so the drop
+    /// finds them made. Every <see cref="AheadAskSeconds"/> of world time (<paramref name="now"/>);
+    /// allocates nothing but as a body is first asked for. One under formula crosses under formula,
+    /// needing no physics there.
     /// </summary>
-    internal void AskAhead(double now)
+    internal void AskAhead(double now, IReadOnlyList<Vessel>? witnessed = null)
     {
         if (now >= _askedAheadAt && now < _askedAheadAt + AheadAskSeconds)
             return;
         _askedAheadAt = now;
-        var horizon = now + Scene.PhysicsAheadSeconds * Math.Max(1f, TimeScale);
+        var horizon = now + Scene.PhysicsAheadSeconds * Math.Clamp(TimeScale, 1f, Scene.PhysicsTopRate);
+        if (ByFormula)
+        {
+            // Nothing is in the physics: what will be as the rate drops is the flown vessel and the
+            // witnessed, at their bodies or those their paths reach within the horizon.
+            AskAheadFor(Controlled, now, horizon);
+            for (var i = 0; witnessed is not null && i < witnessed.Count; i++) // by index: a foreach over the interface would box its enumerator
+                AskAheadFor(witnessed[i], now, horizon);
+            return;
+        }
         for (var i = 0; i < _world.Count; i++)
         {
             var v = _world[i];
@@ -2144,6 +2205,32 @@ internal sealed partial class Flight : IDisposable
             for (var k = 1; k < _aheadLegs.Count; k++)
                 _worlds.Ahead(_aheadLegs[k].Body);
         }
+    }
+
+    /// <summary>Asks ahead for <paramref name="v"/>'s body's physics, and, flying, each body its path reaches by <paramref name="horizon"/> (see <see cref="AskAhead"/>).</summary>
+    private void AskAheadFor(Vessel v, double now, double horizon)
+    {
+        if (v.State == FlightState.Crashed)
+            return;
+        _worlds.Ahead(v.Body);
+        if (v.State != FlightState.Flying)
+            return;
+        Patched.Legs(v.Body, v.CentreOfMass, v.Body.AmongStars(v.CentreOfMass, v.Velocity), now, _aheadLegs, horizon);
+        for (var k = 1; k < _aheadLegs.Count; k++)
+            _worlds.Ahead(_aheadLegs[k].Body);
+    }
+
+    /// <summary>
+    /// <paramref name="body"/>'s physics for a link-up due (a vessel flown, or given a view or the
+    /// main camera): made now, behind the link-up's static; but at a formula's rate, where nothing
+    /// is brought into it until the rate drops, only asked ahead (<see cref="Worlds.Ahead"/>).
+    /// </summary>
+    private void MakeFor(GroundBody body)
+    {
+        if (ByFormula)
+            _worlds.Ahead(body);
+        else
+            _worlds.Need(body);
     }
 
     /// <summary>Who is in the physics, and who is moved by formula (see <see cref="GameOne.Unwatched"/>).</summary>
@@ -2282,6 +2369,8 @@ internal sealed partial class Flight : IDisposable
     /// </summary>
     public void BringIn(Vessel vessel)
     {
+        if (ByFormula)
+            return; // at a formula's rate nothing is in the physics: it comes back as the rate drops (see LeaveFormula)
         if (vessel.OnFormula && _world.Contains(vessel))
             Unwatched.Return(vessel, _bodiesAt);
     }
@@ -2601,6 +2690,7 @@ internal sealed partial class Flight : IDisposable
         // Nor is a warp to a point on the last one's path going on: its time is the last world's clock's.
         if (_warpTo is not null)
             DropWarp();
+        BackToThePhysics();
         Restarted?.Invoke();
     }
 
