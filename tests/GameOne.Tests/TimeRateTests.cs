@@ -12,19 +12,35 @@ namespace GameOne.Tests;
 public sealed class TimeRateTests(ITestOutputHelper output)
 {
     [Fact]
-    public void The_rate_keys_step_through_the_rates()
+    public void The_rate_keys_step_through_the_doubling_ladder()
     {
-        using var sim = new Simulation();
+        Assert.Equal(17, Flight.Rates.Length);
+        Assert.Equal(0.25f, Flight.Rates[0]);
+        Assert.Equal(16384f, Flight.Rates[^1]);
+        for (var i = 1; i < Flight.Rates.Length; i++)
+            Assert.Equal(2f * Flight.Rates[i - 1], Flight.Rates[i]);
+        Assert.Equal(Scene.PhysicsTopRate, Flight.Rates[Flight.PhysicsTopIndex]);
+        Assert.False(Flight.IsFormulaRate(Scene.PhysicsTopRate));
+        Assert.True(Flight.IsFormulaRate(Flight.Rates[Flight.PhysicsTopIndex + 1]));
+
+        // A satellite above the air flown, so nothing holds the warp; each key in a frame of no
+        // time, so the formula's rates run no steps.
+        var (sim, _) = WarpScenes.LowOrbit();
+        using var _s = sim;
         var flight = sim.Flight;
         Assert.Equal(1f, flight.PlayerRate);
-        foreach (var expected in new[] { 2f, 4f, 8f, 16f, 32f, 32f })
+        var expected = 1f;
+        for (var i = 0; i < 15; i++)
         {
-            flight.RunFrame(Simulation.FrameSeconds, new FlightInput(Faster: true));
+            flight.RunFrame(0f, new FlightInput(Faster: true));
+            expected = MathF.Min(2f * expected, Scene.TopRate);
             Assert.Equal(expected, flight.PlayerRate);
             Assert.Equal(expected, flight.TimeScale);
+            Assert.Equal(expected > Scene.PhysicsTopRate, flight.ByFormula);
         }
-        for (var i = 0; i < 9; i++)
-            flight.RunFrame(Simulation.FrameSeconds, new FlightInput(Slower: true));
+        Assert.Null(flight.WarpHeldBy);
+        for (var i = 0; i < 17; i++)
+            flight.RunFrame(0f, new FlightInput(Slower: true));
         Assert.Equal(0.25f, flight.PlayerRate);
         Assert.Equal(Flight.Rates[0], flight.PlayerRate);
     }

@@ -454,7 +454,7 @@ public sealed class PerformanceTests(ITestOutputHelper output)
         var others = landers.Where(v => v != flown).ToArray();
         Assert.Equal(LowPassAhead.Length, others.Length);
 
-        var results = FlyViews(sim, others, [1f, Flight.Rates[^1]]);
+        var results = FlyViews(sim, others, [1f, Scene.PhysicsTopRate]); // the fastest it allows, low over the moon
         foreach (var vessel in landers)
             output.WriteLine($"lander {vessel.Id}: {vessel.State} {vessel.CrashReason}, {vessel.Ground:0.0} m over the ground");
         Assert.All(landers, v => Assert.Equal(FlightState.Flying, v.State));

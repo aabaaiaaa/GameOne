@@ -259,7 +259,8 @@ public sealed class SolarEdgeTests(ITestOutputHelper output)
         using var sim = new Simulation(Mission.FreePlay, world: EdgeWorld(AtTheEdge(0, 50_000, 2000f)));
         var flight = sim.Flight;
         for (var i = 0; i < Flight.Rates.Length; i++)
-            sim.Step(new FlightInput(Faster: true));
+            sim.Flight.RunFrame(0f, new FlightInput(Faster: true)); // in frames of no time, so no step runs at the rates on the way
+        sim.RealFrame = Simulation.TopRateFrame; // then frames that run, at the top rate, what one at the physics' top rate does: not minutes of steps each
         Assert.Equal(Flight.Rates[^1], flight.PlayerRate);
         Assert.True(sim.Run(Nobody, f => !f.WorldVessels.Any(v => v.Id == 0), maxSeconds: 120), "it should have gone past the edge");
         LeftAndLogged(flight, 0);
@@ -334,7 +335,8 @@ public sealed class SolarEdgeTests(ITestOutputHelper output)
             return ++frames > 60;
         }, maxSeconds: 10);
         for (var i = 0; i < Flight.Rates.Length; i++)
-            sim.Step(new FlightInput(Faster: true));
+            sim.Flight.RunFrame(0f, new FlightInput(Faster: true)); // in frames of no time, so no step runs at the rates on the way
+        sim.RealFrame = Simulation.TopRateFrame; // then frames that run, at the top rate, what one at the physics' top rate does: not minutes of steps each
         frames = 0;
         sim.Run(Nobody, f =>
         {

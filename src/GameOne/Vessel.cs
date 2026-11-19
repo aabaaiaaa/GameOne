@@ -850,6 +850,20 @@ internal sealed class Vessel
     }
 
     public FlightState State { get; internal set; }
+
+    /// <summary>
+    /// Whether it is at rest: on its pad, landed or afloat, and settled (not still coming down in
+    /// the water): carried round with its ground or its raft, it needs no physics to stay so.
+    /// </summary>
+    internal bool AtRest => State is FlightState.Ready or FlightState.Landed or FlightState.Floating && (OnFormula || !Craft.Settling);
+
+    /// <summary>
+    /// Whether it flies above its body's air and clear of its highest ground, where its orbit
+    /// carries it with nothing to touch (<see cref="Formula.OnItsOrbitAt"/>): not in the air nor low
+    /// over the ground, so it holds no warp (<see cref="Flight.WarpHeldBy"/>).
+    /// </summary>
+    internal bool AboveTheAir => State == FlightState.Flying && Formula.OnItsOrbitAt(this, CentreOfMass, Velocity);
+
     public float Throttle { get; private set; }
 
     /// <summary>Fuel left in the firing stage, 1 (full) to 0 (empty: or it never had any).</summary>

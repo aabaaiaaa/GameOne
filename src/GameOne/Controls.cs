@@ -32,7 +32,7 @@ internal enum ControlAction
 ///   <item>W A S D or the arrow keys: lean the nose forward, left, back or right, in the vessel's own frame (so the same whatever the camera does). On the pad, facing the starting camera, D leans it east, for the gravity turn.</item>
 ///   <item>Space: light the engine (at the throttle set), then drop a stage (whenever, empty or not). G: deploy or stow the landing legs.</item>
 ///   <item>Tab: fly the next vessel that can be flown (a dropped stage with guidance).</item>
-///   <item>Comma / full stop (they read as &lt; and &gt;): time slower / faster: 1/4, 1/2, normal, then warp at 2, 4, 8, 16, 32x.</item>
+///   <item>Comma / full stop (they read as &lt; and &gt;): time slower / faster: 1/4, 1/2, normal, then warp doubling from 2x to 16384x (see <see cref="Flight.Rates"/>).</item>
 ///   <item>M: zoom all the way out, to see the planet and the predicted path round it (or back to the vessel).</item>
 ///   <item>H: show the controls list over the small views (or hide it again).</item>
 ///   <item>F2: hide the whole HUD, for a screenshot (or show it again); a menu still shows over it.</item>

@@ -25,6 +25,17 @@ internal sealed class Simulation : IDisposable
     /// <summary>The frame length the game would see at 60 frames a second.</summary>
     public const float FrameSeconds = 1f / 60f;
 
+    /// <summary>
+    /// The real frame <see cref="Step"/> and <see cref="Run"/> run (<see cref="FrameSeconds"/>, unless a
+    /// test shortens it): a test of a warp at the formula's rates whose frame would otherwise run
+    /// minutes of game time, in physics steps, shortens it so each frame runs what one at the
+    /// physics' top rate does.
+    /// </summary>
+    public float RealFrame { get; set; } = FrameSeconds;
+
+    /// <summary>A <see cref="RealFrame"/> that runs, at the fastest rate (<see cref="Scene.TopRate"/>), the game time a 60 fps frame at the physics' top rate does.</summary>
+    public const float TopRateFrame = FrameSeconds * Scene.PhysicsTopRate / Scene.TopRate;
+
     private readonly Worlds _worlds = new();
     private readonly GroundBody _body;
     private readonly Watcher? _watcher;
@@ -74,7 +85,7 @@ internal sealed class Simulation : IDisposable
         {
             // The pilot is told the frame's game time, as its rules (a throttle's rate, a hold's
             // gain) run on the game's clock: at a rate other than 1 that isn't the real frame.
-            var input = pilot(Flight, FrameSeconds * Flight.TimeScale);
+            var input = pilot(Flight, RealFrame * Flight.TimeScale);
             Frame(input);
             done = until(Flight);
         }
@@ -123,9 +134,9 @@ internal sealed class Simulation : IDisposable
 
     private void RunOne(FlightInput input)
     {
-        var dt = Flight.RunFrame(FrameSeconds, input);
+        var dt = Flight.RunFrame(RealFrame, input);
         Time += dt;
-        _watcher?.Show(Flight, dt, FrameSeconds);
+        _watcher?.Show(Flight, dt, RealFrame);
     }
 
     /// <summary>

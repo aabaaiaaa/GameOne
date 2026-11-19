@@ -614,6 +614,21 @@ internal sealed class Hud : IDisposable
         set => _running += (value - _running) * 0.1f;
     }
 
+    /// <summary>The witnessed vessel holding the warp to the physics' top rate (the flight's <see cref="Flight.WarpHeldBy"/>, as the log names it), given each frame, or none.</summary>
+    public string? WarpHeldBy { get; set; }
+
+    /// <summary>Whether <see cref="WarpHeldBy"/>'s vessel is at a body with no air, so it is held low over the ground rather than in the air.</summary>
+    public bool WarpHeldAirless { get; set; }
+
+    /// <summary>The warp's last drop (the flight's <see cref="Flight.LastDrop"/>), given each frame: said on the time line for <see cref="Scene.WarpDropShownSeconds"/>.</summary>
+    public WarpDropped? WarpDropped { get; set; }
+
+    /// <summary>The flight's real seconds (<see cref="Flight.RealTime"/>), given each frame, by which <see cref="WarpDropped"/> is timed.</summary>
+    public double RealTime { get; set; }
+
+    /// <summary>The warp's last drop, while the time line says it (see <see cref="TimeLine"/>), for the <see cref="Readout"/>.</summary>
+    public WarpDropped? DropShown(float playerRate) => WarpDropped is { } d && d.ShownAt(RealTime, playerRate) ? d : null;
+
     /// <summary>The big message in the middle of the screen last frame, if any: its title and lines (for the <see cref="Readout"/>).</summary>
     public (string? Title, List<(string Text, float4 Color)>? Lines) LastMessage { get; private set; }
 
@@ -2212,7 +2227,7 @@ internal sealed class Hud : IDisposable
             // one that is that fast collision too: see Flight.NearMissShown).
             if (flight.NearMissShown is { } m)
                 ImGui.TextColored(Warning, Escape(NearMissLine(m)));
-            if (TimeLine(flight.Slowed, flight.PlayerRate, TimeScale, _running) is { } time)
+            if (TimeLine(flight.Slowed, flight.PlayerRate, TimeScale, _running, WarpHeldBy, WarpDropped, RealTime, WarpHeldAirless) is { } time)
                 ImGui.TextColored(time.Good ? Good : Warning, Escape(time.Text));
             // The clocks, in every frame: the world's (Home's day and time of day) and the time of
             // day where the vessel is (by its longitude), each in minutes and seconds of the day.
@@ -3057,7 +3072,7 @@ internal sealed class Hud : IDisposable
         18 => "Hold buttons    Prograde, Retrograde, Manoeuvre: keep the nose that way (again: off)"u8,
         19 => "Frame buttons   Auto, Surface, Orbit, Target: what speeds and holds go by"u8,
         20 => "Tab             fly another vessel (or click its view)"u8,
-        21 => ", / .           time: slower / faster (1/4x to 32x warp)"u8,
+        21 => ", / .           time: slower / faster (1/4x to 16384x warp)"u8,
         22 => "H               this list: open or fold it (over the small views)"u8,
         23 => "F2              hide the HUD, for a screenshot (and back)"u8,
         24 => "Esc             pause: restart, missions, worlds, quit"u8,
@@ -3444,9 +3459,13 @@ internal sealed class Hud : IDisposable
 
     /// <summary>
     /// The time line, under the vessel's name, and whether it is good news (a steady warp) rather
-    /// than a warning; none at normal speed.
+    /// than a warning; none at normal speed. Held to the physics' top rate by a witnessed vessel
+    /// (<paramref name="heldBy"/>, named as the log names it; <paramref name="airless"/> for one
+    /// low over a body with no air), it says by which; for <see cref="Scene.WarpDropShownSeconds"/>
+    /// after the warp dropped there (<paramref name="dropped"/>, timed by <paramref name="realNow"/>,
+    /// the flight's real seconds), why. Information, never a prompt.
     /// </summary>
-    internal static (string Text, bool Good)? TimeLine(Slowdown? slowed, float playerRate, float timeScale, float running)
+    internal static (string Text, bool Good)? TimeLine(Slowdown? slowed, float playerRate, float timeScale, float running, string? heldBy, WarpDropped? dropped, double realNow, bool airless = false)
     {
         // Slowed for a fast collision, the time line says so and why, whatever the player's own
         // rate (with it, if slower): never the rate keys' hint, as they do nothing then.
@@ -3454,6 +3473,10 @@ internal sealed class Hud : IDisposable
             return (SlowedLine(s, playerRate), false);
         if (timeScale < 1f)
             return ($"SLOW MOTION  1/{1f / timeScale:0}x   ( , and . )", false);
+        if (dropped is { } d && d.ShownAt(realNow, playerRate))
+            return ($"WARP DROPPED to {d.Rate:0}x: {d.Why}", false);
+        if (timeScale > 1f && heldBy is not null && timeScale >= Scene.PhysicsTopRate)
+            return ($"WARP {timeScale:0}x  (held: {heldBy} {(airless ? "flying low over the ground" : "flying in the air")})   ( , and . )", false);
         if (timeScale > 1f && running < timeScale * 0.9f)
             return ($"WARP {timeScale:0}x  (running {running:0}x)   ( , and . )", false);
         if (timeScale > 1f)

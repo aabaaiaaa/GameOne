@@ -81,6 +81,24 @@ internal static class Scene
     public const float LinkUpClearShare = 0.25f;
 
     /// <summary>
+    /// The fastest rate the physics runs at (<see cref="Flight.Rates"/>): up to it a warped frame is
+    /// that many 1/60 s physics steps, within <see cref="Flight.WarpBudgetSeconds"/> (12 ms, over
+    /// eight of the busiest scene's median step); past it, the formula's rates
+    /// (<see cref="Flight.IsFormulaRate"/>). The fastest too while a witnessed vessel flies in the
+    /// air (<see cref="Flight.WarpHeldBy"/>), and where the warp drops to (<see cref="Flight.LastDrop"/>).
+    /// </summary>
+    public const float PhysicsTopRate = 8f;
+
+    /// <summary>The fastest rate of all (<see cref="Flight.Rates"/>, doubling from 1/4): a lap of the sun in under a second of real time.</summary>
+    public const float TopRate = 16384f;
+
+    /// <summary>How long (game seconds) ahead of what it is for the warp drops to <see cref="PhysicsTopRate"/> (<see cref="WarpDrop"/>), so the physics is running as it happens.</summary>
+    public const float WarpDropLeadSeconds = 4f;
+
+    /// <summary>How long (real seconds) the time line says why the warp dropped (<see cref="Flight.LastDrop"/>).</summary>
+    public const float WarpDropShownSeconds = 3f;
+
+    /// <summary>
     /// How far ahead (game seconds) a body's physics is asked for before a vessel is to need it
     /// there (<see cref="Physics.Worlds.Ahead"/>: made on the tile worker's idle time, so the step
     /// never waits on one being made).

@@ -15,7 +15,11 @@ namespace GameOne.Tests;
 /// </summary>
 public sealed class WarpToTests(ITestOutputHelper output)
 {
+    /// <summary>The fastest rate, for a warp begun where nothing holds it (above the air).</summary>
     private static readonly float Fastest = Flight.Rates[^1];
+
+    /// <summary>The fastest for a warp begun in the air, or low over the ground: held to the physics' top rate (<see cref="Flight.WarpHeldBy"/>).</summary>
+    private static readonly float InTheAir = Scene.PhysicsTopRate;
 
     private static List<PathLeg> PathOf(Vessel vessel, double now)
     {
@@ -29,6 +33,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
     {
         var (sim, flown) = WarpScenes.Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
         using var _ = sim;
+        sim.RealFrame = Simulation.TopRateFrame; // many frames to the time, as at the physics' top rate, not one of minutes
         var flight = sim.Flight;
         var now = flight.WorldTime;
         var to = now + 40.0;
@@ -50,13 +55,13 @@ public sealed class WarpToTests(ITestOutputHelper output)
         Assert.Null(flight.WarpingTo);
         Assert.Equal(1f, flight.PlayerRate);
         Assert.InRange(flight.WorldTime, to - Flight.WarpStepSeconds, to + 1e-4);
-        Assert.InRange(frames, (int)(40.0 / (Fastest * Simulation.FrameSeconds)), (int)(40.0 / (Fastest * Simulation.FrameSeconds)) + 2);
+        Assert.InRange(frames, (int)(40.0 / (Fastest * sim.RealFrame)), (int)(40.0 / (Fastest * sim.RealFrame)) + 2);
         Assert.True(Vector3.Distance(flown.CentreOfMass, expected) < 5f, "where its path said it would be then");
 
         // At normal speed from there on.
         var before = flight.WorldTime;
         sim.Step(default);
-        Assert.Equal(Simulation.FrameSeconds, flight.WorldTime - before, 5);
+        Assert.Equal(sim.RealFrame, flight.WorldTime - before, 5);
     }
 
     [Theory]
@@ -66,6 +71,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
     {
         var (sim, _) = WarpScenes.Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
         using var _s = sim;
+        sim.RealFrame = Simulation.TopRateFrame; // many frames to the time, as at the physics' top rate, not one of minutes
         var flight = sim.Flight;
         sim.Step(new FlightInput(WarpTo: flight.WorldTime + 300.0));
         sim.Step(default);
@@ -82,6 +88,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
         other = other with { Position = other.Position + new Vector3(0f, 0f, 3000f) };
         var (sim, _) = WarpScenes.Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f), other);
         using var _s = sim;
+        sim.RealFrame = Simulation.TopRateFrame; // many frames to the time, as at the physics' top rate, not one of minutes
         var flight = sim.Flight;
         sim.Step(new FlightInput(WarpTo: flight.WorldTime + 300.0));
         sim.Step(default);
@@ -93,11 +100,12 @@ public sealed class WarpToTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Past_the_ground_it_stops_where_the_path_comes_down_and_a_warning_ends_it_first()
+    public void Past_the_ground_it_stops_where_the_path_comes_down_and_the_air_and_a_warning_end_it_first()
     {
         // Falling from 6 km at a third of the speed that would hold it there: down within the minute.
         var (sim, flown) = WarpScenes.Flying(InOrbit.UpperStage(0, 6000f, 0.3f));
         using var _ = sim;
+        sim.RealFrame = Simulation.TopRateFrame; // many frames to the time, as at the physics' top rate, not one of minutes
         var flight = sim.Flight;
         var now = flight.WorldTime;
         var down = Patched.Ends(PathOf(flown, now));
@@ -105,9 +113,22 @@ public sealed class WarpToTests(ITestOutputHelper output)
 
         sim.Step(new FlightInput(WarpTo: now + 1e6));
         Assert.Equal(down, flight.WarpingTo!.Value, 0); // no later than the path goes
-        Assert.Equal(Fastest, flight.PlayerRate);
+        Assert.Equal(Fastest, flight.PlayerRate); // above the air, nothing holds it
 
-        // The ground ahead is warned of, which drops the warp, and so ends it, before it is reached.
+        // The air coming up drops it to the physics' top rate, and so ends it.
+        Assert.True(sim.Run((_, _) => default, f => f.WarpingTo is null, maxSeconds: 300));
+        output.WriteLine($"ended {down - flight.WorldTime:0.0} s short, {flight.Altitude:0} m up, dropped for {flight.LastDrop?.Reason}");
+        Assert.Equal(WarpDrop.Air, flight.LastDrop?.Reason);
+        Assert.Equal(WorldLog.Named(flown), flight.LastDrop?.Vessel);
+        Assert.Equal(InTheAir, flight.PlayerRate);
+        Assert.Null(flight.Warning);
+        Assert.Equal(FlightState.Flying, flown.State);
+
+        // Asked again, at the physics' top rate in the air: the ground ahead is warned of, which
+        // drops the warp, and so ends it, before it is reached.
+        sim.RealFrame = Simulation.FrameSeconds;
+        sim.Step(new FlightInput(WarpTo: down));
+        Assert.Equal(InTheAir, flight.PlayerRate);
         Assert.True(sim.Run((_, _) => default, f => f.WarpingTo is null, maxSeconds: 300));
         output.WriteLine($"ended {down - flight.WorldTime:0.0} s short, warned of {flight.Warning?.With}");
         Assert.NotNull(flight.Warning);
@@ -117,7 +138,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
         // Asked again (that warning drops the warp only once), it runs on to where the path comes
         // down (the air has held it back: it is still a little up).
         sim.Step(new FlightInput(WarpTo: down));
-        Assert.Equal(Fastest, flight.PlayerRate);
+        Assert.Equal(InTheAir, flight.PlayerRate);
         Assert.True(sim.Run((_, _) => default, f => f.WarpingTo is null, maxSeconds: 300));
         output.WriteLine($"{flown.State} {flight.WorldTime - down:+0.00;-0.00} s from the path's end");
         Assert.Equal(1f, flight.PlayerRate);
@@ -140,7 +161,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
         sim.Step(new FlightInput(FullThrottle: true));
         var down = Patched.Ends(PathOf(flown, flight.WorldTime));
         sim.Step(new FlightInput(WarpTo: flight.WorldTime + 1e6));
-        Assert.Equal(Fastest, flight.PlayerRate);
+        Assert.Equal(InTheAir, flight.PlayerRate);
         Assert.True(sim.Run((_, _) => default, f => f.WarpingTo is null, maxSeconds: 60));
         output.WriteLine($"{flown.State} ({flown.CrashReason}) {down - flight.WorldTime:0.00} s before the path's end; warned of {flight.Warning?.With.ToString() ?? "nothing"}");
         Assert.Equal(FlightState.Crashed, flown.State);
@@ -157,6 +178,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
         state = InOrbit.At(state, centre, Planet.East(centre) * 3000f + Planet.Up(centre) * 1000f);
         var (sim, flown) = WarpScenes.Flying(state);
         using var _ = sim;
+        sim.RealFrame = Simulation.TopRateFrame; // many frames to the time, as at the physics' top rate, not one of minutes
         var flight = sim.Flight;
         var legs = PathOf(flown, flight.WorldTime);
         Assert.True(legs[^1].LeavesSystem);
@@ -224,6 +246,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
     {
         var (sim, _) = WarpScenes.Flying(InOrbit.Round(GroundBody.Planet, 0, 2000f));
         using var _s = sim;
+        sim.RealFrame = Simulation.TopRateFrame; // many frames to the time, as at the physics' top rate, not one of minutes
         var flight = sim.Flight;
         sim.Step(new FlightInput(WarpTo: flight.WorldTime + 300.0));
         sim.Step(default);
@@ -234,7 +257,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
         Assert.Equal(1f, flight.PlayerRate);
         var loaded = flight.WorldTime;
         sim.Step(default);
-        Assert.Equal(loaded + Simulation.FrameSeconds, flight.WorldTime, 5); // one frame on at normal speed, never back
+        Assert.Equal(loaded + sim.RealFrame, flight.WorldTime, 5); // one frame on at normal speed, never back
     }
 
     [Fact]
@@ -251,7 +274,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
         var flight = sim.Flight;
         var down = Patched.Ends(PathOf(flown, flight.WorldTime));
         sim.Step(new FlightInput(WarpTo: flight.WorldTime + 1e6));
-        Assert.Equal(Fastest, flight.PlayerRate);
+        Assert.Equal(InTheAir, flight.PlayerRate);
         Assert.True(sim.Run((_, _) => default, f => f.WarpingTo is null, maxSeconds: 60));
         output.WriteLine($"{flown.State} {down - flight.WorldTime:0.00} s before its path's end");
         Assert.Equal(FlightState.Landed, flown.State);
@@ -266,6 +289,7 @@ public sealed class WarpToTests(ITestOutputHelper output)
         // until the warp has run a few seconds.
         var (sim, flown, other) = FastCollisionTests.Fly(NearMissTests.NearMissPass(1000f, seconds: 25f));
         using var _ = sim;
+        sim.RealFrame = Simulation.TopRateFrame; // many frames to the time, as at the physics' top rate, not one of minutes
         var flight = sim.Flight;
         var to = flight.WorldTime + 24.0;
         sim.Step(new FlightInput(WarpTo: to, NearMisses: true));

@@ -213,7 +213,7 @@ public sealed class SlowdownTests(ITestOutputHelper output)
                     var ratio = double.Parse(parts.Groups[1].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.CurrentCulture);
                     var half = 1f / s.Scale < 9.95f ? 0.05 : 0.5; // a tenth under ten times slower, then whole
                     Assert.InRange(ratio, 1.0 / s.Scale - half - 1e-4, 1.0 / s.Scale + half + 1e-4);
-                    Assert.Equal(shown, Hud.TimeLine(f.Slowed, f.PlayerRate, f.TimeScale, 1f)?.Text);
+                    Assert.Equal(shown, Hud.TimeLine(f.Slowed, f.PlayerRate, f.TimeScale, 1f, null, null, 0)?.Text);
                 }
                 else
                     Assert.False(Readout.FlightReadings(f).ContainsKey("Slowed"));
@@ -233,7 +233,7 @@ public sealed class SlowdownTests(ITestOutputHelper output)
         Assert.Equal($"SLOWED 1/{1.6:0.0}x for a collision with Booster 1, in slow motion 1/4x", Hud.SlowedLine(new Slowdown(0.625f, 2000f, "a collision with Booster 1"), 0.25f));
         Assert.Equal("SLOWED 1/37x for a collision with Booster 1", Hud.SlowedLine(new Slowdown(1f / 37f, 2000f, "a collision with Booster 1"), 0.25f));
         Assert.Equal($"SLOWED 1/{1.6:0.0}x for a collision with Booster 1, in slow motion 1/4x",
-            Hud.TimeLine(new Slowdown(0.625f, 2000f, "a collision with Booster 1"), 0.25f, 0.25f, 1f)?.Text);
+            Hud.TimeLine(new Slowdown(0.625f, 2000f, "a collision with Booster 1"), 0.25f, 0.25f, 1f, null, null, 0)?.Text);
 
         // A pair: a collision with the other, by its name, whether or not they would touch.
         var (pair, _, other) = FastCollisionTests.Fly(FastCollisionTests.Pair(2000f, 5000f, 3f));
@@ -721,7 +721,7 @@ public sealed class SlowdownTests(ITestOutputHelper output)
             Assert.True(f.TimeScale <= 0.25f, $"the clock at {f.TimeScale}, quicker than the player's own");
             // The HUD's time line: slowed, it says so and why (with the player's own rate while
             // that is the slower), never the rate keys' hint, as the keys do nothing then.
-            var line = Hud.TimeLine(f.Slowed, f.PlayerRate, f.TimeScale, 1f);
+            var line = Hud.TimeLine(f.Slowed, f.PlayerRate, f.TimeScale, 1f, null, null, 0);
             if (f.Slowed is { } s)
             {
                 slowedLines++;

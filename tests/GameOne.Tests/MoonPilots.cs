@@ -144,7 +144,7 @@ internal sealed class TransferPilot
             case Phase.Out:
                 // On its orbit, the warp up, to where the trim is.
                 if (flight.WorldTime < _cutAt + TrimAfter)
-                    return new FlightInput(Faster: flight.PlayerRate < Flight.Rates[^1] && flight.WorldTime < _cutAt + TrimAfter - 20);
+                    return new FlightInput(Faster: flight.PlayerRate < Scene.PhysicsTopRate && flight.WorldTime < _cutAt + TrimAfter - 20);
                 if (flight.PlayerRate > 1f)
                     return new FlightInput(Slower: true);
                 Now = Phase.Trim;
@@ -152,7 +152,7 @@ internal sealed class TransferPilot
             case Phase.Trim:
                 return Trim(flight, dt, stars);
             default:
-                return new FlightInput(Faster: flight.PlayerRate < Flight.Rates[^1], CutThrottle: flight.Throttle > 0f);
+                return new FlightInput(Faster: flight.PlayerRate < Scene.PhysicsTopRate, CutThrottle: flight.Throttle > 0f);
         }
     }
 
@@ -284,7 +284,7 @@ internal sealed class CapturePilot
                 var burn = (periapsisSpeed - MathF.Sqrt(Moon.Mu / (float)orbit.PeriapsisDistance)) / flight.MaxAcceleration;
                 var lined = Vector3.Dot(flight.Controlled.Up, -Vector3.Normalize(flight.FrameVelocity)) > 0.995f;
                 if (toPeriapsis > 20)
-                    return new FlightInput(Faster: flight.PlayerRate < Flight.Rates[^1] && toPeriapsis > 40);
+                    return new FlightInput(Faster: flight.PlayerRate < Scene.PhysicsTopRate && toPeriapsis > 40);
                 if (flight.PlayerRate > 1f)
                     return new FlightInput(Slower: true);
                 if (toPeriapsis <= burn / 2 && lined)
@@ -468,7 +468,7 @@ internal sealed class MoonLandingPilot
             // Waiting for the spot to come round (a lap, if it has passed: a line-up the pass was too
             // short for carries on at the next), with its engine off.
             if (ahead > LineUpWhenAhead + 0.3f || ahead < BurnWhenAhead + 0.1f && LineUpBegan is null)
-                return new FlightInput(Faster: flight.PlayerRate < Flight.Rates[^1] && flight.Throttle == 0f, CutThrottle: flight.Throttle > 0f);
+                return new FlightInput(Faster: flight.PlayerRate < Scene.PhysicsTopRate && flight.Throttle == 0f, CutThrottle: flight.Throttle > 0f);
             if (flight.PlayerRate > 1f)
                 return new FlightInput(Slower: true);
             if (ahead > LineUpWhenAhead)
@@ -491,7 +491,7 @@ internal sealed class MoonLandingPilot
         {
             var lined = Vector3.Dot(flight.Controlled.Up, -Vector3.Normalize(velocity)) > 0.995f;
             if (ahead > BurnWhenAhead + 0.3f)
-                return new FlightInput(Faster: flight.PlayerRate < Flight.Rates[^1]);
+                return new FlightInput(Faster: flight.PlayerRate < Scene.PhysicsTopRate);
             if (flight.PlayerRate > 1f)
                 return new FlightInput(Slower: true);
             if (!(lined && ahead < BurnWhenAhead))

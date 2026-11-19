@@ -49,7 +49,15 @@ internal sealed class Readout
         if (hud.Hidden)
             Show("HUD", "hidden"); // F2: nothing over the main view but a menu
         if (hud.TimeScale != 1f)
+        {
             Show("Time", $"{hud.TimeScale:0.##}x");
+            Show("Warp", $"{hud.TimeScale:0.##}x {(Flight.IsFormulaRate(hud.TimeScale) ? "by formula" : "in the physics")}"); // which kind of rate runs it
+            Show("Warp reached", $"{hud.RunningScale:0}x"); // how fast the world really ran, as the time line's "running"
+        }
+        if (hud.WarpHeldBy is { } heldBy)
+            Show("Warp held", heldBy); // the witnessed vessel holding the warp to the physics' top rate
+        if (hud.DropShown(flight.PlayerRate) is { } dropped) // why the warp dropped to the physics' top rate, while the time line says it
+            Show("Warp dropped", dropped.Vessel.Length > 0 ? $"{dropped.Reason} {dropped.Vessel} to {dropped.Rate:0}x" : $"{dropped.Reason} to {dropped.Rate:0}x");
 
         ReadFlight(flight, _shown);
         if (Timings.Enabled && Timings.Summary is { } timings)

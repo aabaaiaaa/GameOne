@@ -223,7 +223,7 @@ internal sealed class RunNotice(string text)
 /// starts another flight in it, everything else staying where it is; a rewind (see
 /// <see cref="CanRewind"/>) undoes this flight, putting the world back as it was when it started.</para>
 /// </remarks>
-internal sealed class Flight : IDisposable
+internal sealed partial class Flight : IDisposable
 {
     /// <summary>How far round the launch pad (beyond its edge), and how high above the tower, something is in the new rocket's way.</summary>
     private const float PadClearance = 3f, PadClearanceAbove = 30f;
@@ -948,101 +948,6 @@ internal sealed class Flight : IDisposable
     public void Hold() => _sounds.Clear();
 
     /// <summary>
-    /// The rates time can run at, from slow motion to time warp (the player steps through them
-    /// with <see cref="FlightInput.Slower"/> and <see cref="FlightInput.Faster"/>).
-    /// </summary>
-    public static readonly float[] Rates = [0.25f, 0.5f, 1f, 2f, 4f, 8f, 16f, 32f];
-
-    /// <summary>Normal speed's place among the <see cref="Rates"/>.</summary>
-    private static readonly int NormalRate = Array.IndexOf(Rates, 1f);
-
-    private int _rate = NormalRate;
-
-    /// <summary>The rate the player has picked (see <see cref="Rates"/>): 1 to start with, and kept from flight to flight.</summary>
-    public float PlayerRate => Rates[_rate];
-
-    /// <summary>
-    /// The rate the game runs at, everything on its clock (the flight, the effects, the camera,
-    /// the small views): the player's own, or the forced slow-down's while one is on
-    /// (<see cref="Slowed"/>) and slower.
-    /// </summary>
-    public float TimeScale => Slowed is { } slowed ? MathF.Min(PlayerRate, slowed.Scale) : PlayerRate;
-
-    /// <summary>
-    /// The world time the flight is warping to (<see cref="FlightInput.WarpTo"/>: a point on the
-    /// flown vessel's path), if it is: at the fastest of the <see cref="Rates"/> until the clock
-    /// gets there, the last frame shortened so it stops there exactly, then at normal speed. It
-    /// ends early, at normal speed, on a rate key, another vessel flown, a warning that drops the
-    /// warp (<see cref="Warning"/>, <see cref="NearMissWarning"/>), the vessel no longer flying
-    /// (landed, afloat, wrecked or gone from the solar system), or a world loaded or a flight
-    /// begun; while the engine burns its time is held to where the path then ends. What the path's
-    /// mark shows while it runs.
-    /// </summary>
-    public double? WarpingTo => _warpTo?.Time;
-
-    private (double Time, Vessel For)? _warpTo;
-    private readonly List<PathLeg> _warpLegs = new(Scene.PatchedLegs);
-
-    /// <summary>How near the time warped to the clock must be to have got there: far within a step, as the frame's steps' float sum misses it by.</summary>
-    private const double ArrivedSeconds = 1e-4;
-
-    /// <summary>
-    /// Begins warping to <paramref name="time"/> (see <see cref="WarpingTo"/>), no later than the
-    /// flown vessel's path goes with its engine off (down to the ground, out to the edge), and only
-    /// for a time still ahead of a vessel flying.
-    /// </summary>
-    private void BeginWarpTo(double time)
-    {
-        var vessel = Controlled;
-        if (vessel.State != FlightState.Flying || !(time > WorldTime))
-            return;
-        time = Math.Min(time, PathEnd(vessel));
-        if (!(time > WorldTime))
-            return;
-        _warpTo = (time, vessel);
-        _rate = Rates.Length - 1;
-    }
-
-    /// <summary>When <paramref name="vessel"/>'s path, with its engine off from now, ends (<see cref="Patched.Ends"/>): infinity for one that goes round for ever.</summary>
-    private double PathEnd(Vessel vessel)
-    {
-        Patched.Legs(vessel.Body, vessel.CentreOfMass, vessel.Body.AmongStars(vessel.CentreOfMass, vessel.Velocity), WorldTime, _warpLegs);
-        return Patched.Ends(_warpLegs);
-    }
-
-    /// <summary>
-    /// While the vessel warped for burns, the warp's time held again (once a frame) to where its
-    /// path now ends: a burn that brings it down sooner doesn't warp it on past that.
-    /// </summary>
-    private void HoldWarpToPath()
-    {
-        if (_warpTo is { } warp && warp.For == Controlled && Controlled.EngineLit)
-        {
-            var end = PathEnd(Controlled);
-            if (end < warp.Time)
-                _warpTo = (Math.Max(end, WorldTime), warp.For);
-        }
-    }
-
-    /// <summary>Drops the time warp to normal speed, ending a warp to a point (<see cref="WarpingTo"/>) with it.</summary>
-    private void DropWarp()
-    {
-        _rate = NormalRate;
-        _warpTo = null;
-    }
-
-    /// <summary>
-    /// Ends a warp to a point at normal speed whose vessel is no longer the one flown, or is about
-    /// to be (a switch's link-up begun: the vessel is flown only once it is through), or is no
-    /// longer flying: landed, settled afloat, wrecked or gone from the system.
-    /// </summary>
-    private void KeepWarpTo()
-    {
-        if (_warpTo is { } warp && (warp.For != Controlled || LinkUp.Waiting || warp.For.State != FlightState.Flying))
-            DropWarp();
-    }
-
-    /// <summary>
     /// The flown vessel's soonest fast collision (see <see cref="Collisions"/>), once it is within its
     /// lead (<see cref="Collisions.WarningSeconds"/>: in time to dodge it, or at once with no dodge
     /// possible), and until it has hit or is no longer one: what the HUD warns of. Looked for every
@@ -1690,15 +1595,18 @@ internal sealed class Flight : IDisposable
             else
                 WatchLink.Cancel();
         }
+        // Who holds the warp to the physics' top rate, before the keys are taken (see Gate).
+        Gate(Witnessed(input.Watched, watching), given);
         // Slowed, the game's rate is the slow-down's, not the player's to change. Warping to a
-        // point, either key ends it, at normal speed.
+        // point, either key ends it, at normal speed. Held, faster goes no further than the
+        // physics' top rate.
         if ((input.Slower || input.Faster) && _warpTo is not null)
             DropWarp();
         else
         {
             if (input.Slower && Slowed is null)
                 _rate = Math.Max(0, _rate - 1);
-            if (input.Faster && Slowed is null)
+            if (input.Faster && Slowed is null && (WarpHeldBy is null || _rate < PhysicsTopIndex))
                 _rate = Math.Min(Rates.Length - 1, _rate + 1);
         }
         if (input.WarpTo is { } warpTo)
