@@ -25,14 +25,14 @@ public sealed class FormulaCollisionTests(ITestOutputHelper output)
     /// <summary>
     /// <see cref="FastCollisionTests.Pair"/>'s two boosters, their middles meeting at <see cref="HitPoint"/>,
     /// closing at <paramref name="closing"/> with their middles <paramref name="sideways"/> apart,
-    /// <see cref="MeetIn"/> s after the world's start (time 0) along their Kepler ways, as the
+    /// <paramref name="meetIn"/> s after the world's start (time 0) along their Kepler ways, as the
     /// formula flies them: so far back, the physics' own fall (Pair's aim) and Kepler's part by
     /// hundreds of metres.
     /// </summary>
-    private static WorldState Meeting(float closing, float sideways = 0f)
+    internal static WorldState Meeting(float closing, float sideways = 0f, float meetIn = MeetIn)
     {
         var there = FastCollisionTests.Pair(closing, MeetHeight, 0f, sideways: sideways, over: UnwatchedTests.Opposite);
-        return there with { Time = 0.0, Vessels = [.. there.Vessels.Select(s => Back(GroundBody.Planet, s, MeetIn))] };
+        return there with { Time = 0.0, Vessels = [.. there.Vessels.Select(s => Back(GroundBody.Planet, s, meetIn))] };
     }
 
     /// <summary>

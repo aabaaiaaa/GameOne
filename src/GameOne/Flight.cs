@@ -1601,6 +1601,7 @@ internal sealed partial class Flight : IDisposable
         // Who holds the warp to the physics' top rate, and what drops it there, before the keys
         // are taken (see Gate, DropFor): dropped, the frame runs in the physics, its input taken there.
         ForgetNodesDropped();
+        ForgetWarpWarned();
         Gate(input.Watched, watching);
         var drop = DropFor(given);
         if (drop is { } reason)

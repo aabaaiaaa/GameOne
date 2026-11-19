@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace GameOne;
 
 /// <summary>The time rate: the doubling ladder, the gate that holds it to the physics' top rate, and its drops.</summary>
@@ -231,7 +233,8 @@ internal sealed partial class Flight
         do
         {
             _cutFor = null;
-            var to = windows == 0 && choice ? WorldTime : NextCut(WorldTime, WorldTime + Math.Min(Scene.FormulaWindowSeconds, dt - done), input.Watched, watching);
+            Timings.BeginStep(); // the window's cut is asked within its step, counted in its rules
+            var to = windows == 0 && choice ? WorldTime : NextCut(WorldTime, WorldTime + Math.Min(Scene.FormulaWindowSeconds, dt - done), input.Watched, watching, input.NearMisses);
             var each = (float)(to - WorldTime);
             FormulaStep(each, windows == 0 ? input : held);
             done += each;
@@ -241,6 +244,8 @@ internal sealed partial class Flight
             {
                 if (cut.Node is { } node)
                     _nodesDropped.Add((cut.Of, node));
+                if (cut.Other is { } other)
+                    WarpWarned(cut.Of, other);
                 DropToPhysics(cut.Reason, cut.Of);
             }
             if (!ByFormula)
@@ -267,9 +272,11 @@ internal sealed partial class Flight
     /// <see cref="NodeCut"/>), for each witnessed vessel (the flown one, the small views'
     /// <paramref name="watched"/> and the main camera's <paramref name="watching"/>, as the gate
     /// counts them), kept as <see cref="_cutFor"/> if the cut is there: <paramref name="from"/>
-    /// itself for one already due, a window of no time.
+    /// itself for one already due, a window of no time. A collision or, with
+    /// <paramref name="nearMisses"/> (the player's setting), a near miss coming at one is among them
+    /// (<see cref="ComingCut"/>).
     /// </summary>
-    private double NextCut(double from, double to, IReadOnlyList<Vessel>? watched, Vessel? watching)
+    private double NextCut(double from, double to, IReadOnlyList<Vessel>? watched, Vessel? watching, bool nearMisses)
     {
         if (_warpTo is { } warp && warp.Time > from && warp.Time < to)
             to = warp.Time;
@@ -280,17 +287,93 @@ internal sealed partial class Flight
                 to = crosses;
         }
         var flown = Controlled;
+        // Looked for over the window and, past it, as far as the drop's moment could be from its end.
+        var horizon = to - from + Scene.CollisionHorizonSeconds + Scene.WarpDropLeadSeconds;
         DropCut(flown, from, ref to);
+        ComingCut(flown, from, horizon, nearMisses, ref to);
         for (var i = 0; watched is not null && i < watched.Count; i++) // by index: a foreach over the interface would box its enumerator
+        {
             DropCut(watched[i], from, ref to);
+            ComingCut(watched[i], from, horizon, nearMisses, ref to);
+        }
         if (watching is not null)
+        {
             DropCut(watching, from, ref to);
+            ComingCut(watching, from, horizon, nearMisses, ref to);
+        }
         NodeCut(flown, from, ref to);
         return to;
     }
 
-    /// <summary>The drop a frame at a formula's rate is cut for in the window being run (see <see cref="NextCut"/>): why, for which vessel, and the node it is for, if one is.</summary>
-    private (WarpDrop Reason, Vessel Of, ManoeuvreChain? Node)? _cutFor;
+    /// <summary>
+    /// The drop a frame at a formula's rate is cut for in the window being run (see <see cref="NextCut"/>):
+    /// why, for which vessel, the node it is for and the other vessel coming at it, if one is.
+    /// </summary>
+    private (WarpDrop Reason, Vessel Of, ManoeuvreChain? Node, Vessel? Other)? _cutFor;
+
+    /// <summary>
+    /// Cuts the frame for a collision or near miss coming at witnessed <paramref name="v"/>
+    /// (<see cref="Collisions.AheadOfTheWarp"/>, within <paramref name="horizon"/> of
+    /// <paramref name="from"/>, from another vessel not yet dropped for): at its moment less
+    /// <see cref="Scene.CollisionHorizonSeconds"/> and <see cref="Scene.WarpDropLeadSeconds"/>, so the
+    /// physics' look ahead (its horizon) has it from the drop's moment on, at the physics' top rate,
+    /// and its own warning there drops the warp to normal speed in time for its slow-down; if that
+    /// is by <paramref name="to"/>.
+    /// </summary>
+    private void ComingCut(Vessel v, double from, double horizon, bool nearMisses, ref double to)
+    {
+        if (_collisions.AheadOfTheWarp(v, _world, from, horizon, nearMisses, _warpWarned.AsSpan(0, _warpWarnedCount)) is not { } coming)
+            return;
+        var at = Math.Max(from, coming.At - Scene.CollisionHorizonSeconds - Scene.WarpDropLeadSeconds);
+        if (at <= to)
+            (to, _cutFor) = (at, (coming.NearMiss ? WarpDrop.NearMiss : WarpDrop.Collision, v, null, coming.Other));
+    }
+
+    /// <summary>
+    /// The other vessels whose collision or near miss coming at a witnessed one has dropped the warp
+    /// (see <see cref="ComingCut"/>), each only once, so raising the warp again by hand isn't undone;
+    /// with the witnessed vessel each was coming at (<see cref="_warpWarnedFor"/>). Each is
+    /// forgotten as it is over (<see cref="ForgetWarpWarned"/>). Room for a few, the oldest going,
+    /// as <see cref="_warned"/>'s, so no window allocates.
+    /// </summary>
+    private readonly Vessel?[] _warpWarned = new Vessel?[4];
+    private readonly Vessel?[] _warpWarnedFor = new Vessel?[4];
+    private int _warpWarnedCount;
+
+    /// <summary>Keeps <paramref name="other"/> as having dropped the warp coming at <paramref name="of"/> (see <see cref="_warpWarned"/>).</summary>
+    private void WarpWarned(Vessel of, Vessel other)
+    {
+        if (_warpWarnedCount == _warpWarned.Length) // the oldest goes
+        {
+            Array.Copy(_warpWarned, 1, _warpWarned, 0, _warpWarned.Length - 1);
+            Array.Copy(_warpWarnedFor, 1, _warpWarnedFor, 0, _warpWarnedFor.Length - 1);
+            _warpWarnedCount--;
+        }
+        (_warpWarned[_warpWarnedCount], _warpWarnedFor[_warpWarnedCount]) = (other, of);
+        _warpWarnedCount++;
+    }
+
+    /// <summary>
+    /// Forgets, as every frame begins and whatever the rate, each other vessel that dropped the warp
+    /// (<see cref="_warpWarned"/>) whose coming is over: it or the vessel it came at wrecked or gone
+    /// from the world, the two at different bodies, or moving apart (passed, or turned away), so one
+    /// coming again later drops it again.
+    /// </summary>
+    private void ForgetWarpWarned()
+    {
+        for (var i = _warpWarnedCount - 1; i >= 0; i--)
+        {
+            var (other, of) = (_warpWarned[i]!, _warpWarnedFor[i]!);
+            var over = !_world.Contains(other) || !_world.Contains(of) || GameOne.Comings.Lost(other) || GameOne.Comings.Lost(of)
+                || other.Body != of.Body || Vector3.Dot(other.CentreOfMass - of.CentreOfMass, other.Velocity - of.Velocity) > 0f;
+            if (!over)
+                continue;
+            Array.Copy(_warpWarned, i + 1, _warpWarned, i, _warpWarnedCount - i - 1);
+            Array.Copy(_warpWarnedFor, i + 1, _warpWarnedFor, i, _warpWarnedCount - i - 1);
+            _warpWarnedCount--;
+            (_warpWarned[_warpWarnedCount], _warpWarnedFor[_warpWarnedCount]) = (null, null); // holding no vessel no longer warned of
+        }
+    }
 
     /// <summary>
     /// Cuts the frame <see cref="Scene.WarpDropLeadSeconds"/> ahead of witnessed <paramref name="v"/>'s
@@ -305,7 +388,7 @@ internal sealed partial class Flight
             return;
         var at = Math.Max(from, down - Scene.WarpDropLeadSeconds);
         if (at <= to)
-            (to, _cutFor) = (at, (v.Body.HasAir ? WarpDrop.Air : WarpDrop.Ground, v, null));
+            (to, _cutFor) = (at, (v.Body.HasAir ? WarpDrop.Air : WarpDrop.Ground, v, null, null));
     }
 
     /// <summary>
@@ -360,7 +443,7 @@ internal sealed partial class Flight
         }
         var at = Math.Max(from, kept.At);
         if (at <= to)
-            (to, _cutFor) = (at, (WarpDrop.Node, v, chain));
+            (to, _cutFor) = (at, (WarpDrop.Node, v, chain, null));
     }
 
     /// <summary>
@@ -375,7 +458,6 @@ internal sealed partial class Flight
     /// </summary>
     private void FormulaStep(float dt, in FlightInput input)
     {
-        Timings.BeginStep();
         var from = WorldTime;
         WorldTime += dt;
         _bodiesAt = WorldTime; // nothing in the physics is behind: it isn't stepped

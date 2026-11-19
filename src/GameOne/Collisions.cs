@@ -564,6 +564,101 @@ internal sealed class Collisions
     }
 
     /// <summary>
+    /// What is coming soonest at <paramref name="watched"/> (a witnessed vessel) within
+    /// <paramref name="horizon"/> game seconds of <paramref name="now"/> (the world's time: the
+    /// world's snapshot is taken then), from another vessel at its body not in
+    /// <paramref name="passed"/> (those already dropped the warp for), asked at a formula's rate,
+    /// where no look ahead runs: a collision by their sizes, at any speed (the formula would pass a
+    /// slow one through, where the physics bumps it), or with <paramref name="nearMisses"/> a near
+    /// miss by <see cref="NearestMiss"/>'s rule; with when their middles come closest (world time),
+    /// or null. Two both held where they stand are never one. Allocates nothing.
+    /// </summary>
+    /// <remarks>
+    /// Each other is first ruled out by distance against its closing bound: among the stars their
+    /// gap is <c>r + u t</c> bent by the pull between them, which is no more than the sum of each
+    /// one's (its fall, the air's drag and its thrust), so one with
+    /// <c>|r| − |u| h − ½ (|a_w| + |a_o|) h² &gt; reach</c> (the reach their sizes, or the near
+    /// misses' with the setting on) can't come within it by the horizon. The rest are flown ahead by
+    /// <see cref="Closest"/>'s march, with their present thrust.
+    /// </remarks>
+    internal (Vessel Other, double At, bool NearMiss)? AheadOfTheWarp(Vessel watched, IReadOnlyList<Vessel> world, double now, double horizon, bool nearMisses,
+        ReadOnlySpan<Vessel?> passed = default)
+    {
+        var started = Timings.Start();
+        try
+        {
+            return Ahead(watched, world, now, horizon, nearMisses, passed);
+        }
+        finally
+        {
+            Timings.Stop(StepDetail.Collisions, started);
+        }
+    }
+
+    private (Vessel Other, double At, bool NearMiss)? Ahead(Vessel watched, IReadOnlyList<Vessel> world, double now, double horizon, bool nearMisses,
+        ReadOnlySpan<Vessel?> passed)
+    {
+        if (watched.State == FlightState.Crashed)
+            return null; // a wreck is gone
+        Snapshot(world, now);
+        var h = (float)horizon;
+        var within = Scene.NearMissLengths * watched.Height;
+        var slowest = MathF.Max(Scene.NearMissSlowAbove, Scene.SlowdownPassSpeed); // as NearestMiss's
+        var middle = Middle(watched);
+        var velocity = watched.Velocity;
+        var thrust = Thrust(watched);
+        var heldW = Held(watched);
+        var atW = watched.CentreOfMass;
+        var starsW = watched.Body.AmongStars(atW, velocity);
+        var fallW = Fall(watched.Body, heldW, atW) - velocity * Drag(watched.Body, heldW, atW);
+        var pulledW = fallW.Length() + thrust.Length();
+        var size = Size(watched);
+        var reachW = Reach(watched);
+        var (bottomW, topW, widthW) = Unwatched.Body(watched);
+        (Vessel Other, double At, bool NearMiss)? soonest = null;
+        for (var i = 0; i < _count; i++)
+        {
+            ref readonly var other = ref _world[i];
+            if (other.Vessel == watched || other.Crashed || other.Body != watched.Body || (heldW && other.Held) || Among(passed, other.Vessel))
+                continue; // two at different bodies never meet, nor two standing where they are
+            var hits = size + other.Size;
+            var near = nearMisses ? MathF.Max(hits, within + reachW + other.Reach) : hits;
+            var r = other.Middle - middle;
+            var u = other.Stars - starsW;
+            if (r.Length() - u.Length() * h - (pulledW + other.Fall.Length() + other.Push) * h * h / 2f > near)
+                continue;
+            var uu = u.LengthSquared();
+            var line = uu > 1e-6f ? Math.Clamp(-Vector3.Dot(r, u) / uu, 0f, h) : 0f;
+            var t = Closest(watched.Body, middle, starsW, heldW, thrust, other.Middle, other.Stars, other.Held, other.Thrust, line, h,
+                out var apart, out var passing, out _);
+            if (t > h || t < 0f || (soonest is { } s && now + t >= s.At))
+                continue; // beyond the horizon, behind, or no sooner than one found
+            var miss = apart.Length();
+            if (miss < hits)
+            {
+                soonest = (other.Vessel, now + t, false);
+                continue;
+            }
+            if (!nearMisses || miss >= near || passing.Length() <= slowest)
+                continue;
+            var (bottom, top, width) = Unwatched.Body(other.Vessel);
+            var gap = TowersAndMasts.Closest(bottomW, topW, apart + bottom, apart + top).Apart - widthW - width;
+            if (gap > 0f && gap < within)
+                soonest = (other.Vessel, now + t, true);
+        }
+        return soonest;
+    }
+
+    /// <summary>Whether <paramref name="v"/> is one of <paramref name="vessels"/>, by reference.</summary>
+    private static bool Among(ReadOnlySpan<Vessel?> vessels, Vessel v)
+    {
+        foreach (var each in vessels)
+            if (each == v)
+                return true;
+        return false;
+    }
+
+    /// <summary>
     /// When two moving among the stars, from <paramref name="pW"/> at <paramref name="vW"/> and
     /// <paramref name="pO"/> at <paramref name="vO"/> (each held or falling, with its thrust), come
     /// closest within <paramref name="horizon"/> game seconds either way (its sign <paramref name="estimate"/>'s,

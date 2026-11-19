@@ -839,11 +839,21 @@ say) stalls frames and spoils the timing.
   taken in the physics; a switch and a small view at the top rate to a booster in the air dropping it by
   its name, flown or seen in the physics; and the readout's `Warp dropped` saying why for
   `Scene.WarpDropShownSeconds`.
+- **`WarpWarningTests`:** a collision or near miss coming at a witnessed vessel at a formula's
+  rate (`Collisions.AheadOfTheWarp`), two levels: two boosters head on, 600 s of travel apart
+  closing at 2,000 m/s, dropping the top rate to the physics' top rate (`Collision`) between
+  `Scene.CollisionHorizonSeconds` and that plus `Scene.WarpDropLeadSeconds` ahead of their
+  meeting, then the physics' warning dropping it to normal speed and the slow-down reaching its
+  least scale as both are wrecked; the same pass a little wider than their sizes dropping it
+  (`NearMiss`) only with the setting on, the warning there naming the other; the warp raised
+  again after the drop not dropped again by the same vessel, the collision then the formula's;
+  and two satellites 300 m apart on one orbit never dropping it in 120 frames at the top rate.
 - **`WarpToTests`:** warping to a point on the flown vessel's path (`FlightInput.WarpTo`,
   `Flight.WarpingTo`, a right click on the path in the map): 40 s on round a low orbit at the top
   rate, there in one frame and at normal speed on the time asked (its last window cut there), the
   vessel within metres of where the path had it; a rate key (either), a switch to another vessel,
-  the ground's collision warning, a near miss's warning (the setting on), a landing (a booster
+  the ground's collision warning, a near miss coming (the setting on: at the top rate ended at
+  the physics' top rate ahead of it, then its warning there dropping it to normal speed), a landing (a booster
   settling on the moon before its path's end) and the vessel wrecked (driven nose down into the
   ground, under a fast collision's speed, so unwarned) each ending it early at normal speed; a
   world restored mid-warp, its clock past the warp's time or before it, dropping it with the clock

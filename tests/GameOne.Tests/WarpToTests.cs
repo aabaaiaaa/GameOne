@@ -280,11 +280,12 @@ public sealed class WarpToTests(ITestOutputHelper output)
         Assert.Equal(1f, flight.PlayerRate);
     }
 
-    [Fact(Skip = "At a formula's rate no look ahead runs yet: the witnessed vessels' collisions and near misses ahead of the warp come with Collisions.AheadOfTheWarp")]
-    public void A_near_miss_warning_ends_it_at_normal_speed()
+    [Fact]
+    public void A_near_miss_coming_ends_it_at_the_physics_top_rate_and_its_warning_then_drops_to_normal_speed()
     {
-        // A pass 1,000 m/s beside the flown booster 25 s ahead, past the look ahead's horizon
-        // until the warp has run a few seconds.
+        // A pass 1,000 m/s beside the flown booster 25 s ahead: at the top rate the warp drops to
+        // the physics' top rate ahead of it, ending the warp to the point; then, in the physics,
+        // the near miss's warning drops it to normal speed.
         var (sim, flown, other) = FastCollisionTests.Fly(NearMissTests.NearMissPass(1000f, seconds: 25f));
         using var _ = sim;
         sim.RealFrame = Simulation.TopRateFrame; // many frames to the time, as at the physics' top rate, not one of minutes
@@ -293,10 +294,13 @@ public sealed class WarpToTests(ITestOutputHelper output)
         sim.Step(new FlightInput(WarpTo: to, NearMisses: true));
         Assert.Equal(Fastest, flight.PlayerRate);
         Assert.True(sim.Run((_, _) => new FlightInput(NearMisses: true), f => f.WarpingTo is null, maxSeconds: 30));
-        output.WriteLine($"ended {to - flight.WorldTime:0.0} s short; near miss {flight.NearMissWarning}; warning {flight.Warning}");
-        Assert.NotNull(flight.NearMissWarning);
-        Assert.Same(other, flight.NearMissWarning!.Value.Other);
+        output.WriteLine($"ended {to - flight.WorldTime:0.0} s short at {flight.PlayerRate}x: {flight.LastDrop?.Why}");
+        Assert.Equal(WarpDrop.NearMiss, flight.LastDrop!.Value.Reason);
+        Assert.Equal(InTheAir, flight.PlayerRate);
         Assert.True(flight.WorldTime < to - 1.0);
+        sim.RealFrame = Simulation.FrameSeconds; // in the physics now: frames of its own top rate's length
+        Assert.True(sim.Run((_, _) => new FlightInput(NearMisses: true), f => f.NearMissWarning is not null, maxSeconds: 30));
+        Assert.Same(other, flight.NearMissWarning!.Value.Other);
         Assert.Equal(1f, flight.PlayerRate);
         Assert.Same(flown, flight.Controlled);
     }

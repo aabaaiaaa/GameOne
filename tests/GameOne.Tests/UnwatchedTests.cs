@@ -30,7 +30,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
     private static VesselState FarAway(int id) => Satellite(id, 10000f, 0f, 240f);
 
     /// <summary>How far along a circle <paramref name="altitude"/> up a chord of <paramref name="apart"/> metres reaches, in degrees.</summary>
-    private static float DegreesApart(float altitude, float apart) =>
+    internal static float DegreesApart(float altitude, float apart) =>
         float.RadiansToDegrees(2f * MathF.Asin(apart / (2f * (Planet.SeaRadius + altitude))));
 
     internal static Quaternion RotationTo(Vector3 up)
