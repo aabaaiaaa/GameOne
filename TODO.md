@@ -631,6 +631,15 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   the GameDriver (`tools/GameDriver/CLAUDE.md`) have their own; the game's folders (Physics,
   Rendering, Terrain) and the other tools have none yet. To discuss before starting: which of
   those get their own file, and what stays inline.
+- **The README and the CLAUDE.md files split by domain** (the user, 2026-11-19; to discuss before
+  starting). The README (some 840 lines) has grown too big. It is for people: the game's features
+  at a high level, the high-level technical picture, and a link to contributing docs (how to
+  build, develop and test), with the detail moved into docs by domain. The root CLAUDE.md (some
+  900 lines) to be reviewed the same way: what belongs to one area goes into that area's own
+  CLAUDE.md (as the tests' and the GameDriver's already do), leaving the root with what holds
+  across the project. Goes with "Comments that don't go stale" (above). To discuss: the domains
+  (the physics, the rendering, the terrain, the flight and its frames, the worlds, the HUD and
+  the map, say), where the contributing docs live, and what the README keeps.
 - **Friction by surface.** The feet grip every surface alike (`Scene.FootFriction`); sand, rock,
   snow, grass and ice should differ. Landing tests on each kind of real ground. To discuss before
   building.
