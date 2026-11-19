@@ -827,6 +827,16 @@ say) stalls frames and spoils the timing.
   in no capture), written once, and gone from the world once Tab flies its run's booster; and
   `Flight.EdgeAsked` counting only the vessel 1,000 km inside, never the one in orbit or on the
   pad, at warp too.
+- **`WarpDropTests`:** the warp's drops from a formula's rate to the physics' top rate
+  (`Flight.LastDrop`, a `WarpDrop`): `Scene.WarpDropLeadSeconds` ahead of an orbit coming down
+  into the planet's air (`Air`) and into reach of the moon's ground (`Ground`), still above it
+  and in the physics; never climbing back as it dips into the air and out again; a launch,
+  staging, the legs, the bay doors and the throttle at rest each dropping it (`SetMoving`) with
+  the action taken in the physics; a steering key (`Steering`) turning the aim as far as at the
+  physics' top rate; a node 2,000 s ahead dropping it (`Node`) its lead and half its burn before
+  its time, once; a switch and a small view at the top rate to a booster in the air dropping it by
+  its name, flown or seen in the physics; and the readout's `Warp dropped` saying why for
+  `Scene.WarpDropShownSeconds`.
 - **`WarpToTests`:** warping to a point on the flown vessel's path (`FlightInput.WarpTo`,
   `Flight.WarpingTo`, a right click on the path in the map): 40 s on round a low orbit at the top
   rate, there in one frame and at normal speed on the time asked (its last window cut there), the
