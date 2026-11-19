@@ -233,6 +233,13 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   zoomed out (`Paths.Draw` returns early otherwise): a player on the pad, or landed, sees none,
   though two satellites overhead may be about to collide. Should they show there too (and how,
   with no path of the flown vessel's drawn)? To discuss before building.
+- **The map zoomed in closer** (the user, 2026-11-19; to discuss before building). The map's zoom
+  stops `Scene.ZoomOutMinDistance` (16 km) from what it looks at, too far to see where a path's
+  collision with a body's ground (its cross) falls among the hills, craters and sites. The player
+  should be able to zoom in closer, not all the way to the vessel (that is the chase view), but
+  near enough to see any collision spot on a body in detail. To work out: how near; whether the
+  map then looks at the spot (the cross clicked, say) rather than the vessel; and what the
+  paths, markers and the ground's detail need at that range.
 - **To try: the map's paths of the vessels in the physics kept between frames** (a performance
   idea, from the solar system part 3, 2026-11-13). Zoomed out, each vessel in the physics but the
   flown one (the witnessed, and what is by them) has its path patched at the spheres of influence
