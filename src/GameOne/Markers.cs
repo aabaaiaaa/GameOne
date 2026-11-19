@@ -58,7 +58,6 @@ internal sealed class Markers
     // The markers drawn this frame, as a click finds them (MapLabels.Hit), and each one's candidate.
     private readonly List<MapLabels.Clickable> _clickable = [];
     private readonly List<Candidate> _clickableMarkers = [];
-    private Candidate? _hovered;
     private MapLabels? _labels; // the labels the last Draw laid out, which a click is found on
     private readonly List<(string Name, Vector2 At)> _drawn = [];
     private NavTarget? _set;
@@ -130,14 +129,13 @@ internal sealed class Markers
     /// as it comes close), never hidden behind the planet (it would be gone just as the vessel
     /// passes close over the horizon). Off the screen it is not drawn: the compass's tick gives its
     /// bearing. Drawn last by <see cref="Draw"/>, which leaves that vessel's own marker out, so it is
-    /// over everything and the only mark on it; so it is clicked as that marker would be, and the
-    /// pointer on it is on a marker (<paramref name="pointed"/>; <paramref name="pressedOn"/> its
-    /// vessel, when the press was on it).
+    /// over everything and the only mark on it; so it is clicked as that marker would be
+    /// (<paramref name="pressedOn"/> its vessel, when the press was on it).
     /// </summary>
-    private void DrawComing(ImDrawListPtr draw, Flight flight, ChaseCamera camera, Vector2 display, Vector2 pointer, Vector2? press, BodyFrames frames,
-        out bool pointed, out NavTarget? pressedOn)
+    private void DrawComing(ImDrawListPtr draw, Flight flight, ChaseCamera camera, Vector2 display, Vector2? press, BodyFrames frames,
+        out NavTarget? pressedOn)
     {
-        (ComingMark, pointed, pressedOn) = (null, false, null);
+        (ComingMark, pressedOn) = (null, null);
         if (flight.ComingAt(flight.Controlled) is not { Other: { } other } coming)
             return;
         var place = frames.InView(other.Body, other.CentreOfMass);
@@ -155,7 +153,6 @@ internal sealed class Markers
         var labelMin = new float2(at.X + Shape + 6f, at.Y - text.Y / 2);
         Label(draw, labelMin, color, label, 1f);
         ComingMark = (name, at - display * 0.5f);
-        pointed = On(pointer, at, Shape, labelMin, labelMin + text);
         if (press is { } p && On(p, at, Shape, labelMin, labelMin + text))
             pressedOn = NavTarget.OfVessel(other);
     }
@@ -173,10 +170,13 @@ internal sealed class Markers
     /// What a left press does to the flown vessel's target (<paramref name="current"/>): only the
     /// second press of a double click (<paramref name="twice"/>) does anything, and only on
     /// something to target (<paramref name="clicked"/>, see <see cref="PressedOn"/>) that its first
-    /// press was on too (<paramref name="first"/>: a first press on a node, the path or the steering
-    /// rings is theirs, so the pair is no pick). That is made the target, or let go if it already
-    /// is. A single click, or a double click off them all, never changes the target, so no click
-    /// meant for something else (a node low over the planet) loses it.
+    /// press was on too (<paramref name="first"/>). That is made the target, or let go if it
+    /// already is. A single click, or a double click off them all, never changes the target, so no
+    /// click meant for something else (a node low over the planet) loses it. A press on a marker
+    /// reaches the nodes and the steering rings under it as well (a single click there places a
+    /// node or turns the rings); a double click that picks takes back a node its first press placed
+    /// (<see cref="Picked"/>). A press on a body's line or disc counts only off the nodes, the path
+    /// and the rings, so a double click begun there picks nothing.
     /// </summary>
     internal static (NavTarget? Set, bool Clear) Click(bool twice, NavTarget? first, NavTarget? clicked, NavTarget? current) =>
         twice && clicked is { } c && first == c
@@ -196,8 +196,12 @@ internal sealed class Markers
     /// <summary>Where the pointer was last seen (from the window's own events: see the constructor), in pixels from the screen's top left.</summary>
     public Vector2 Pointer => _cursor;
 
-    /// <summary>Whether the pointer was over a marker last frame: a click there is for it, not the steering rings.</summary>
-    public bool PointerOver { get; private set; }
+    /// <summary>
+    /// Whether the last <see cref="Draw"/> took a double click as a pick (a new target, or the
+    /// target let go): what its first press did to the nodes is then taken back
+    /// (<see cref="NodeEditor.UndoInsert"/>), as a press on a marker reaches them too.
+    /// </summary>
+    public bool Picked { get; private set; }
 
     /// <summary>What was clicked since the last call: a new target, or none wanted. For the flight's input.</summary>
     public (NavTarget? Set, bool Clear) TakeClick()
@@ -230,10 +234,9 @@ internal sealed class Markers
     /// <summary>A frame with the HUD hidden: nothing drawn, nothing under the pointer, and a press let go.</summary>
     public void Hide()
     {
-        _pressed = false;
+        (_pressed, _pairUnjudged, _pressCount) = (false, false, 0);
         _firstOn = null;
-        PointerOver = false;
-        _hovered = null;
+        Picked = false;
         _drawn.Clear();
     }
 
@@ -241,8 +244,8 @@ internal sealed class Markers
     /// Lays out and draws this frame's markers (with markers off, none; their labels into
     /// <paramref name="labels"/>, drawn with the path's), then the coming mark on the
     /// vessel coming at the flown one (whatever the settings: see <see cref="DrawComing"/>), and takes
-    /// a double click on one (see <see cref="Click"/>; a press on the nodes or the steering rings,
-    /// <paramref name="ringsInUse"/>, is on none). Nothing is clickable while <paramref name="menuOpen"/>.
+    /// a double click on one (see <see cref="Click"/>; a press on the nodes, the path or the steering
+    /// rings, <paramref name="ringsInUse"/>, is on no body's line or disc, but is on a marker there). Nothing is clickable while <paramref name="menuOpen"/>.
     /// </summary>
     public void Draw(ImDrawListPtr draw, Flight flight, ChaseCamera camera, Vector2 display, Settings settings, bool ringsInUse, bool menuOpen, BodyFrames frames, MapLabels labels, SystemMap? map = null)
     {
@@ -252,8 +255,7 @@ internal sealed class Markers
         (_doubleTime, _doubleDistance) = (io.MouseDoubleClickTime, io.MouseDoubleClickMaxDist);
         if (pressed)
             _firstOn = null; // until judged on something, below
-        PointerOver = false;
-        _hovered = null;
+        Picked = false;
         _labels = labels;
         _clickable.Clear();
         _clickableMarkers.Clear();
@@ -313,17 +315,13 @@ internal sealed class Markers
         }
 
         // Last, over them all, and so first for a click.
-        DrawComing(draw, flight, camera, display, pointer, pressed ? pressAt : null, frames, out var onComing, out var pressedComing);
+        DrawComing(draw, flight, camera, display, pressed ? pressAt : null, frames, out var pressedComing);
 
-        // What the pointer and the press are on (a spread pile's labels over anything under them:
-        // a click there is on them, never off them all).
+        // What the press is on (a spread pile's labels over anything under them: a click there is
+        // on them, never off them all).
         var clickable = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_clickable);
-        var (hoverIndex, hoverOnPile) = labels.Hit(clickable, pointer);
-        if (hoverIndex >= 0)
-            _hovered = _clickableMarkers[hoverIndex];
         var (pressIndex, pressOnPile) = pressed ? labels.Hit(clickable, pressAt) : (-1, false);
         Candidate? pressedOn = pressIndex >= 0 ? _clickableMarkers[pressIndex] : null;
-        PointerOver = _hovered is not null || onComing || hoverOnPile;
         if (menuOpen || io.WantCaptureMouse || !pressed)
             return;
         // A press on none of them, nor on the nodes or the steering rings (ringsInUse), is on a body's
@@ -339,6 +337,7 @@ internal sealed class Markers
         // Both presses of a double click between two Draws are judged as one, where the second was.
         var (set, clear) = Click(twice, together ? on : first, on, flight.Target);
         _firstOn = on;
+        Picked = set is not null || clear;
         if (set is not null)
             _set = set;
         _clear |= clear; // held until TakeClick, never unset by a later frame

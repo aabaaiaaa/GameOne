@@ -502,8 +502,14 @@ internal sealed class Hud : IDisposable
     /// <summary>Whether a node's handles were drawn last frame, over the steering rings' place: a click there is for them.</summary>
     public bool NodeSelected => _nodes.Selected;
 
-    /// <summary>Whether the pointer was over a marker, or the path or a node to plan with, last frame, so a click there isn't for the steering rings.</summary>
-    public bool PointerOnMarker => _markers.PointerOver || _nodes.PointerOver;
+    /// <summary>Whether the pointer was over the path or a node to plan with last frame, so a click there isn't for the steering rings (a marker under it never stops them).</summary>
+    public bool PointerOnPlan => _nodes.PointerOver;
+
+    /// <summary>Whether the node editor takes no click: a menu up, or the steering rings in use. A marker under the pointer is none of it, so a click there reaches the path too.</summary>
+    internal static bool NodesBlocked(bool menuOpen, bool ringsInUse) => menuOpen || ringsInUse;
+
+    /// <summary>Whether the steering rings take no press: the pointer on the path or a node, or a node's handles drawn over their place. A marker under the pointer is none of it.</summary>
+    internal static bool RingsBlocked(bool onPlan, bool nodeSelected) => onPlan || nodeSelected;
 
     /// <summary>The flown vessel's frame has changed to another body's (<see cref="Flight.ViewRebased"/>): what the paths keep from frame to frame in the old one is dropped (<see cref="Paths.Rebase"/>), so the change itself isn't needed.</summary>
     public void Rebase(FrameChange _) => _paths.Rebase();
@@ -750,14 +756,18 @@ internal sealed class Hud : IDisposable
         _creditsShown = ShowsCredits(MenuOpen, _playingSince == 0 ? null : System.Diagnostics.Stopwatch.GetElapsedTime(_playingSince).TotalSeconds);
         // The path, as the flown vessel's nodes plan it (as they are being changed, if they are);
         // then the nodes over it, and the markers (and over them the coming mark on what is coming,
-        // whatever their settings), which give way to whichever has the pointer.
+        // whatever their settings). A press reaches both: a single click on a marker is the nodes'
+        // (it never changes the target), and a double click that picks takes back the node its
+        // first press placed.
         var vessel = flight.Controlled;
         _nodes.Follow(vessel);
         _plan.Update(vessel, _nodes.Chain, flight.WorldTime);
         _paths.Labels.Clear();
         _paths.Draw(ImGui.GetBackgroundDrawList(), flight, camera, new Vector2(display.X, display.Y), _plan, frames);
-        _nodes.Update(ImGui.GetBackgroundDrawList(), flight, camera, _plan, _paths, blocked: MenuOpen || _markers.PointerOver || navigation.InUse);
+        _nodes.Update(ImGui.GetBackgroundDrawList(), flight, camera, _plan, _paths, blocked: NodesBlocked(MenuOpen, navigation.InUse));
         _markers.Draw(ImGui.GetBackgroundDrawList(), flight, camera, new Vector2(display.X, display.Y), Settings, navigation.InUse || _nodes.PointerOver, MenuOpen, frames, _paths.Labels, _paths.Map);
+        if (_markers.Picked)
+            _nodes.UndoInsert();
         // The path's and the markers' labels together, over them all; a pile under the pointer
         // spread, but not from under a panel or a menu.
         _paths.Labels.Draw(ImGui.GetBackgroundDrawList(), MenuOpen || ImGui.GetIO().WantCaptureMouse ? null : _markers.Pointer, new Vector2(display.X, display.Y));

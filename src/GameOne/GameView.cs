@@ -237,7 +237,7 @@ internal sealed class GameView : IDisposable
         var model = _frames.ToScene(vessel.Body).Model(vessel.Model, Vector3Double.Zero);
 
         var size = _window.Size;
-        Navigation.Blocked = Hud.PointerOnMarker || Hud.NodeSelected; // a click on a marker (or a node, or its handles) is for it, not the rings
+        Navigation.Blocked = Hud.RingsBlocked(Hud.PointerOnPlan, Hud.NodeSelected); // a click on the path, a node or its handles is for it, not the rings (one on a marker reaches them)
         Navigation.Burn = flight.Guide is { } guide ? (guide.Left, guide.Overshot, guide.Matched) : null;
         Navigation.Update(dt, flight, Camera, new Vector2(size.X, size.Y), enabled: !paused && !Hud.Hidden && Camera.Centre.Kind == CentreKind.Own); // (hidden, the rings can't be seen, so they take no drag; nor on what the camera is on if not the flown vessel)
         _smokeStirs.Update(dt, exploded ? null : model, vessel.Height, flown.Nozzle, flown.Exhaust, throttle);

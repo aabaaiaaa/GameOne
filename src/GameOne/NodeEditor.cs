@@ -55,6 +55,10 @@ internal sealed class NodeEditor
     private Vector2 _grabbedAt; // where the pointer was as a node was grabbed
     private bool _dragging;     // and whether it has since moved far enough to drag it
     private bool _pressed, _rightPressed, _held;
+    private int _presses; // left presses so far, to tell which placed a node
+    // The last node placed by a click: the chain before it and with it, and which press placed it
+    // (see UndoInsert).
+    private (ManoeuvreChain? Before, ManoeuvreChain After, int Press)? _inserted;
 
     /// <summary>
     /// Follows the mouse from the window's own events, as the steering rings do (see
@@ -68,7 +72,7 @@ internal sealed class NodeEditor
             if (button == GlfwMouseButton.Left)
             {
                 if (action == GlfwButtonAction.Press)
-                    (_pressed, _held) = (true, true);
+                    (_pressed, _held, _presses) = (true, true, _presses + 1);
                 else if (action == GlfwButtonAction.Release)
                     _held = false;
             }
@@ -111,7 +115,7 @@ internal sealed class NodeEditor
     /// <summary>The nodes drawn this frame, each by its place in the chain and where it is on the screen (window pixels): for the readout.</summary>
     public IReadOnlyList<(int Index, float2 At)> Drawn => _drawn;
 
-    /// <summary>Whether the pointer is on a node, a handle or the path, or dragging: a click then is for planning, not the steering rings or the markers.</summary>
+    /// <summary>Whether the pointer is on a node, a handle or the path, or dragging: a click then is for planning, not the steering rings, nor a body's line or disc.</summary>
     public bool PointerOver { get; private set; }
 
     /// <summary>The plan, if it changed since the last call: the flown vessel's nodes from now on, for the flight's input.</summary>
@@ -155,6 +159,28 @@ internal sealed class NodeEditor
             _selected = -1;
     }
 
+    /// <summary>
+    /// Takes back the node placed by a click, if it was placed by either press of the double click
+    /// just taken as a target's pick (<see cref="Markers.Picked"/>: a press on a marker reaches the
+    /// path under it too) and nothing has changed the plan since: a double click on a marker picks
+    /// it and leaves the plan as it was.
+    /// </summary>
+    public void UndoInsert()
+    {
+        if (!Undoes(_inserted, _pending, _presses))
+            return;
+        (_pending, _selected, _grab, _dragging, _changed, _inserted) = (_inserted!.Value.Before, -1, Grab.None, false, true, null);
+    }
+
+    /// <summary>
+    /// Whether the node placed last (<paramref name="inserted"/>: the plan with it, and the press
+    /// that placed it) is to be taken back for a double click whose second press is the
+    /// <paramref name="presses"/>th: placed by that press or the one before it, and the plan still
+    /// as it left it (<paramref name="pending"/>).
+    /// </summary>
+    internal static bool Undoes((ManoeuvreChain? Before, ManoeuvreChain After, int Press)? inserted, ManoeuvreChain? pending, int presses) =>
+        inserted is { } i && i.Press >= presses - 1 && Equals(i.After, pending);
+
     /// <summary>A frame with the HUD hidden: nothing drawn, nothing under the pointer or held, and a press let go.</summary>
     public void Hide()
     {
@@ -167,8 +193,9 @@ internal sealed class NodeEditor
 
     /// <summary>
     /// Takes the mouse and draws the nodes, after the path (<paramref name="paths"/>, whose camera
-    /// and fade it shares). Nothing is clickable while <paramref name="blocked"/> (a menu up, or the
-    /// pointer on a marker); nothing shows until the path does.
+    /// and fade it shares). Nothing is clickable while <paramref name="blocked"/> (see
+    /// <see cref="Hud.NodesBlocked"/>: a menu up, or the steering rings in use; a marker under the
+    /// pointer never blocks it); nothing shows until the path does.
     /// </summary>
     public void Update(ImDrawListPtr draw, Flight flight, ChaseCamera camera, ManoeuvrePlan plan, Paths paths, bool blocked)
     {
@@ -329,7 +356,9 @@ internal sealed class NodeEditor
                     {
                         var into = _pending ?? ManoeuvreChain.Empty;
                         _selected = into.SlotFor(place.Time);
+                        var before = _pending;
                         _pending = into.Insert(place.Time, flight.Controlled, now);
+                        _inserted = (before, _pending, _presses);
                         _changed = true;
                     }
                     else

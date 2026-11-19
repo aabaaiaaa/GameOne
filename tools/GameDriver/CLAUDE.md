@@ -244,11 +244,14 @@ centred on the smaller height):
 - **Markers:** a script picks a target as a player does, by double clicking its marker: `dclick
   marker "<name>"` double clicks it wherever it is then (markers move with the camera), by the
   readout's `Marker <name>`. A single click (`click marker`) on a marker, or any click off them
-  all, never changes the target (it would be lost to clicks meant for the nodes), and a double
-  click whose first press is on a node or the path is the node editor's. A marker shows only
-  while its object is too small to see for itself, so from the pad the landing zone (320 m off)
-  has none: zoom out (M) first, and the drone ship's shows from the air, looking east (see `gameone-terrain.txt`). A click on a marker under a panel or the big
-  message is the panel's. A vessel coming at the flown one has the red mark instead of its own
+  all, never changes the target. A click on a marker reaches the path, the nodes and the
+  steering rings under it too (a `click marker` on one lying on the path places a node there),
+  and a `dclick marker` that picks takes back a node its first press placed, so it leaves the
+  plan as it was. A double click on the path or a node away from any marker picks nothing. A
+  marker shows only while its object is too small to see for itself, so from the pad the landing
+  zone (320 m off) has none: zoom out (M) first, and the drone ship's shows from the air, looking
+  east (see `gameone-terrain.txt`). A click on a marker under a panel or the big message is the
+  panel's. A vessel coming at the flown one has the red mark instead of its own
   marker, whatever the markers' settings: double click it as `dclick marker "Booster 1"` (its name
   and id, as `Coming mark` gives it), which targets that vessel, or lets it go if it is the target.
   The moon is targeted by `dclick marker "Moon"` (from the planet; the planet by `"Planet"` from

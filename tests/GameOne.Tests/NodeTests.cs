@@ -1075,4 +1075,19 @@ public sealed class NodeTests(ITestOutputHelper output)
         Assert.True(MathF.Abs(Vector3.Dot(normal, Vector3.UnitZ)) > 0.9999f);
         Assert.True(Vector3.Dot(Vector3.Cross(at - Planet.Centre, east), normal) > 0f, "normal is the way the orbit's spin points");
     }
+
+    [Fact]
+    public void A_double_click_that_picks_a_target_takes_back_the_node_its_first_press_placed()
+    {
+        // A press on a marker lying on the path places a node there (its fifth press, say); the
+        // double click's second press (the sixth) picks the marker, and the node goes, leaving the
+        // plan as it was (none, or the nodes there were).
+        var before = new ManoeuvreChain(default, [new ManoeuvreNode(30)]);
+        var after = new ManoeuvreChain(default, [new ManoeuvreNode(30), new ManoeuvreNode(10)]);
+        Assert.True(NodeEditor.Undoes((before, after, 5), after, presses: 6)); // its first press's node
+        Assert.True(NodeEditor.Undoes((null, after, 6), after, presses: 6)); // both presses in one frame: the node placed by the pair
+        Assert.False(NodeEditor.Undoes((before, after, 4), after, presses: 6)); // an earlier click's node stays
+        Assert.False(NodeEditor.Undoes((before, after, 5), before, presses: 6)); // the plan changed since: kept as it is
+        Assert.False(NodeEditor.Undoes(null, after, presses: 6)); // no node placed by a click
+    }
 }

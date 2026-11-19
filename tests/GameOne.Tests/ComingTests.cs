@@ -388,6 +388,19 @@ public sealed class ComingTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void A_press_over_a_marker_reaches_the_nodes_and_the_steering_rings()
+    {
+        // A marker under the pointer is none of what blocks them: a single click on it never
+        // changes the target, so it is theirs as if the marker weren't there.
+        Assert.False(Hud.NodesBlocked(menuOpen: false, ringsInUse: false));
+        Assert.True(Hud.NodesBlocked(menuOpen: true, ringsInUse: false));
+        Assert.True(Hud.NodesBlocked(menuOpen: false, ringsInUse: true));
+        Assert.False(Hud.RingsBlocked(onPlan: false, nodeSelected: false));
+        Assert.True(Hud.RingsBlocked(onPlan: true, nodeSelected: false));
+        Assert.True(Hud.RingsBlocked(onPlan: false, nodeSelected: true));
+    }
+
+    [Fact]
     public void Presses_in_a_row_count_by_ImGui_s_double_click_time_and_distance()
     {
         Assert.Equal(1, Markers.PressCount(0, 0.1, 0f, 0.3f, 6f)); // the first
