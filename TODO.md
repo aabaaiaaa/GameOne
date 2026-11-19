@@ -94,12 +94,57 @@ frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
     The moon goes round in about 27 minutes, a few frames at the top rate, so the crossings of
     the spheres, the collisions and the comings down must be found from the orbits, never by
     stepping past them.
-  - **To discuss with that:** the rates' steps between ×32 and the top; when the warp may go on
-    (above the air, engine off, nothing in a collision's reach, as is usual) and what drops it or
-    holds it back (a sphere's edge, the air, a node, a collision or a near miss warned of, the
-    ground coming up, a vessel flown or watched coming near another); what the HUD, the map and
-    the small views show meanwhile; and the world's other clocks at that rate (the sun, the
-    lights, the sea, the landing lights), which may need to skip rather than ease.
+  - **The user's view of how** (2026-11-19): the formula must do the trajectories, the orbits and
+    the unwitnessed collisions, and the slow-down for witnessed collisions made to work with it,
+    so physics is set up only as needed, as bubbles, for actual collisions and near misses (this
+    joins "Local physics, as an experiment" and its bubbles that travel, below, which it makes
+    essential):
+    - In open space a bubble need only be as big as the objects colliding at that moment.
+    - At a body, the tiles are part of the same idea: only the tiles a vessel could touch need
+      physics, so it is only ever a bubble round the vessel, if at all. A vessel near no other
+      object needs no physics.
+    - A vessel that isn't moving needs none either: a landed one, even the one flown.
+    - The vessels the player controls are what set a bubble off: anything on course to collide
+      with one, or to pass it in a near miss, brings the physics in; so does the player moving a
+      landed vessel. Vessels near each other in orbit but plainly on no collision course need none.
+    - A control input at a very high rate could drop the warp to ×1 (not a rule: a possible
+      saving, so control needn't be handled at those rates); though thrust and the like still
+      working in warp would help travel between solar systems later.
+  - **Decided** (the user, 2026-11-19): the low rates keep the physics for the flown and
+    witnessed vessels as today (×1, ×2, ×4, perhaps higher: where the line falls is the
+    measurements' call), so any difference in handling between the formula and the physics is
+    less noticeable; the formula takes over above it. The physics left out at ×1 too, where
+    nothing needs it (a flown vessel alone, say), is to be tried as an optimisation on its own.
+    Burns work in warp at any rate, under the formula, the aim held by a hold (prograde, a node,
+    the rings'). The user: a burn with little delta-v left would burn out too fast to stop by
+    hand, but the burns this is for (long ones, between solar systems) have plenty. The steering
+    rings work in warp at every rate (the user: "less twitchy controls compared to keyboard
+    taps"): a click on a ring sets its angle and the vessel turns to it there as at ×1 (at a
+    high rate the turn, a few seconds of game time, is over within a frame). A steering key at a
+    formula rate drops the warp to the physics' top rate (the user's choice), so the keys always
+    steer as they do today; the rings, the holds and the throttle go on working in warp.
+    The formula's rates only above the air (a body with none: above its highest ground, its orbit
+    floor); below it, the physics' top rate is the fastest. The warp drops to the physics' top
+    rate, by itself, ahead of (within a frame or so of) the air coming up or the ground coming
+    within reach, a collision or near miss warned of (as today's warnings drop it), a manoeuvre
+    node, and a burn's fuel running out. Crossing a sphere's edge doesn't drop it, so a long
+    coast past the moon goes on; a warp to a point on the path still stops on that moment.
+    The rates double all the way (the user: "the formula scale should not jump massively"):
+    paused, ¼, ½, ×1, ×2, ×4 in the physics (where the physics stops, sooner than ×32, is the
+    measurements' call: ×2 to ×8), then the formula's from the next doubling on: ×8, ×16, … up
+    to ×16,384, one past ×8,192 (the user's choice), where a lap of the sun takes 0.88 s (1.76 s
+    at ×8,192, the moon's lap 1.6 s at ×1,024). That is 14 presses from ×1 to the top, so
+    holding a rate key steps on (about every quarter second: a new key behaviour, for the HUD's
+    controls list and the README), and a warp to a point on the path goes at the new top rate.
+    Travel between solar systems doubles on past it when it is built.
+    The day at those rates (the user's choice): at ×16,384 the planet's day (1,200 s) passes some
+    14 times a real second, so above the rate where a day passes faster than about one in 5 s
+    real (about ×256) the light is shown averaged, not flickering: an even dusk over the ground,
+    the sun's disc hidden or blurred into its band, the pad and landing lights steady at their
+    average; the true light comes back as the warp drops.
+  - **To discuss with that:** what the HUD, the map and the small views show meanwhile; and the
+    world's other clocks at that rate (the sea's waves, the eclipses), which may need to skip
+    rather than ease.
   - **First, measure:** nothing here has yet timed a frame at ×32. `Timings` (the readout's
     parts and `StepDetail`) at ×32 on a moon transfer, in a low orbit, and in a busy world, to
     find what each frame spends its time on before choosing what to cut.
