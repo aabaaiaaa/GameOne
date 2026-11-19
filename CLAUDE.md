@@ -625,15 +625,15 @@ dotnet run --project src/GameOne
   Auto, Surface, Orbit, Target); `Flight.Frame` is the one in use. The frames follow the body the
   flown vessel is at (`Flight.Body`): Surface is over its ground, Orbit round its centre among its
   stars, and Auto (`Frames.Auto(body, …)`) goes by height, not by the orbit: the height of the
-  vessel's centre of mass over what is under it (`SurfaceAltitude`, in its own body's frame: the
-  ground, a pad or the calm sea), against a share of its body's radius
-  (`GroundBody.FrameSurfaceHeight`: `Scene.FrameSurfaceWithin`, 0.3, of its datum's radius, as the
-  room to bleed off a body's orbital speed grows with that speed, v² = gR, so with its radius; the
-  planet's 2,990 m, about its air's top, the moon's 750 m), so over high ground it is the
-  surface's sooner: orbital once above that height by `Scene.FrameOrbitMargin` (100 m), surface
-  again under the height itself (held between, so it doesn't flip-flop at the edge; landed or
-  afloat always surface). The ground is read only where the answer could hang on it (far above
-  the highest ground it isn't). So the ascent's upper part and the circularising burn have
+  vessel's centre of mass over its body's datum (`Altitude`, the sea's zero; never over the ground
+  under it, so a low orbit stays orbital over high ground), against `GroundBody.FrameSurfaceHeight`:
+  the higher of the body's orbit floor (`GroundBody.OrbitFloor`: the air's top, or with no air its
+  highest ground) and `Scene.FrameSurfaceWithin` (0.3) of its datum's radius (the room to bleed off
+  a body's orbital speed grows with that speed, v² = gR, so with its radius). The planet's is its
+  air's top (3 km, over the share's 2,990 m), the moon's its highest ground (822 m, over 750 m), so
+  it is never orbital low over the moon's mountain; the share takes over on a bigger body. Orbital
+  once above that height by `Scene.FrameOrbitMargin` (100 m), surface again under the height itself
+  (held between, so it doesn't flip-flop at the edge; landed or afloat always surface). So the ascent's upper part and the circularising burn have
   orbital prograde, and the way down and the landing surface prograde. The HUD's and the
   readout's numbers are that body's too (heights over its datum, its orbit, local time, the
   compass's north), never the planet's by assumption. The holds follow the frame in use (floor

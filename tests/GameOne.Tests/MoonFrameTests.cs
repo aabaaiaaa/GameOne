@@ -36,72 +36,43 @@ public sealed class MoonFrameTests(ITestOutputHelper output)
         float.Parse(reading.Split(' ')[0], NumberStyles.Float, CultureInfo.CurrentCulture);
 
     [Fact]
-    public void On_the_moon_auto_is_orbital_once_above_its_share_of_the_radius_by_the_margin()
+    public void On_the_moon_auto_is_orbital_once_above_its_highest_ground_by_the_margin()
     {
-        var within = Moon.FrameSurfaceHeight;
-        output.WriteLine($"the moon's Auto height {within:0.0} m over its ground (its highest ground {Moon.MaxHeight:0.0} m over its datum); the planet's {Planet.FrameSurfaceHeight:0} m");
-        Assert.Equal(Scene.FrameSurfaceWithin * Moon.SeaRadius, within);
-        Assert.Equal(Frame.Orbital, Frames.Auto(Moon, Frame.Surface, within + Scene.FrameOrbitMargin + 1f, false));
-        Assert.Equal(Frame.Surface, Frames.Auto(Moon, Frame.Orbital, within - 1f, false));
-        // The planet's hysteresis: between the height and the margin over it, each keeps the frame it had.
-        Assert.Equal(Frame.Orbital, Frames.Auto(Moon, Frame.Orbital, within + Scene.FrameOrbitMargin / 2, false));
-        Assert.Equal(Frame.Surface, Frames.Auto(Moon, Frame.Surface, within + Scene.FrameOrbitMargin / 2, false));
-        Assert.Equal(Frame.Orbital, Frames.Auto(Moon, Frame.Orbital, within, false));
-        Assert.Equal(Frame.Surface, Frames.Auto(Moon, Frame.Surface, within + Scene.FrameOrbitMargin, false));
-        // Well under the planet's, so by the planet's height these would all be the surface's.
-        Assert.True(within + Scene.FrameOrbitMargin + 1f < Planet.FrameSurfaceHeight);
-        Assert.Equal(Frame.Surface, Frames.Auto(Planet, Frame.Surface, within + Scene.FrameOrbitMargin + 1f, false));
+        // The moon's floor (its highest ground) is over its share of the radius, so it is Auto's
+        // height: never orbital while low over its mountain.
+        var floor = Moon.MaxHeight;
+        Assert.False(Moon.HasAir);
+        Assert.Equal(floor, Moon.OrbitFloor);
+        Assert.True(floor > Scene.FrameSurfaceWithin * Moon.SeaRadius);
+        Assert.Equal(floor, Moon.FrameSurfaceHeight);
+        output.WriteLine($"the moon's highest ground {floor:0.0} m over its datum (its share {Scene.FrameSurfaceWithin * Moon.SeaRadius:0} m); the planet's height {Planet.FrameSurfaceHeight:0} m");
+        Assert.Equal(Frame.Orbital, Frames.Auto(Moon, Frame.Surface, floor + Scene.FrameOrbitMargin + 1f, false));
+        Assert.Equal(Frame.Surface, Frames.Auto(Moon, Frame.Orbital, floor - 1f, false));
+        // The planet's hysteresis: between the floor and the margin over it, each keeps the frame it had.
+        Assert.Equal(Frame.Orbital, Frames.Auto(Moon, Frame.Orbital, floor + Scene.FrameOrbitMargin / 2, false));
+        Assert.Equal(Frame.Surface, Frames.Auto(Moon, Frame.Surface, floor + Scene.FrameOrbitMargin / 2, false));
+        Assert.Equal(Frame.Orbital, Frames.Auto(Moon, Frame.Orbital, floor, false));
+        Assert.Equal(Frame.Surface, Frames.Auto(Moon, Frame.Surface, floor + Scene.FrameOrbitMargin, false));
+        // Well under the planet's air's top, so by the planet's height these would all be the surface's.
+        Assert.True(floor + Scene.FrameOrbitMargin + 1f < Planet.FrameSurfaceHeight);
+        Assert.Equal(Frame.Surface, Frames.Auto(Planet, Frame.Surface, floor + Scene.FrameOrbitMargin + 1f, false));
         // On the ground it is the surface's whatever its orbit.
-        Assert.Equal(Frame.Surface, Frames.Auto(Moon, Frame.Orbital, within + 5_000f, onTheGround: true));
+        Assert.Equal(Frame.Surface, Frames.Auto(Moon, Frame.Orbital, floor + 5_000f, onTheGround: true));
 
-        // A vessel on a round orbit 200 m over Auto's height and the margin, over the ground under
-        // it, is orbital by Auto; 200 m under the height (with no history) it is the surface's.
-        var ground = Moon.Height(Vector3.UnitX); // under InOrbit.Round's start
-        var (high, highVessel) = Flying(InOrbit.Round(Moon, 0, within + Scene.FrameOrbitMargin + 200f + ground - Moon.OrbitFloor));
+        // A vessel on its orbit 400 m over the moon's highest ground is orbital by Auto; 50 m over
+        // it (inside the margin, with no history) it is the surface's.
+        var (high, highVessel) = Flying(InOrbit.Round(Moon, 0, 400f));
         using (high)
         {
-            output.WriteLine($"high: {Moon.SurfaceAltitude(highVessel.CentreOfMass):0} m over the ground under it");
             Assert.Equal(Frame.Orbital, highVessel.AutoFrame);
             Assert.Equal(Frame.Orbital, high.Flight.Frame);
+            Assert.True(highVessel.OrbitStable);
         }
-        var (low, lowVessel) = Flying(InOrbit.Round(Moon, 0, within - 200f + ground - Moon.OrbitFloor));
+        var (low, lowVessel) = Flying(InOrbit.Round(Moon, 0, 50f));
         using (low)
         {
-            output.WriteLine($"low: {Moon.SurfaceAltitude(lowVessel.CentreOfMass):0} m over the ground under it");
             Assert.Equal(Frame.Surface, lowVessel.AutoFrame);
-        }
-    }
-
-    [Fact]
-    public void On_the_moon_auto_goes_by_the_ground_under_it_so_over_its_mountain_it_is_the_surface_s_sooner()
-    {
-        // The moon's highest and lowest ground, found over a lattice of directions: at one height
-        // over the datum, over the mountain it is under Auto's height (the surface's), over the
-        // lowest ground well over it and the margin (orbital), from either frame.
-        var (highest, lowest) = (Vector3.Zero, Vector3.Zero);
-        var (top, bottom) = (float.MinValue, float.MaxValue);
-        const int n = 40_000;
-        for (var i = 0; i < n; i++)
-        {
-            var z = 1f - 2f * (i + 0.5f) / n;
-            var (sin, cos) = MathF.SinCos(i * 2.39996323f);
-            var direction = new Vector3(MathF.Sqrt(1f - z * z) * cos, z, MathF.Sqrt(1f - z * z) * sin);
-            var h = Moon.Height(direction);
-            if (h > top)
-                (top, highest) = (h, direction);
-            if (h < bottom)
-                (bottom, lowest) = (h, direction);
-        }
-        var within = Moon.FrameSurfaceHeight;
-        var height = top + within - 100f;
-        var overMountain = Moon.Centre + highest * (Moon.SeaRadius + height);
-        var overLow = Moon.Centre + lowest * (Moon.SeaRadius + height);
-        output.WriteLine($"ground {top:0} m to {bottom:0} m over the datum; {height:0} m up is {Moon.SurfaceAltitude(overMountain):0} m over the mountain, {Moon.SurfaceAltitude(overLow):0} m over the lowest ground");
-        Assert.True(Moon.SurfaceAltitude(overLow) > within + Scene.FrameOrbitMargin + 50f, "the ground should lie low enough apart");
-        foreach (var current in new[] { Frame.Surface, Frame.Orbital })
-        {
-            Assert.Equal(Frame.Surface, Frames.Auto(Moon, current, overMountain, false));
-            Assert.Equal(Frame.Orbital, Frames.Auto(Moon, current, overLow, false));
+            Assert.True(lowVessel.OrbitStable, "its orbit clears the moon's highest ground");
         }
     }
 

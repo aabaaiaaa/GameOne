@@ -229,11 +229,13 @@ internal sealed class GroundBody
     public float OrbitFloor => HasAir ? Scene.AtmosphereHeight : MaxHeight;
 
     /// <summary>
-    /// The height over what is under a vessel (<see cref="SurfaceAltitude"/>) below which Auto has it
-    /// in the surface frame: <see cref="Scene.FrameSurfaceWithin"/> of its radius (its datum's,
-    /// <see cref="SeaRadius"/>), as the room to bleed off its orbital speed grows with its size.
+    /// The height over its datum (<see cref="Altitude"/>) below which Auto has a vessel in the
+    /// surface frame: the higher of its <see cref="OrbitFloor"/> (no orbit is stable under it) and
+    /// <see cref="Scene.FrameSurfaceWithin"/> of its radius (its datum's, <see cref="SeaRadius"/>),
+    /// as the room to bleed off its orbital speed grows with its size: the floor on the planet and
+    /// the moon, the share on a bigger body.
     /// </summary>
-    public float FrameSurfaceHeight => Scene.FrameSurfaceWithin * SeaRadius;
+    public float FrameSurfaceHeight => MathF.Max(OrbitFloor, Scene.FrameSurfaceWithin * SeaRadius);
 
     /// <summary>
     /// Whether <paramref name="p"/> is low over its ground: within <see cref="Scene.GroundTopSpeedHeight"/>
