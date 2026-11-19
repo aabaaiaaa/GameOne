@@ -55,6 +55,24 @@ internal static class Air
     public static float FlareDimming(Vector3 camera, Vector3 sun, float sunSeen) =>
         Math.Clamp(Luminance(Sunlight(camera, sun)) / Luminance(SunLight), 0f, 1f) * sunSeen;
 
+    /// <summary>
+    /// How much the air dims the moon's light seen from <paramref name="camera"/> along <paramref name="d"/>
+    /// (unit), the moon <paramref name="toMoon"/> away on it: the table's transmittance there
+    /// (<see cref="AirTables.Look"/>) if that way comes within the air's top of the planet's centre,
+    /// else 1, as no air lies on it. Not the ray's to infinity, which from beyond the moon meets
+    /// the sea behind it and would be 0. Twin of the sky shader's <c>throughAir</c> and its dimming
+    /// of the moon's face in <c>Shaders.SkyFragment</c>.
+    /// </summary>
+    public static Vector3 MoonSeenThrough(Vector3 camera, Vector3 d, float toMoon)
+    {
+        var toPlanet = D3.From(GroundBody.Planet.Centre - camera);
+        var nearest = (toPlanet + D3.From(d) * -Math.Clamp(toPlanet.Dot(D3.From(d)), 0, toMoon)).Length;
+        if (nearest >= TopRadius)
+            return Vector3.One;
+        var from = camera - GroundBody.Planet.Centre;
+        return AirTables.Look(0, (float)(D3.From(from).Length - SeaRadius), Vector3.Dot(Vector3.Normalize(from), d));
+    }
+
     /// <summary>A linear colour's brightness to the eye (Rec. 709's weights).</summary>
     internal static float Luminance(Vector3 c) => 0.2126f * c.X + 0.7152f * c.Y + 0.0722f * c.Z;
 

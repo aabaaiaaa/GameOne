@@ -206,4 +206,30 @@ public sealed class AirTests
         var halfFaded = MathF.Log(2f) / mean; // metres of sea-level air that halve the light: the fog's reach
         Assert.InRange(halfFaded, 2200f, 2800f);
     }
+
+    [Fact]
+    public void The_moon_seen_from_beyond_it_with_the_planet_behind_is_not_dimmed_by_the_sea_behind_it()
+    {
+        // 24 km out past the moon, looking in at it with the planet's disc behind it: the way to the
+        // moon crosses no air, though the ray on to infinity meets the sea.
+        var outward = Vector3.Normalize(new Vector3(1f, 0.2f, 0.3f));
+        var moon = GroundBody.Planet.Centre + outward * Scene.MoonDistance;
+        var camera = moon + outward * 24_000f;
+        var d = -outward;
+        var up = Vector3.Normalize(camera - GroundBody.Planet.Centre);
+        var height = (camera - GroundBody.Planet.Centre).Length() - GroundBody.PlanetSeaRadius;
+        Assert.Equal(Vector3.One, Air.MoonSeenThrough(camera, d, 24_000f - Scene.MoonRadius));
+        Assert.Equal(Vector3.Zero, AirTables.Look(0, height, Vector3.Dot(up, d))); // the to-infinity ray is blocked
+    }
+
+    [Fact]
+    public void The_moon_low_over_the_horizon_from_home_is_dimmed_by_the_air_on_the_way_to_it()
+    {
+        var up = Planet.Up(Home);
+        var d = Vector3.Normalize(up * MathF.Sin(float.DegreesToRadians(4)) + Planet.East(Home) * MathF.Cos(float.DegreesToRadians(4)));
+        var seen = Air.MoonSeenThrough(Home, d, Scene.MoonDistance);
+        var height = (Home - GroundBody.Planet.Centre).Length() - GroundBody.PlanetSeaRadius;
+        Assert.Equal(AirTables.Look(0, height, Vector3.Dot(up, d)), seen);
+        Assert.True(Sum(seen) < 3f && Sum(seen) > 0f, $"{seen}");
+    }
 }

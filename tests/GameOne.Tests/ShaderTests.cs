@@ -73,6 +73,8 @@ public sealed class ShaderTests(ITestOutputHelper output)
         Assert.Contains("return discSeen(apart, frame.sunDisc.w, moon);", Shaders.SkyFragment);
         Assert.Contains("float b = dot(o, d), miss = length(o - d * b);", Shaders.SkyFragment);
         Assert.Contains("float towards = dot(toSea, d), seaMiss = length(toSea - d * towards);", main);
+        // The moon is dimmed by the air only where the way to it passes through the air.
+        Assert.Contains("throughAir ? airTransmittance(", Shaders.SkyFragment);
         // Never less than the triangle's own depth (it is at the far plane, 0), and said so.
         Assert.Contains("layout(depth_greater) out float gl_FragDepth;", Shaders.SkyFragment);
         Assert.Contains("gl_Position = vec4(p, 0.0, 1.0);", Shaders.SkyVertex);

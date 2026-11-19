@@ -2023,8 +2023,9 @@ internal static class Shaders
             // holds still and sharp however far either is), over the sky, the stars and the sun's
             // disc. The place hit, turned into the moon's own axes, is its ground there (its map's
             // height, slope and paleness), lit as moonLight has it; seen through the air as the sky
-            // is, its light dimmed by the air from here to the air's top along the ray (none below
-            // the horizon) and the sky's own light along the ray added, if the way to it crosses the
+            // is, its light dimmed by the air along the way to it (none when that way misses the air:
+            // the ray on to infinity would meet the sea behind it, from out past the moon, and
+            // blacken it) and the sky's own light along the ray added, if the way to it crosses the
             // air at all (else the sky's light is from beyond the moon: the planet's air behind it
             // seen from out past it, which it hides). Its edge covers the pixel by how far inside it
             // the ray passes, over a pixel's width there, so it doesn't alias. (Only where the sky is
@@ -2061,8 +2062,10 @@ internal static class Shaders
                 // The nearest the way to the moon comes to the planet's centre, against the air's top.
                 vec3 toPlanet = frame.planet.xyz - frame.cameraPos.xyz;
                 float nearest = length(toPlanet - d * clamp(dot(toPlanet, d), 0.0, along - into));
-                vec3 inFront = nearest < frame.planet.w + frame.atmosphere.x ? sky : vec3(0.0);
-                vec3 seen = face * airTransmittance(altitudeOf(frame.cameraPos.xyz), dot(upAt(frame.cameraPos.xyz), d)) + inFront;
+                bool throughAir = nearest < frame.planet.w + frame.atmosphere.x;
+                vec3 inFront = throughAir ? sky : vec3(0.0);
+                vec3 dimmed = throughAir ? airTransmittance(altitudeOf(frame.cameraPos.xyz), dot(upAt(frame.cameraPos.xyz), d)) : vec3(1.0);
+                vec3 seen = face * dimmed + inFront;
                 rgb = mix(rgb, seen, cover);
             }
 

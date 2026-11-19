@@ -776,7 +776,11 @@ dotnet run --project src/GameOne
   is repeated in `Shaders.AirLight` (`sunSeen`, `discSeen`): it multiplies `sunlightAt` and
   `skyLightAt` at each place, and the sky's and the haze's light (`skyColor`, `fogTerms`) by the
   camera's, never per step of the march; the corona and the horizon's glow are the sky's
-  (`SkyFragment`), and the flare takes the camera's (`Air.FlareDimming`). Change one and change
+  (`SkyFragment`), and the flare takes the camera's (`Air.FlareDimming`). The moon's own face is
+  dimmed by the air along the way to it only (`Air.MoonSeenThrough`, twin of `SkyFragment`'s
+  `throughAir` and `dimmed`; 1 when that way misses the air), never by the ray's to infinity,
+  which from beyond the moon meets the planet's sea behind it; the corona and the sun's disc keep
+  the to-infinity one, as the planet hides the sun there. Change one and change
   the other; the numbers (the map's range, `Scene`'s) are written into the GLSL, not repeated by hand.
 - **Timings:** `Timings` is the game's own diagnostic, in one place: where each physics step's
   time goes (`StepPart`: rules, Jolt, tiles, water, contact, the rest), each frame's (`FramePart`)
