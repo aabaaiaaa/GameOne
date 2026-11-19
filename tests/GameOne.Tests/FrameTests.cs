@@ -40,20 +40,20 @@ public sealed class FrameTests(ITestOutputHelper output)
     [InlineData(float.NaN)]
     [InlineData(float.PositiveInfinity)]
     [InlineData(float.NegativeInfinity)]
-    public void A_periapsis_that_is_not_a_number_is_surface(float periapsis)
+    public void A_height_that_is_not_a_number_is_surface(float height)
     {
-        // Not knowing where the orbit's lowest point is, it can't be said to clear the air.
-        Assert.Equal(Frame.Surface, Frames.Auto(GroundBody.Planet, Frame.Orbital, periapsis, false));
-        Assert.Equal(Frame.Surface, Frames.Auto(GroundBody.Planet, Frame.Surface, periapsis, false));
+        // Not knowing where it is, it can't be said to be clear of the air.
+        Assert.Equal(Frame.Surface, Frames.Auto(GroundBody.Planet, Frame.Orbital, height, false));
+        Assert.Equal(Frame.Surface, Frames.Auto(GroundBody.Planet, Frame.Surface, height, false));
     }
 
     [Fact]
-    public void An_orbit_grazing_the_top_switches_once_each_way()
+    public void A_vessel_skimming_the_top_switches_once_each_way()
     {
         var frame = Frame.Surface;
         var seen = new List<Frame>();
-        foreach (var periapsis in new[] { 2990f, 3020f, 3110f, 3040f, 3105f, 2998f, 3060f })
-            seen.Add(frame = Frames.Auto(GroundBody.Planet, frame, periapsis, false));
+        foreach (var height in new[] { 2990f, 3020f, 3110f, 3040f, 3105f, 2998f, 3060f })
+            seen.Add(frame = Frames.Auto(GroundBody.Planet, frame, height, false));
         Assert.Equal(
             [Frame.Surface, Frame.Surface, Frame.Orbital, Frame.Orbital, Frame.Orbital, Frame.Surface, Frame.Surface],
             seen);
@@ -62,19 +62,33 @@ public sealed class FrameTests(ITestOutputHelper output)
     [Fact]
     public void Landed_or_afloat_is_always_surface()
     {
-        // Whatever it had, and whatever its orbit would be: the rule by state, which Vessel also
-        // keeps (its AutoFrame and the restoring constructor). No flight test: a landed vessel's
-        // own periapsis never clears the air, being no higher than where it stands, and one
-        // restored landed is frozen, its craft reading no velocity, so its orbit there falls too.
+        // Whatever it had, and however high it stands: the rule by state, which Vessel also keeps
+        // (its AutoFrame and the restoring constructor).
         Assert.Equal(Frame.Surface, Frames.Auto(GroundBody.Planet, Frame.Orbital, 5000f, onTheGround: true));
         Assert.Equal(Frame.Surface, Frames.Auto(GroundBody.Planet, Frame.Surface, 5000f, onTheGround: true));
     }
 
     [Fact]
-    public void An_escaping_path_clear_of_the_air_is_orbital()
+    public void Auto_goes_by_height_not_by_the_orbit()
     {
-        // Only the periapsis counts: an escaping path (its apoapsis infinite) is judged by it too.
-        Assert.Equal(Frame.Orbital, Frames.Auto(GroundBody.Planet, Frame.Surface, 4000f, false));
+        // A booster above the air going east at 150 m/s: its periapsis is far under the ground, but
+        // it is over the orbit floor by more than the margin, so Auto has it orbital (the line the
+        // ellipse among the stars, with orbital prograde on it). The same booster 400 m over the
+        // ground is under the floor: surface.
+        using (var high = Drops.At(Vector3.Zero, Planet.East(Vector3.Zero), 0f, sideways: Planet.East(Vector3.Zero) * 150f, clearance: 3500f))
+        {
+            var flight = high.Flight;
+            output.WriteLine($"high: {flight.Altitude:0} m up, periapsis {flight.Periapsis:0} m: {flight.Controlled.AutoFrame}");
+            Assert.True(flight.Periapsis < 0f, "it should be suborbital");
+            Assert.True(flight.Altitude > GroundBody.Planet.OrbitFloor + Scene.FrameOrbitMargin);
+            Assert.Equal(Frame.Orbital, flight.Controlled.AutoFrame);
+            Assert.Equal(Frame.Orbital, flight.Frame);
+        }
+        using var low = Drops.At(Vector3.Zero, Planet.East(Vector3.Zero), 0f, sideways: Planet.East(Vector3.Zero) * 150f, clearance: 400f);
+        output.WriteLine($"low: {low.Flight.Altitude:0} m up: {low.Flight.Controlled.AutoFrame}");
+        Assert.True(low.Flight.Altitude < GroundBody.Planet.OrbitFloor);
+        Assert.Equal(Frame.Surface, low.Flight.Controlled.AutoFrame);
+        Assert.Equal(Frame.Surface, low.Flight.Frame);
     }
 
     [Fact]
@@ -117,39 +131,30 @@ public sealed class FrameTests(ITestOutputHelper output)
     [Fact]
     public void A_hand_picked_frame_stays_through_an_automatic_switch_point()
     {
-        // A satellite (orbital by Auto), flown with Surface picked: its own pilot burns against its
-        // orbit until the periapsis is in the air (Auto's switch back), then along it until it
-        // clears the margin again (Auto's switch out). The frame in use stays Surface throughout.
-        using var sim = new Simulation(Mission.ReachOrbit, world: WorldPresets.Satellites());
+        // A booster thrown up through the orbit floor, its engine off, flown with Surface picked: it
+        // climbs past the floor and its margin (Auto's switch out), then falls back under the floor
+        // (Auto's switch back). The frame in use stays Surface throughout.
+        using var sim = Drops.At(Vector3.Zero, Planet.East(Vector3.Zero), -150f, clearance: 2700f);
         var flight = sim.Flight;
-        var satellite = flight.WorldVessels.First(v => v.Flight == 0);
-        sim.Step(new FlightInput(SwitchTo: satellite, ChooseFrame: FrameChoice.Surface));
-        Assert.Equal(Frame.Orbital, satellite.AutoFrame);
+        var booster = flight.Controlled;
+        sim.Step(new FlightInput(ChooseFrame: FrameChoice.Surface));
+        Assert.Equal(Frame.Surface, booster.AutoFrame);
         Assert.Equal(FrameChoice.Surface, flight.FrameChoice);
         Assert.Equal(Frame.Surface, flight.Frame);
 
-        var seen = new HashSet<Frame>();
-        var lowered = false;
-        FlightInput Burn(Flight f, bool along)
-        {
-            var stars = Planet.AmongStars(f.CentreOfMass, f.Velocity);
-            var way = Vector3.Normalize(along ? stars : -stars);
-            var lined = Vector3.Dot(f.Controlled.Up, way) > 0.999f;
-            return new FlightInput(Hold: way, Throttle: lined ? 1f : -1f);
-        }
+        var seen = new List<Frame>();
         Assert.True(sim.Run((f, _) =>
         {
-            seen.Add(satellite.AutoFrame);
+            if (seen.Count == 0 || seen[^1] != booster.AutoFrame)
+                seen.Add(booster.AutoFrame);
             Assert.Equal(Frame.Surface, f.Frame);
-            lowered |= satellite.Periapsis < Scene.AtmosphereHeight - 100f;
-            return Burn(f, along: lowered);
-        }, _ => lowered && satellite.AutoFrame == Frame.Orbital, maxSeconds: 200), "the burns never took it through both switches");
-        output.WriteLine($"Auto went through {string.Join(", ", seen)}; periapsis now {satellite.Periapsis:0} m");
-        Assert.Contains(Frame.Surface, seen);
+            return default;
+        }, f => seen.Count == 3 || f.Altitude < Scene.AtmosphereHeight - 300f, maxSeconds: 120), "it never came back under the floor");
+        output.WriteLine($"Auto went through {string.Join(", ", seen)}; {flight.Altitude:0} m up now");
+        Assert.Equal([Frame.Surface, Frame.Orbital, Frame.Surface], seen);
         Assert.Equal(Frame.Surface, flight.Frame);
-
-        sim.Step(new FlightInput(CutThrottle: true, ChooseFrame: FrameChoice.Auto));
-        Assert.Equal(Frame.Orbital, flight.Frame);
+        sim.Step(new FlightInput(ChooseFrame: FrameChoice.Auto));
+        Assert.Equal(Frame.Surface, flight.Frame);
     }
 
     [Fact]
@@ -439,7 +444,7 @@ public sealed class FrameTests(ITestOutputHelper output)
     public void Prograde_hold_in_the_surface_frame_keeps_the_nose_along_the_ground_track()
     {
         // A booster above the air going north a little faster than a circle there among the stars,
-        // its nose that way: Auto would have it orbital (its periapsis, where it is, clears the
+        // its nose that way: Auto would have it orbital (it is above the orbit floor and its
         // margin), and over the ground it goes west of north too (the ground turns east under it),
         // so the two frames' progrades are well apart. Surface picked, the hold turns the nose to
         // the way over the ground, and keeps it there.
@@ -593,15 +598,15 @@ public sealed class FrameTests(ITestOutputHelper output)
     [Fact]
     public void Above_the_air_a_de_orbit_follows_its_surface_line_to_its_landing_mark()
     {
-        // A satellite burned against its orbit until its periapsis is 2 km under the ground: then
-        // Auto has it in the surface frame, and its line comes down, at the landing mark. Above the
+        // A satellite burned against its orbit until its periapsis is 2 km under the ground, flown
+        // in the surface frame: its line comes down, at the landing mark. Above the
         // air its real track over the ground is that line (a few metres' bound: the line is sampled
         // 256 pieces a lap, and the physics steps in floats). Below, the air (which the line
         // ignores) takes over, and it breaks up in the thick of it: no test of the frame there.
         using var sim = new Simulation(Mission.ReachOrbit, world: WorldPresets.Satellites());
         var flight = sim.Flight;
         var satellite = flight.WorldVessels.First(v => v.Flight == 0);
-        sim.Step(new FlightInput(SwitchTo: satellite));
+        sim.Step(new FlightInput(SwitchTo: satellite, ChooseFrame: FrameChoice.Surface));
         Assert.True(sim.Run((f, _) =>
         {
             if (f.Periapsis < -2000f)
@@ -671,7 +676,7 @@ public sealed class FrameTests(ITestOutputHelper output)
         using var sim = new Simulation(world: WorldPresets.Satellites());
         var flight = sim.Flight;
         var (satellite, next) = (flight.WorldVessels[0], flight.WorldVessels[1]);
-        sim.Step(new FlightInput(SwitchTo: satellite));
+        sim.Step(new FlightInput(SwitchTo: satellite, ChooseFrame: FrameChoice.Surface));
         sim.Step(new FlightInput(SetTarget: NavTarget.OfVessel(next)));
         foreach (var choice in new[] { FrameChoice.Orbit, FrameChoice.Surface })
         {

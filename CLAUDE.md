@@ -624,9 +624,13 @@ dotnet run --project src/GameOne
 - **Frames of reference:** the player picks one from the HUD's selector (`Flight.FrameChoice`:
   Auto, Surface, Orbit, Target); `Flight.Frame` is the one in use. The frames follow the body the
   flown vessel is at (`Flight.Body`): Surface is over its ground, Orbit round its centre among its
-  stars, and Auto (`Frames.Auto(body, …)`) is orbital once the periapsis clears the body's orbit
-  floor (`GroundBody.OrbitFloor`: the air's top, or with no air its highest ground) by
-  `Scene.FrameOrbitMargin` (100 m) and surface again as it dips under the floor. The HUD's and the
+  stars, and Auto (`Frames.Auto(body, …)`) goes by height, not by the orbit: orbital once the
+  vessel (its centre of mass) is above the body's orbit floor (`GroundBody.OrbitFloor`: the air's
+  top, or with no air its highest ground) by `Scene.FrameOrbitMargin` (100 m), surface again as it
+  comes down under the floor itself (held between, so it doesn't flip-flop at the edge; landed or
+  afloat always surface): so through the ascent above the air and the circularising burn the line
+  is the ellipse among the stars with orbital prograde on it, and low down and landing the track
+  over the ground with surface prograde. The HUD's and the
   readout's numbers are that body's too (heights over its datum, its orbit, local time, the
   compass's north), never the planet's by assumption. The holds follow the frame in use (floor
   5 m/s; 0.2 m/s in Target against a flying target or in orbit, `Flight.HoldFloor`), as do the

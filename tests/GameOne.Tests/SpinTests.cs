@@ -440,18 +440,19 @@ public sealed class SpinTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void In_auto_the_holds_follow_the_ground_on_a_hop_and_the_stars_in_orbit()
+    public void In_auto_the_holds_follow_the_ground_low_down_and_the_stars_above_the_air()
     {
-        // On a hop the frame in use is the surface's, even above the air (its path comes back down
-        // into it): the holds steer by the way it moves over the ground, which the air turns with.
+        // Auto goes by height: on a hop low down the frame in use is the surface's, and the holds
+        // steer by the way it moves over the ground, which the air turns with; the same hop above
+        // the air (its path coming back down into it) is in the orbital frame, by the stars.
         var (at, downhill, _) = Drops.FindSlope(0f, 3f);
-        foreach (var clearance in new[] { 1000f, 4000f })
+        foreach (var (clearance, frame) in new[] { (1000f, Frame.Surface), (4000f, Frame.Orbital) })
         {
             using var sim = Drops.At(at, downhill, 50f, clearance: clearance, legsOut: false);
             var vessel = sim.Flight.Controlled;
             output.WriteLine($"{Planet.Altitude(vessel.CentreOfMass):0} m up: {sim.Flight.Frame}, hold {sim.Flight.FrameVelocity}, ground {vessel.Velocity}");
-            Assert.Equal(Frame.Surface, sim.Flight.Frame);
-            Assert.Equal(vessel.Velocity, sim.Flight.FrameVelocity);
+            Assert.Equal(frame, sim.Flight.Frame);
+            Assert.Equal(frame == Frame.Surface ? vessel.Velocity : Planet.AmongStars(vessel.CentreOfMass, vessel.Velocity), sim.Flight.FrameVelocity);
         }
 
         // In orbit, the orbital frame: by its orbit, among the stars.

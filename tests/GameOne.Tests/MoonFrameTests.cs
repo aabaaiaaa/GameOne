@@ -36,7 +36,7 @@ public sealed class MoonFrameTests(ITestOutputHelper output)
         float.Parse(reading.Split(' ')[0], NumberStyles.Float, CultureInfo.CurrentCulture);
 
     [Fact]
-    public void On_the_moon_auto_is_orbital_once_the_periapsis_clears_its_highest_ground()
+    public void On_the_moon_auto_is_orbital_once_above_its_highest_ground_by_the_margin()
     {
         var floor = Moon.MaxHeight;
         Assert.False(Moon.HasAir);

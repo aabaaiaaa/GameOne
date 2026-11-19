@@ -14,8 +14,11 @@ public sealed class FrameFlightTests(ITestOutputHelper output)
 {
     [PlaythroughFact(Long = false)]
     [Trait("Kind", "Playthrough")]
-    public void Auto_turns_to_orbit_on_the_way_up_as_the_orbit_clears_the_air()
+    public void Auto_turns_to_orbit_on_the_way_up_as_it_clears_the_air()
     {
+        // Auto goes by height: the ascent turns orbital once, as it climbs past the air's top and
+        // the margin over it, its periapsis still in the air, well before the orbit step is
+        // ticked, and stays orbital through the circularising burn and on in orbit.
         using var sim = new Simulation(Mission.ReachOrbit);
         var flight = sim.Flight;
         var orbit = Array.FindIndex(flight.Mission.Steps, s => s.Label.StartsWith("Reach a stable orbit"));
@@ -23,13 +26,13 @@ public sealed class FrameFlightTests(ITestOutputHelper output)
         Assert.Equal(Frame.Surface, flight.Frame);
 
         var pilot = new OrbitAutopilot();
-        var turns = new List<(double Time, Frame To, float Periapsis, float Before)>();
-        var (frame, periapsis) = (flight.Frame, flight.Periapsis);
+        var turns = new List<(double Time, Frame To, float Altitude, float Periapsis)>();
+        var frame = flight.Frame;
         Pilot watched = (f, dt) =>
         {
             if (f.Frame != frame)
-                turns.Add((f.WorldTime, f.Frame, f.Periapsis, periapsis));
-            (frame, periapsis) = (f.Frame, f.Periapsis);
+                turns.Add((f.WorldTime, f.Frame, Planet.Altitude(f.CentreOfMass), f.Periapsis));
+            frame = f.Frame;
             return pilot.Fly(f, dt);
         };
         Assert.True(sim.Run(watched, f => f.Run!.Progress.IsDone(orbit), maxSeconds: 400), "the orbit step was never ticked");
@@ -37,13 +40,13 @@ public sealed class FrameFlightTests(ITestOutputHelper output)
         sim.Run(watched, _ => false, maxSeconds: 60); // and on in orbit, coasting: it stays orbital
 
         foreach (var turn in turns)
-            output.WriteLine($"{turn.Time:0.0} s: to {turn.To}, the periapsis {turn.Before:0} m, then {turn.Periapsis:0} m");
+            output.WriteLine($"{turn.Time:0.0} s: to {turn.To}, {turn.Altitude:0} m up, the periapsis {turn.Periapsis:0} m");
         output.WriteLine($"the orbit step ticked at {ticked:0.0} s; the periapsis now {flight.Periapsis:0} m");
         var only = Assert.Single(turns);
         Assert.Equal(Frame.Orbital, only.To);
-        Assert.True(only.Before <= Scene.AtmosphereHeight + Scene.FrameOrbitMargin);
-        Assert.True(only.Periapsis > Scene.AtmosphereHeight + Scene.FrameOrbitMargin);
-        Assert.True(only.Time <= ticked);
+        Assert.InRange(only.Altitude, Scene.AtmosphereHeight + Scene.FrameOrbitMargin, Scene.AtmosphereHeight + Scene.FrameOrbitMargin + 50f);
+        Assert.True(only.Periapsis < Scene.AtmosphereHeight, "it turns orbital by its height, its orbit still in the air");
+        Assert.True(only.Time < ticked);
         Assert.Equal(FrameChoice.Auto, flight.FrameChoice);
         Assert.Equal(Frame.Orbital, flight.Frame);
     }
@@ -101,7 +104,7 @@ public sealed class FrameFlightTests(ITestOutputHelper output)
             var lead = FrameReadings.Beyond(fell.Position, fell.Way, fell.Mark) - FrameReadings.Beyond(fell.Position, fell.Way, zone);
             output.WriteLine($"  as it started braking the mark was {lead:0} m beyond the zone: the air took {cut.MarkBeyond - lead:0} m off in the fall");
         }
-        Assert.Equal(Frame.Surface, cut.Frame); // Auto had turned surface by the end of the burn
+        Assert.Equal(Frame.Orbital, cut.Frame); // the burn above the air: Auto turns surface only once it is down in it
         Assert.InRange(cut.MarkBeyond, 200f, 500f);
         Assert.InRange(MathF.Abs(cut.MarkAside), 0f, 30f); // the burn steered it onto the zone's line
         Assert.Equal([Frame.Orbital, Frame.Surface], frames.Select(x => x.Frame));

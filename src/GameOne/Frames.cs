@@ -18,24 +18,26 @@ public enum FrameChoice { Auto, Surface, Orbit, Target }
 public static class Frames
 {
     /// <summary>
-    /// A vessel's own frame at <paramref name="body"/>: the orbital one once its orbit clears the
+    /// A vessel's own frame at <paramref name="body"/>, by its <paramref name="height"/> (its centre
+    /// of mass's over the body's datum), whatever its orbit: the orbital one once it is above the
     /// body's orbit floor (<see cref="GroundBody.OrbitFloor"/>: the top of its air, or with no air
-    /// its highest ground) by <see cref="Scene.FrameOrbitMargin"/>, the surface's again as it dips
-    /// under the floor. The two thresholds differ so that an orbit grazing the floor doesn't
-    /// flicker between frames; <paramref name="current"/> is its last Auto frame. On the ground or
-    /// afloat it is always the surface's, whatever its orbit would be were the ground not there. A
-    /// periapsis that isn't a finite number (a state gone bad) is the surface's too: an orbit whose
-    /// lowest point isn't known can't be said to clear the floor, and a NaN would otherwise fail
-    /// every comparison and stick in whichever frame it found.
+    /// its highest ground) by <see cref="Scene.FrameOrbitMargin"/>, the surface's again as it comes
+    /// down under the floor. So through the ascent above the air and the circularising burn the
+    /// line is the ellipse among the stars, and low down and landing it is the track over the
+    /// ground. The two thresholds differ so that a vessel at the floor doesn't flicker between
+    /// frames; <paramref name="current"/> is its last Auto frame. On the ground or afloat it is
+    /// always the surface's. A height that isn't a finite number (a state gone bad) is the
+    /// surface's too: a NaN would otherwise fail every comparison and stick in whichever frame it
+    /// found.
     /// </summary>
-    internal static Frame Auto(GroundBody body, Frame current, float periapsis, bool onTheGround)
+    internal static Frame Auto(GroundBody body, Frame current, float height, bool onTheGround)
     {
-        if (onTheGround || !float.IsFinite(periapsis))
+        if (onTheGround || !float.IsFinite(height))
             return Frame.Surface;
         var floor = body.OrbitFloor;
         if (current == Frame.Orbital)
-            return periapsis < floor ? Frame.Surface : Frame.Orbital;
-        return periapsis > floor + Scene.FrameOrbitMargin ? Frame.Orbital : Frame.Surface;
+            return height < floor ? Frame.Surface : Frame.Orbital;
+        return height > floor + Scene.FrameOrbitMargin ? Frame.Orbital : Frame.Surface;
     }
 
     /// <summary>

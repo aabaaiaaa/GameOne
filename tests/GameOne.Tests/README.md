@@ -236,12 +236,16 @@ say) stalls frames and spoils the timing.
   flown once for both by a class fixture); releasing the satellite leaving the upper stage behind, with
   its legs.
 - **`FrameFlightTests`:** whole flights flown by the frames' pilots: the orbit mission on Auto
-  turning orbital once, as the orbit clears the air, by the time its orbit step is ticked; the
-  satellite mission's upper stage, put in orbit, brought home on Auto (orbital, then surface by the
-  end of its burn) onto the landing zone; a rendezvous in the target frame, closing from 1 km to
+  turning orbital once, as it climbs past the air's top and the margin (its periapsis still in the
+  air), before its orbit step is ticked; the
+  satellite mission's upper stage, put in orbit, brought home on Auto (orbital through its burn above
+  the air, surface once down in it) onto the landing zone; a rendezvous in the target frame, closing from 1 km to
   under 50 m and holding there, under 0.5 m/s; and a hop from the pad onto the nearest test pad on
   the surface frame's line.
-- **`FrameTests`:** the frames of reference one rule at a time, the line among them: over the
+- **`FrameTests`:** the frames of reference one rule at a time: Auto by height, not by the orbit
+  (a booster above the air with its periapsis under the ground orbital, 400 m up surface; a
+  frame picked by hand kept as a booster thrown up through the floor passes both switches); the
+  line among them: over the
   ground in Surface (a hop's and a de-orbit's real track above the air on it, its end where it
   comes down; a lap drifting west by the ground's turn; a window on a later lap with the line
   going round to it), among the stars in Orbit (the ellipse, closed round the planet and round the
@@ -841,7 +845,7 @@ say) stalls frames and spoils the timing.
   own; and the window looked for only as far as the orbit is flown to a crossing. The pass joins
   the planet's legs either side within a centimetre.
 - **`MoonFrameTests`:** the frames, the HUD's numbers and the readout by the body the flown
-  vessel is at: on the moon Auto orbital once the periapsis clears its highest ground (822 m) by
+  vessel is at: on the moon Auto orbital once the vessel is above its highest ground (822 m) by
   the margin, surface under it, each frame kept between (the planet's hysteresis), and a vessel
   400 m over it orbital, 50 m over it the surface's; Surface over the moon's ground and Orbit round
   its centre among its stars, in orbit and landed; a lander's readings the moon's (`Body`, its
