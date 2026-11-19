@@ -159,6 +159,76 @@ public sealed class WarpGateTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Throttling_up_in_orbit_at_a_formula_rate_drops_nothing_by_itself_and_the_lit_engine_holds_it()
+    {
+        var (sim, flown) = WarpScenes.LowOrbit();
+        using var _ = sim;
+        var flight = sim.Flight;
+        Press(flight, 20);
+        Assert.Equal(Scene.TopRate, flight.PlayerRate);
+
+        // The throttle raised: not a drop (only a vessel at rest is set moving by it).
+        flight.RunFrame(Simulation.TopRateFrame, new FlightInput(FullThrottle: true));
+        Assert.Equal(Scene.TopRate, flight.PlayerRate);
+        Assert.Null(flight.LastDrop);
+        Assert.True(flown.EngineLit);
+
+        // Lit, it counts as in the air (the formula doesn't fly a witnessed burn): held at the
+        // next frame's gate, and dropped for that, never as set moving.
+        flight.RunFrame(0f, default);
+        output.WriteLine($"{flight.PlayerRate}x, dropped for {flight.LastDrop?.Reason}");
+        Assert.Same(flown, flight.WarpHeldBy);
+        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
+        Assert.Equal(WarpDrop.Air, flight.LastDrop?.Reason);
+    }
+
+    [Fact]
+    public void Set_moving_from_rest_at_a_formula_rate_drops_it()
+    {
+        using var sim = new Simulation(Mission.FreePlay);
+        sim.Step(default);
+        var flight = sim.Flight;
+        Press(flight, 20);
+        Assert.Equal(Scene.TopRate, flight.PlayerRate);
+        flight.RunFrame(0f, new FlightInput(FullThrottle: true));
+        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
+        Assert.Equal(new WarpDropped(WarpDrop.SetMoving, WorldLog.Named(flight.Controlled), Scene.PhysicsTopRate, flight.RealTime), flight.LastDrop);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_vessel_watched_whose_link_up_still_waits_holds_it_from_the_first_frame(bool smallView)
+    {
+        // A booster falling 500 m over the moon, where no physics is made: watched from a low orbit
+        // round the planet, its link-up waits a frame or more for the moon's physics.
+        var moon = GroundBody.Moon;
+        var at = moon.Centre + OnTheMoon.LandingSpot * moon.SeaRadius;
+        var booster = Drops.Placed(at, moon.East(at), 0f, clearance: 500f, mission: Mission.FreePlay, id: 1, body: moon);
+        var (sim, _) = WarpScenes.Flying(InOrbit.Round(GroundBody.Planet, 0, WarpScenes.LowOrbitHeight), booster);
+        using var _s = sim;
+        var flight = sim.Flight;
+        var watched = flight.WorldVessels.Single(v => v.Id == 1);
+        Press(flight, 20);
+        Assert.Equal(Scene.TopRate, flight.PlayerRate);
+
+        if (smallView)
+        {
+            flight.OpenView(watched); // as the HUD opens one, between frames
+            flight.RunFrame(0f, new FlightInput(Watched: [watched]));
+            Assert.True(flight.ViewLink(watched)?.Waiting, "its link-up should still wait");
+        }
+        else
+        {
+            flight.RunFrame(0f, new FlightInput(Watching: watched));
+            Assert.True(flight.WatchLink.Waiting, "its link-up should still wait");
+        }
+        Assert.Same(watched, flight.WarpHeldBy);
+        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
+        Assert.Equal(WarpDrop.Ground, flight.LastDrop?.Reason); // the moon has no air
+    }
+
+    [Fact]
     public void The_time_line_says_who_holds_the_warp_and_why_it_dropped()
     {
         Assert.Equal(("WARP 8x  (held: Booster 1 flying in the air)   ( , and . )", false), Hud.TimeLine(null, 8f, 8f, 8f, "Booster 1", null, 0));

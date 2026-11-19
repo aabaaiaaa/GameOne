@@ -1596,7 +1596,7 @@ internal sealed partial class Flight : IDisposable
                 WatchLink.Cancel();
         }
         // Who holds the warp to the physics' top rate, before the keys are taken (see Gate).
-        Gate(Witnessed(input.Watched, watching), given);
+        Gate(input.Watched, watching, given);
         // Slowed, the game's rate is the slow-down's, not the player's to change. Warping to a
         // point, either key ends it, at normal speed. Held, faster goes no further than the
         // physics' top rate.

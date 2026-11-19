@@ -51,7 +51,7 @@ internal sealed partial class Flight
     /// keys are taken: while it is set, <see cref="FlightInput.Faster"/> past the physics' top rate
     /// does nothing.
     /// </summary>
-    /// <remarks>One burning counts as in the air, and so does the flown one as the frame's input lights its engine or launches it: the formula doesn't fly a witnessed vessel's burn.</remarks>
+    /// <remarks>One burning counts as in the air: the formula doesn't fly a witnessed vessel's burn.</remarks>
     public Vessel? WarpHeldBy { get; private set; }
 
     /// <summary>The warp's last drop to the physics' top rate (<see cref="DropToPhysics"/>), for the HUD to say why, a while.</summary>
@@ -143,22 +143,28 @@ internal sealed partial class Flight
     }
 
     /// <summary>
-    /// The gate, as a frame begins (<see cref="WarpHeldBy"/>, of the flown vessel and
-    /// <paramref name="witnessed"/>), and the warp dropped to the physics' top rate if it is at a
-    /// formula's while a vessel holds it: into the air, or near the ground of a body with none; or
-    /// set moving, the flown one's engine lit or launched by <paramref name="input"/>, so no frame
-    /// at a formula's rate runs a witnessed vessel's burn.
+    /// The gate, as a frame begins (<see cref="WarpHeldBy"/>, of the flown vessel, the small views'
+    /// <paramref name="watched"/> and the main camera's <paramref name="watching"/>, each counted
+    /// from the frame it is watched in, its link-up still waiting or not), and the warp dropped to
+    /// the physics' top rate if it is at a formula's while a vessel holds it: into the air, or near
+    /// the ground of a body with none. The flown vessel at rest set moving by <paramref name="input"/>
+    /// (launched, or its engine lit, with fuel to light it) drops it too, so no frame at a formula's
+    /// rate runs its take-off; flying, the throttle drops nothing (a lit engine holds it, as the
+    /// formula doesn't fly a witnessed vessel's burn).
     /// </summary>
-    private void Gate(IReadOnlyList<Vessel>? witnessed, in FlightInput input)
+    private void Gate(IReadOnlyList<Vessel>? watched, Vessel? watching, in FlightInput input)
     {
         var flown = Controlled;
-        var lighting = flown.State != FlightState.Crashed && (input.Launch || input.FullThrottle || input.Throttle > 0f);
-        WarpHeldBy = lighting || Holds(flown) ? flown : null;
-        for (var i = 0; WarpHeldBy is null && witnessed is not null && i < witnessed.Count; i++) // by index: a foreach over the interface would box its enumerator
-            if (Holds(witnessed[i]))
-                WarpHeldBy = witnessed[i];
+        WarpHeldBy = Holds(flown) ? flown : null;
+        for (var i = 0; WarpHeldBy is null && watched is not null && i < watched.Count; i++) // by index: a foreach over the interface would box its enumerator
+            if (Holds(watched[i]))
+                WarpHeldBy = watched[i];
+        if (WarpHeldBy is null && watching is not null && Holds(watching))
+            WarpHeldBy = watching;
         if (WarpHeldBy is { } held)
-            DropToPhysics(held.AtRest || held.AboveTheAir ? WarpDrop.SetMoving : held.Body.HasAir ? WarpDrop.Air : WarpDrop.Ground, held);
+            DropToPhysics(held.Body.HasAir ? WarpDrop.Air : WarpDrop.Ground, held);
+        else if (flown.AtRest && flown.Fuel > 0f && (input.Launch || input.FullThrottle || input.Throttle > 0f))
+            DropToPhysics(WarpDrop.SetMoving, flown);
     }
 
     /// <summary>Whether <paramref name="v"/>, witnessed, holds the warp (see <see cref="WarpHeldBy"/>).</summary>

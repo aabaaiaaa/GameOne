@@ -52,7 +52,8 @@ internal sealed class Readout
         {
             Show("Time", $"{hud.TimeScale:0.##}x");
             Show("Warp", $"{hud.TimeScale:0.##}x {(Flight.IsFormulaRate(hud.TimeScale) ? "by formula" : "in the physics")}"); // which kind of rate runs it
-            Show("Warp reached", $"{hud.RunningScale:0}x"); // how fast the world really ran, as the time line's "running"
+            if (hud.TimeScale > 1f) // measured only in warp
+                Show("Warp reached", $"{hud.RunningScale:0}x"); // how fast the world really ran, as the time line's "running"
         }
         if (hud.WarpHeldBy is { } heldBy)
             Show("Warp held", heldBy); // the witnessed vessel holding the warp to the physics' top rate
