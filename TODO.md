@@ -79,6 +79,43 @@ frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
   cost); the rest are as they were. The
   next gains are still "The step's cost for each vessel" (below) in the game's own code, or 1
   (queries) where it asks what Jolt already knows.
+- **Time warp that keeps up with its rate** (the user, 2026-11-18, playing: "x32 actually runs
+  much slower (x7 or less sometimes)"; the user's next piece of work, a session of its own that
+  draws on the performance ideas here; to discuss before building). The fastest rate, ×32, gets
+  nowhere near ×32 of real time: a trip to the moon is bearable, anything further out would take
+  far too long. The user: "the performance issues do need clever ways to optimise how to speed up
+  the orbital trajectories."
+  - **The rate wanted** (the user, 2026-11-19): far past ×32, enough for a vessel going round the
+    sun to finish a lap in one to two seconds of real time. The planet's year is 12 days of
+    1,200 s (14,400 s), so about ×7,000 to ×14,000: two to four minutes of game time a frame at
+    60 fps. No physics steps that, so the top rates need a warp where nothing is stepped: every
+    vessel moved by formula (Kepler on its orbit, the landed and afloat carried round with their
+    ground), the physics' worlds idle, and only the low rates the physics warp they are today.
+    The moon goes round in about 27 minutes, a few frames at the top rate, so the crossings of
+    the spheres, the collisions and the comings down must be found from the orbits, never by
+    stepping past them.
+  - **To discuss with that:** the rates' steps between ×32 and the top; when the warp may go on
+    (above the air, engine off, nothing in a collision's reach, as is usual) and what drops it or
+    holds it back (a sphere's edge, the air, a node, a collision or a near miss warned of, the
+    ground coming up, a vessel flown or watched coming near another); what the HUD, the map and
+    the small views show meanwhile; and the world's other clocks at that rate (the sun, the
+    lights, the sea, the landing lights), which may need to skip rather than ease.
+  - **First, measure:** nothing here has yet timed a frame at ×32. `Timings` (the readout's
+    parts and `StepDetail`) at ×32 on a moon transfer, in a low orbit, and in a busy world, to
+    find what each frame spends its time on before choosing what to cut.
+  - **The ideas here that bear on it:** the crossing search in `Patched.Legs` kept or shared
+    (asked several times a frame on a transfer, the looking ahead at warp among them); the step's
+    cost for each vessel and the fixed cost of a world, and the flight's step allocating (each
+    paid once a step, so 32 times over at ×32); Jolt's worker pool sized to the work; the tiles'
+    worker skipping cells it can't finish in time (it lags in warp); a point of interest's place
+    cached (asked through a long warp).
+  - **The bigger lever:** "Local physics, as an experiment" (below), and its bubbles that travel,
+    the flown vessel itself under formula when nothing is near it, so a coast in orbit or on a
+    transfer is Kepler's, not stepped, and rates past ×32 become possible there.
+  - **What it would gain:** warp at the rate asked, and faster rates for long coasts. **What it
+    would cost or risk:** whatever each idea above costs; for the flown vessel under formula, the
+    formula must steer and burn as the physics does, and hand back before anything comes near.
+    **Which case it would help:** every long coast, most of all beyond the moon.
 - **To try: the step's cost for each vessel, and the fixed cost of a world** (performance ideas,
   from the `StepDetail` split above, 2026-11-03, and the test-run-times work's slowest tests,
   2026-11-04, Debug, timed with `Timings`; one piece of work, as they share the idea and the
@@ -527,6 +564,17 @@ frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
   unlike the ground, the towers and the masts, which are never marked.
 - **A binary star.** The system's centre as two stars, with the planets orbiting the pair. To
   discuss before building.
+- **Four solar systems round a central star** (the user, 2026-11-18, asking how big the edge must
+  be for it; to discuss before building). A world of several solar systems, each its own sun with
+  planets and moons, all going round one central star. Sized at today's scale (the sun 3,000 km
+  from the planet), as suggested then: each system about 30,000 km across round its own sun (ten
+  times the planet's distance, room for several planets); each system about 1 million km from the
+  central star (neighbours well over a million km apart, so they don't pull on each other); the
+  edge 10 million km round the central star, the star nothing else goes round (built:
+  `Scene.SolarSystemEdge`, round the sun for now). Doubles hold a place to about 0.002 mm out
+  there, but a float's step is about 1 km, so it needs "Precision for bodies further out" (below)
+  first. To discuss: the bodies a system holds, how the map shows systems a million km apart,
+  how a vessel gets from one to another, and the edge's centre moving to the central star.
 - **BRUTAL features roadmap** (from the framework feature list): logging, and ImPlot for flight
   graphs, first.
 - **Autopilots for vessels** (the user, 2026-10-30). Something like an autopilot, for the complex
@@ -661,6 +709,17 @@ frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
   tells them apart.
 - **A testing area in the game.** The test range could seed an in-game testing area, to grow later
   (more pads and surfaces, a place to try a vessel out). To discuss before building.
+- **A world with one mission in flight at several phases** (the user, 2026-11-17: "to help manual
+  testing ... a world to be generated with several versions of the same mission in flight to make
+  it quicker for me to manually test different phases of a mission, but not yet"; the user will
+  ask when it is wanted). One world holding several runs of one mission in progress, each at a
+  different phase (for the moon: in low orbit, the transfer burnt, arriving at the moon, in orbit
+  round it, coming down), carried on from the carry-on screen to test that phase by hand, rather
+  than flying the whole mission each time. The moon trip's prepared worlds (`MoonTripWorlds`, six
+  worlds of one vessel each, for `gameone-moon-trip.txt`: see the GameDriver's `CLAUDE.md`) are
+  the nearest thing today. To discuss: which missions and phases, one world with many runs or a
+  world per phase, and how it is made (a test switch writing it, as those are, or an option in
+  the game).
 - **A demo run of every feature** (the user, 2026-11-01). Not really a test: it uses the test
   framework (the watched flights, `GAMEONE_WATCH`, through `GameView`) to fly an automated tour of
   every gameplay feature the game has. It lets the user see new features, and judge whether
