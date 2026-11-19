@@ -834,7 +834,9 @@ say) stalls frames and spoils the timing.
   staging, the legs, the bay doors and the throttle at rest each dropping it (`SetMoving`) with
   the action taken in the physics; a steering key (`Steering`) turning the aim as far as at the
   physics' top rate; a node 2,000 s ahead dropping it (`Node`) its lead and half its burn before
-  its time, once; a switch and a small view at the top rate to a booster in the air dropping it by
+  its time, once, and again once deleted and made again the same; Faster (or a warp to a point)
+  from the physics' top rate in a frame with a launch or a steering key held there, the input
+  taken in the physics; a switch and a small view at the top rate to a booster in the air dropping it by
   its name, flown or seen in the physics; and the readout's `Warp dropped` saying why for
   `Scene.WarpDropShownSeconds`.
 - **`WarpToTests`:** warping to a point on the flown vessel's path (`FlightInput.WarpTo`,

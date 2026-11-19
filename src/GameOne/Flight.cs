@@ -1600,27 +1600,27 @@ internal sealed partial class Flight : IDisposable
         }
         // Who holds the warp to the physics' top rate, and what drops it there, before the keys
         // are taken (see Gate, DropFor): dropped, the frame runs in the physics, its input taken there.
+        ForgetNodesDropped();
         Gate(input.Watched, watching);
-        var dropped = false;
-        if (_rate > PhysicsTopIndex && DropFor(given) is { } drop)
-        {
-            DropToPhysics(drop, WarpHeldBy ?? Controlled);
-            dropped = true;
-        }
+        var drop = DropFor(given);
+        if (drop is { } reason)
+            DropToPhysics(reason, WarpHeldBy ?? Controlled);
         // Slowed, the game's rate is the slow-down's, not the player's to change. Warping to a
-        // point, either key ends it, at normal speed. Held, faster goes no further than the
-        // physics' top rate; nor, in the frame it dropped there, back past it.
+        // point, either key ends it, at normal speed. Held, or with a drop's input in the frame
+        // (so it is taken in the physics, at whatever rate it was asked from), faster goes no
+        // further than the physics' top rate, nor does a warp to a point begin past it.
+        var held = drop is not null; // WarpHeldBy holding it is a drop too (see DropFor)
         if ((input.Slower || input.Faster) && _warpTo is not null)
             DropWarp();
         else
         {
             if (input.Slower && Slowed is null)
                 _rate = Math.Max(0, _rate - 1);
-            if (input.Faster && Slowed is null && (WarpHeldBy is null && !dropped || _rate < PhysicsTopIndex))
+            if (input.Faster && Slowed is null && (!held || _rate < PhysicsTopIndex))
                 _rate = Math.Min(Rates.Length - 1, _rate + 1);
         }
         if (input.WarpTo is { } warpTo)
-            BeginWarpTo(warpTo, held: WarpHeldBy is not null || dropped);
+            BeginWarpTo(warpTo, held);
         HoldWarpToPath();
         // Slowed, the step is shortened by the slow-down's scale (see Slow): at that clock this is
         // the same steps a real second, each that much shorter; under the player's own slower

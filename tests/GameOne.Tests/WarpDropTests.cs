@@ -292,6 +292,81 @@ public sealed class WarpDropTests(ITestOutputHelper output)
         Assert.Equal(dropped, flight.LastDrop);
     }
 
+    [Fact]
+    public void A_node_deleted_and_made_again_drops_the_warp_again()
+    {
+        var (sim, flown) = WarpScenes.LowOrbit();
+        using var _ = sim;
+        var flight = sim.Flight;
+        var node = flight.WorldTime + 2000.0;
+        var chain = ManoeuvreChain.AnchoredOn(flown, node, [new ManoeuvreNode(0.0, Prograde: 20f)], flight.WorldTime);
+        sim.Step(new FlightInput(Plan: chain));
+        sim.RealFrame = Simulation.TopRateFrame * 600f;
+        FormulaRateTests.ToTheTop(flight);
+        UntilDropped(sim, frames: 100);
+        Assert.Equal(WarpDrop.Node, flight.LastDrop!.Value.Reason);
+        var first = flight.LastDrop;
+
+        // Deleted at the physics' top rate, and made again the same (value for value) a frame later.
+        sim.RealFrame = Simulation.FrameSeconds;
+        sim.Step(new FlightInput(Plan: ManoeuvreChain.Empty));
+        Assert.Null(flown.Chain);
+        sim.Step(new FlightInput(Plan: chain));
+        Assert.Equal(chain, flown.Chain);
+
+        // Faster again, to the formula's first rate: dropped again for it in that frame, at once
+        // (it is within its lead already).
+        flight.RunFrame(0f, new FlightInput(Faster: true));
+        output.WriteLine($"dropped again {node - flight.WorldTime:0.000} s before the node");
+        Assert.Equal(WarpDrop.Node, flight.LastDrop!.Value.Reason);
+        Assert.NotEqual(first, flight.LastDrop);
+        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
+    }
+
+    /// <summary>At the physics' top rate, by the rate key pressed in frames of no time.</summary>
+    private static void ToThePhysicsTop(Flight flight)
+    {
+        while (flight.PlayerRate < Scene.PhysicsTopRate)
+            flight.RunFrame(0f, new FlightInput(Faster: true));
+        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
+    }
+
+    [Fact]
+    public void Faster_from_the_physics_top_rate_with_a_launch_stays_there_and_launches_in_the_physics()
+    {
+        using var sim = new Simulation(Mission.FreePlay);
+        sim.Step(default);
+        var flight = sim.Flight;
+        var flown = flight.Controlled;
+        var stood = flown.Position;
+        ToThePhysicsTop(flight);
+        sim.Step(new FlightInput(Faster: true, Launch: true, FullThrottle: true));
+        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
+        Assert.False(flown.OnFormula);
+        Assert.Equal(FlightState.Flying, flown.State);
+        Assert.True(sim.Run((_, _) => default, _ => Vector3.Distance(flown.Position, stood) > 1f, maxSeconds: 5), "it never lifted off");
+        Assert.False(flown.OnFormula);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Faster_or_a_warp_to_a_point_from_the_physics_top_rate_with_a_steering_key_stays_there(bool warpTo)
+    {
+        var (sim, flown) = WarpScenes.LowOrbit();
+        using var _ = sim;
+        var flight = sim.Flight;
+        ToThePhysicsTop(flight);
+        var aim = flown.Aim;
+        sim.Step(warpTo ? new FlightInput(Lean: flown.Right, WarpTo: flight.WorldTime + 300.0) : new FlightInput(Lean: flown.Right, Faster: true));
+        output.WriteLine($"{flight.PlayerRate}x, warping to {flight.WarpingTo}, turned {Degrees(aim, flown.Aim):0.000}°");
+        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
+        Assert.False(flown.OnFormula);
+        Assert.True(Degrees(aim, flown.Aim) > 0.1f, "it should have steered, in the physics");
+        if (warpTo)
+            Assert.NotNull(flight.WarpingTo); // begun, at the physics' top rate
+    }
+
     /// <summary>The satellite launcher's upper stage in a low orbit, flown, beside a booster falling from 500 m over level ground (numbered 1), the warp at its fastest.</summary>
     private static (Simulation Sim, Vessel Flown, Vessel Booster) BesideABoosterInTheAir()
     {

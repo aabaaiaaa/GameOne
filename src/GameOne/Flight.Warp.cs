@@ -170,6 +170,9 @@ internal sealed partial class Flight
     /// at rest with fuel to light it, so no frame at a formula's rate runs its take-off (flying, the
     /// throttle drops nothing); and a steering key, so the keys always steer as in the physics. Null
     /// for none. The drop is for <see cref="WarpHeldBy"/>'s vessel if it is that, else the flown one.
+    /// Asked at every rate: at a formula's it drops the warp; at the physics' it keeps the rate key
+    /// and a warp to a point in the same frame from taking it past them, so the input still runs in
+    /// the physics.
     /// </summary>
     private WarpDrop? DropFor(in FlightInput input)
     {
@@ -237,7 +240,7 @@ internal sealed partial class Flight
             if (_cutFor is { } cut)
             {
                 if (cut.Node is { } node)
-                    NodeDropped(node);
+                    _nodesDropped.Add((cut.Of, node));
                 DropToPhysics(cut.Reason, cut.Of);
             }
             if (!ByFormula)
@@ -305,8 +308,33 @@ internal sealed partial class Flight
             (to, _cutFor) = (at, (v.Body.HasAir ? WarpDrop.Air : WarpDrop.Ground, v, null));
     }
 
-    /// <summary>The nodes that have dropped the warp once (see <see cref="NodeCut"/>), each forgotten as its chain changes.</summary>
-    private readonly List<ManoeuvreChain> _nodesDropped = [];
+    /// <summary>
+    /// The nodes that have dropped the warp once (see <see cref="NodeCut"/>), by the vessel whose
+    /// chain it is, each forgotten as soon as that vessel's chain is no longer the one kept
+    /// (<see cref="ForgetNodesDropped"/>): a node deleted, or flown, and made again drops it again.
+    /// </summary>
+    private readonly List<(Vessel Of, ManoeuvreChain Chain)> _nodesDropped = [];
+
+    /// <summary>
+    /// Forgets each node dropped for whose vessel's chain has changed since (or which is gone from
+    /// the world), as every frame begins, whatever the rate: a chain changed at the physics' rates
+    /// is forgotten as surely as one changed at a formula's.
+    /// </summary>
+    private void ForgetNodesDropped()
+    {
+        for (var i = _nodesDropped.Count - 1; i >= 0; i--)
+            if (!_nodesDropped[i].Chain.Equals(_nodesDropped[i].Of.Chain) || !_world.Contains(_nodesDropped[i].Of))
+                _nodesDropped.RemoveAt(i);
+    }
+
+    /// <summary>Whether <paramref name="v"/>'s <paramref name="chain"/> has dropped the warp for its next node (see <see cref="_nodesDropped"/>).</summary>
+    private bool NodeDropped(Vessel v, ManoeuvreChain chain)
+    {
+        foreach (var (of, kept) in _nodesDropped)
+            if (of == v && kept.Equals(chain))
+                return true;
+        return false;
+    }
 
     /// <summary>The next node's drop moment, worked out once for its chain (see <see cref="NodeCut"/>).</summary>
     private (ManoeuvreChain Chain, double At)? _nodeCutAt;
@@ -319,7 +347,7 @@ internal sealed partial class Flight
     /// </summary>
     private void NodeCut(Vessel v, double from, ref double to)
     {
-        if (v.Chain is not { } chain || _nodesDropped.Contains(chain))
+        if (v.Chain is not { } chain || NodeDropped(v, chain))
             return;
         var time = chain.TimeOf(0);
         if (!(time > from))
@@ -333,23 +361,6 @@ internal sealed partial class Flight
         var at = Math.Max(from, kept.At);
         if (at <= to)
             (to, _cutFor) = (at, (WarpDrop.Node, v, chain));
-    }
-
-    /// <summary>
-    /// Keeps <paramref name="chain"/>'s next node as dropped for, so it drops the warp once; those of
-    /// chains no vessel has any more (changed, or flown) are forgotten.
-    /// </summary>
-    private void NodeDropped(ManoeuvreChain chain)
-    {
-        for (var i = _nodesDropped.Count - 1; i >= 0; i--)
-        {
-            var still = false;
-            for (var k = 0; !still && k < _world.Count; k++)
-                still = _nodesDropped[i].Equals(_world[k].Chain);
-            if (!still)
-                _nodesDropped.RemoveAt(i);
-        }
-        _nodesDropped.Add(chain);
     }
 
     /// <summary>
