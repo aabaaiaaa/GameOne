@@ -56,9 +56,9 @@ internal sealed class NodeEditor
     private bool _pressed, _rightPressed, _held;
     private RightPress _rightPress; // whose the last right press was: its click, once let go, is the node's if it deleted one
     private int _presses; // left presses so far, to tell which placed a node
-    // The last node placed by a click: the chain before it and with it, and which press placed it
-    // (see UndoInsert).
-    private (ManoeuvreChain? Before, ManoeuvreChain After, int Press)? _inserted;
+    // The last edit a left press made to the plan (a node placed, or deleted by its x): the chain
+    // before it and after it, and which press made it (see UndoClickEdit).
+    private (ManoeuvreChain? Before, ManoeuvreChain? After, int Press)? _clickEdit;
 
     /// <summary>
     /// Follows the mouse from the window's own events, as the steering rings do (see
@@ -160,26 +160,36 @@ internal sealed class NodeEditor
     }
 
     /// <summary>
-    /// Takes back the node placed by a click, if it was placed by either press of the double click
-    /// just taken as a target's pick (<see cref="Markers.Picked"/>: a press on a marker reaches the
-    /// path under it too) and nothing has changed the plan since: a double click on a marker picks
-    /// it and leaves the plan as it was.
+    /// Takes back the edit a left press made to the plan (a node placed on the path, or deleted by
+    /// its x), if either press of the double click just taken as a target's pick made it
+    /// (<see cref="Markers.Picked"/>: a press on a marker reaches the path and the nodes under it
+    /// too) and nothing has changed the plan since: a double click on a marker picks it and leaves
+    /// the plan as it was.
     /// </summary>
-    public void UndoInsert()
+    public void UndoClickEdit()
     {
-        if (!Undoes(_inserted, _pending, _presses))
+        if (!Undoes(_clickEdit, _pending, _presses))
             return;
-        (_pending, _selected, _grab, _dragging, _changed, _inserted) = (_inserted!.Value.Before, -1, Grab.None, false, true, null);
+        (_pending, _selected, _grab, _dragging, _changed, _clickEdit) = (_clickEdit!.Value.Before, -1, Grab.None, false, true, null);
     }
 
     /// <summary>
-    /// Whether the node placed last (<paramref name="inserted"/>: the plan with it, and the press
-    /// that placed it) is to be taken back for a double click whose second press is the
-    /// <paramref name="presses"/>th: placed by that press or the one before it, and the plan still
-    /// as it left it (<paramref name="pending"/>).
+    /// Whether the last edit a left press made (<paramref name="edit"/>: the plan before and after
+    /// it, and the press that made it) is to be taken back for a double click whose second press
+    /// is the <paramref name="presses"/>th: made by that press or the one before it, and the plan
+    /// still as it left it (<paramref name="pending"/>).
     /// </summary>
-    internal static bool Undoes((ManoeuvreChain? Before, ManoeuvreChain After, int Press)? inserted, ManoeuvreChain? pending, int presses) =>
-        inserted is { } i && i.Press >= presses - 1 && Equals(i.After, pending);
+    internal static bool Undoes((ManoeuvreChain? Before, ManoeuvreChain? After, int Press)? edit, ManoeuvreChain? pending, int presses) =>
+        edit is { } e && e.Press >= presses - 1 && Same(e.After, pending);
+
+    /// <summary>
+    /// Whether a right press deletes the node under the pointer (<paramref name="onNode"/>): taken
+    /// (<paramref name="interact"/>), and not with a marker under the pointer
+    /// (<paramref name="onMarker"/>), whose a right click is (the camera put on it) as it always
+    /// was. A left press on a marker reaches the nodes; a right one never does.
+    /// </summary>
+    internal static bool RightDeletes(bool rightPressed, bool interact, bool onMarker, bool onNode) =>
+        rightPressed && interact && !onMarker && onNode;
 
     /// <summary>A frame with the HUD hidden: nothing drawn, nothing under the pointer or held, and a press let go.</summary>
     public void Hide()
@@ -195,9 +205,10 @@ internal sealed class NodeEditor
     /// Takes the mouse and draws the nodes, after the path (<paramref name="paths"/>, whose camera
     /// and fade it shares). Nothing is clickable while <paramref name="blocked"/> (see
     /// <see cref="Hud.NodesBlocked"/>: a menu up, or the steering rings in use; a marker under the
-    /// pointer never blocks it); nothing shows until the path does.
+    /// pointer never blocks a left press, but a right one is the marker's, <paramref name="onMarker"/>:
+    /// see <see cref="RightDeletes"/>); nothing shows until the path does.
     /// </summary>
-    public void Update(ImDrawListPtr draw, Flight flight, ChaseCamera camera, ManoeuvrePlan plan, Paths paths, bool blocked)
+    public void Update(ImDrawListPtr draw, Flight flight, ChaseCamera camera, ManoeuvrePlan plan, Paths paths, bool blocked, bool onMarker)
     {
         var dt = (float)Math.Min(System.Diagnostics.Stopwatch.GetElapsedTime(_last).TotalSeconds, 0.1);
         _last = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -220,7 +231,6 @@ internal sealed class NodeEditor
         if (!_held)
             _grab = Grab.None;
         var clicked = interact && pressed;
-        var rightClicked = interact && rightPressed;
         var alpha = Math.Clamp((paths.Fade - 0.5f) * 2f, 0f, 1f);
 
         // Dragging: the node along the path it is on (the first, the vessel's own as it is now, so
@@ -336,7 +346,7 @@ internal sealed class NodeEditor
         }
         PointerOver = interact && (_grab != Grab.None || hovered != Hover.None || ghost is not null);
 
-        if (rightClicked && hovered == Hover.Node)
+        if (RightDeletes(rightPressed, interact, onMarker, hovered == Hover.Node))
         {
             Delete(hoveredIndex, flight.Controlled, now);
             _rightPress.DeletedANode(); // its click, once let go, is no warp (see WarpPoint)
@@ -346,7 +356,9 @@ internal sealed class NodeEditor
             switch (hovered)
             {
                 case Hover.Delete:
+                    var unDeleted = _pending;
                     Delete(_selected, flight.Controlled, now);
+                    _clickEdit = (unDeleted, _pending, _presses);
                     break;
                 case Hover.Handle:
                     (_grab, _handle) = (Grab.Handle, hoveredIndex);
@@ -361,7 +373,7 @@ internal sealed class NodeEditor
                         _selected = into.SlotFor(place.Time);
                         var before = _pending;
                         _pending = into.Insert(place.Time, flight.Controlled, now);
-                        _inserted = (before, _pending, _presses);
+                        _clickEdit = (before, _pending, _presses);
                         _changed = true;
                     }
                     else

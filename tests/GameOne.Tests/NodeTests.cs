@@ -1090,4 +1090,28 @@ public sealed class NodeTests(ITestOutputHelper output)
         Assert.False(NodeEditor.Undoes((before, after, 5), before, presses: 6)); // the plan changed since: kept as it is
         Assert.False(NodeEditor.Undoes(null, after, presses: 6)); // no node placed by a click
     }
+
+    [Fact]
+    public void A_double_click_that_picks_a_target_takes_back_a_delete_its_first_press_made()
+    {
+        // Its first press on the selected node's x, under the marker: the node deleted, then given back.
+        var before = new ManoeuvreChain(default, [new ManoeuvreNode(30), new ManoeuvreNode(10)]);
+        var after = new ManoeuvreChain(default, [new ManoeuvreNode(30)]);
+        Assert.True(NodeEditor.Undoes((before, after, 5), after, presses: 6));
+        // The last node deleted: the plan none, however it is held (no chain, or one with no nodes).
+        Assert.True(NodeEditor.Undoes((after, null, 5), ManoeuvreChain.Empty, presses: 6));
+        Assert.False(NodeEditor.Undoes((before, after, 4), after, presses: 6)); // an earlier click's delete stays
+    }
+
+    [Fact]
+    public void A_right_press_on_a_node_under_a_marker_deletes_nothing()
+    {
+        Assert.True(NodeEditor.RightDeletes(rightPressed: true, interact: true, onMarker: false, onNode: true));
+        Assert.False(NodeEditor.RightDeletes(rightPressed: true, interact: true, onMarker: true, onNode: true)); // the marker's: the camera put on it
+        Assert.False(NodeEditor.RightDeletes(rightPressed: true, interact: false, onMarker: false, onNode: true)); // a menu up
+        Assert.False(NodeEditor.RightDeletes(rightPressed: true, interact: true, onMarker: false, onNode: false)); // the path's: a warp, perhaps
+        Assert.False(NodeEditor.RightDeletes(rightPressed: false, interact: true, onMarker: false, onNode: true));
+        // Its click, once let go, then goes to the marker, never a warp along the path under it.
+        Assert.Null(Hud.RightClickWarp(new CameraCentre(CentreKind.Site, 0), onVessel: null, onPath: 1000.0));
+    }
 }

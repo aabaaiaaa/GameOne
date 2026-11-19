@@ -4,7 +4,7 @@ using Xunit;
 namespace GameOne.Tests;
 
 /// <summary>
-/// Targets (picked by clicking a marker, so set through <see cref="FlightInput"/>): each vessel
+/// Targets (picked by double clicking a marker, so set through <see cref="FlightInput"/>): each vessel
 /// keeps its own, which comes back when it is flown again; a vessel can't be its own; one that is
 /// destroyed is let go. And the player's settings, which say which markers show, saved beside the
 /// worlds.

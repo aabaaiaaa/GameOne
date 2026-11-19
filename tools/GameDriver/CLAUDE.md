@@ -246,8 +246,10 @@ centred on the smaller height):
   readout's `Marker <name>`. A single click (`click marker`) on a marker, or any click off them
   all, never changes the target. A click on a marker reaches the path, the nodes and the
   steering rings under it too (a `click marker` on one lying on the path places a node there),
-  and a `dclick marker` that picks takes back a node its first press placed, so it leaves the
-  plan as it was. A double click on the path or a node away from any marker picks nothing. A
+  and a `dclick marker` that picks takes back what its first press did to the plan (a node
+  placed, or deleted by its x), so it leaves the plan as it was. A double click on the path or a
+  node away from any marker picks nothing. An `rclick marker` is the marker's, never deleting a
+  node under it. A
   marker shows only while its object is too small to see for itself, so from the pad the landing
   zone (320 m off) has none: zoom out (M) first, and the drone ship's shows from the air, looking
   east (see `gameone-terrain.txt`). A click on a marker under a panel or the big message is the

@@ -188,7 +188,7 @@ there and landing, and the lander and its mission), merged 2026-11-16.)
   has. Costs or risks: as the slow-down eases back (1 s real) the stretch grows twentyfold, so
   the worker must catch up or the cells turn urgent and are made in the step; a cell missed is a
   craft falling through, so the crash theory, the sweep and the paced check must still pass.
-  Only worth it for a higher top speed (at 4,000 m/s the frames hold). To discuss before building.
+  Only worth it for a higher ground top speed (`Scene.GroundTopSpeed`; at 4,000 m/s the frames hold). To discuss before building.
 - **To try: a cap on the kept shapes laid in one update** (a performance idea, from the final
   review of the tiles made off the step, 2026-11-03). A wanted cell with a shape already made
   (the worker's or a kept one) is laid at once, however many there are: each is only a body made

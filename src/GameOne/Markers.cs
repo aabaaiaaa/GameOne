@@ -199,7 +199,7 @@ internal sealed class Markers
     /// <summary>
     /// Whether the last <see cref="Draw"/> took a double click as a pick (a new target, or the
     /// target let go): what its first press did to the nodes is then taken back
-    /// (<see cref="NodeEditor.UndoInsert"/>), as a press on a marker reaches them too.
+    /// (<see cref="NodeEditor.UndoClickEdit"/>), as a press on a marker reaches them too.
     /// </summary>
     public bool Picked { get; private set; }
 
