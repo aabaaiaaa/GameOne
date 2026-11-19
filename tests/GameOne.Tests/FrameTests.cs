@@ -487,9 +487,9 @@ public sealed class FrameTests(ITestOutputHelper output)
         var start = Vector3.Distance(line[0], flight.CentreOfMass);
         var end = Vector3.Distance(line[^1], Planet.Turned(orbit.Landing, orbit.SecondsToEnd));
         output.WriteLine($"{line.Count} points, at most {worst:0.000} m off the conic; it starts {start:0.00} m from the vessel and ends {end:0.00} m from where the landing's ground will be by then");
-        Assert.InRange(worst, 0f, 0.5f);
-        Assert.InRange(start, 0f, 0.5f);
-        Assert.InRange(end, 0f, 2f);
+        Assert.InRange(worst, 0f, 0.05f);
+        Assert.InRange(start, 0f, 0.05f);
+        Assert.InRange(end, 0f, 0.05f);
         sim.Step(new FlightInput(ChooseFrame: FrameChoice.Orbit));
         var orbital = Built(flight).Line;
         Assert.Equal(line.Count, orbital.Count);

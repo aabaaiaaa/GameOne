@@ -634,8 +634,10 @@ internal sealed class Paths
     /// kept coming while the map is drawn: <see cref="Flight.LookForCollisions"/>), as drawn among
     /// the stars: a cross where each is, and the stretch of each moving vessel's
     /// path it covers in the <see cref="Scene.CollisionLeadSeconds"/> before (from now, if that is
-    /// sooner), so a faster pair's line is longer. Only the soonest <see cref="Scene.CollisionsShown"/>,
-    /// each laid once a pass (<see cref="LayCollisions"/>) and only turned to where it is drawn each
+    /// sooner), so a faster pair's line is longer; with one of the two on the ground (landed or
+    /// afloat), the cross is where that one stands, on the ground as it is now, as the landing cross
+    /// is (<see cref="LandingMark"/>), not where that ground will have turned to by then. Only the
+    /// soonest <see cref="Scene.CollisionsShown"/>, each laid once a pass (<see cref="LayCollisions"/>) and only turned to where it is drawn each
     /// frame, as the window is (<see cref="WindowPoint"/>), so a frame's cost is bounded however
     /// many there are. Not drawn: one already passed; one with a vessel wrecked since; one whose
     /// two vessels, on their orbits as they are now, would be further apart then than their sizes
@@ -689,7 +691,12 @@ internal sealed class Paths
                     : Scene.OtherPathAlpha;
                 _leadIns.Add(new LeadIn(v.Id, alpha, points));
             }
-            _collisionMarks.Add(new CollisionMark(toView.Point(WindowPoint(collision.Where, askedAt, now, laid.Body)).ToSingle(),
+            // With one of them held on the ground (landed or afloat), the cross is where it stands,
+            // as a landing cross is; else among the stars, on the line.
+            var where = !laid.LeadA ? _laidPoints[2 * n * (LeadSegments + 1)].At
+                : !laid.LeadB ? _laidPoints[(2 * n + 1) * (LeadSegments + 1)].At
+                : WindowPoint(collision.Where, askedAt, now, laid.Body);
+            _collisionMarks.Add(new CollisionMark(toView.Point(where).ToSingle(),
                 CollisionLabel(n, a, b, ahead, collision.ClosingSpeed)));
         }
     }
@@ -788,7 +795,6 @@ internal sealed class Paths
         var place = new LegPlace(leg, view, now);
         if (starts is not null && points.Count > 0)
             starts.Add(points.Count);
-        var startsIn = leg.Start - now;
         if (orbit.Radial)
         {
             // Straight up and down among the stars: its few points on its one line, where it
@@ -804,9 +810,8 @@ internal sealed class Paths
             var top = orbit.TopSeconds; // then the second point is the top
             for (var i = 0; i < _radial.Count; i++)
             {
-                var seconds = startsIn + (i == 1 && top is { } t ? t : 0);
                 points.Add(place.Point(_radial[i]));
-                var reached = i == _radial.Count - 1 && i > 0 ? orbit.SecondsToEnd : seconds - startsIn; // when it is there, on from the leg's start
+                var reached = i == _radial.Count - 1 && i > 0 ? orbit.SecondsToEnd : i == 1 && top is { } t ? t : 0; // when it is there, on from the leg's start
                 if (leg.Start + reached < before)
                     earlier++;
             }

@@ -82,9 +82,6 @@ internal readonly struct LegPlace
         _change = _same ? FrameChange.Identity : Bodies.Change(leg.Body, view, now);
     }
 
-    /// <summary>Whether the leg is round the view's own body (nothing to change).</summary>
-    public bool Same => _same;
-
     /// <summary>
     /// Where <paramref name="p"/>, in the leg's body's frame now (a point of its orbit among its
     /// stars, or a place on its ground as it is now), is drawn in the view's frame.
