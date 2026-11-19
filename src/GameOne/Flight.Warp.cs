@@ -226,13 +226,22 @@ internal sealed partial class Flight
 
     /// <summary>
     /// The earliest moment in (<paramref name="from"/>, <paramref name="to"/>] a frame at a formula's
-    /// rate must be cut at, so what comes then is taken at its moment: the warp to a point's time;
-    /// else <paramref name="to"/>.
+    /// rate must be cut at, so what comes then is taken at its moment: the warp to a point's time,
+    /// and the earliest crossing of a sphere's edge by a vessel on its orbit
+    /// (<see cref="FormulaMotion.CrossesAt"/>), so it is handed across then (<see cref="Cross"/>, at
+    /// the window's end), never a window late; else <paramref name="to"/>. (A stepped vessel's
+    /// crossing is asked at each window's end.)
     /// </summary>
     private double NextCut(double from, double to)
     {
         if (_warpTo is { } warp && warp.Time > from && warp.Time < to)
             to = warp.Time;
+        for (var i = 0; i < _world.Count; i++)
+        {
+            var v = _world[i];
+            if (v.OnFormula && v.State == FlightState.Flying && v.Motion.CrossesAt is var crosses && crosses > from && crosses < to)
+                to = crosses;
+        }
         return to;
     }
 

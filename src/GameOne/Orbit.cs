@@ -253,13 +253,27 @@ internal readonly struct Orbit
     }
 
     /// <summary>
-    /// Straight up or down, falling back: how long from now until it is down through
-    /// <paramref name="distance"/> from its body's centre (after its top, if it is still rising to
-    /// one); null if it escapes or never gets that high.
+    /// How long from now until it next comes down through <paramref name="distance"/> from its
+    /// body's centre. Straight up or down, falling back (after its top, if it is still rising to
+    /// one); null if it escapes or never gets that high. On a conic, where it next descends through
+    /// it, however far round (not held to the path's end, so an orbit asked only its shape answers
+    /// too); null if it never comes that low (its periapsis is above it) or never that high.
     /// </summary>
     public double? FallingTo(double distance)
     {
-        if (!_radial || _top >= MaxRange || distance >= _top)
+        if (!_radial)
+        {
+            var cos = (_p / distance - 1) / Math.Max(_e, 1e-12);
+            if (cos < -1 || cos > 1)
+                return null;
+            var down = -Math.Acos(cos);
+            if (_e >= 1)
+                return down > _now ? TimeTo(down) : null; // a hyperbola comes in once
+            while (down <= _now)
+                down += 2 * Math.PI;
+            return TimeTo(down);
+        }
+        if (_top >= MaxRange || distance >= _top)
             return null;
         var r0 = ((Vector3Double)_position - (Vector3Double)_body.Centre).Length();
         return !_rising && distance > r0 ? null : RadialSeconds(r0, distance);

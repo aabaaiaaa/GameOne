@@ -427,7 +427,12 @@ say) stalls frames and spoils the timing.
   vessel's bodies asked ahead on a moon transfer (no moon physics made while the crossing is
   further than a frame and the physics' top rate's horizon); a world saved at the top rate coming
   back within a millimetre of where the formula had each vessel; starting again coming back at
-  normal speed in the physics; and a frame allocating nothing.
+  normal speed in the physics; a frame allocating nothing; an orbit dipping 500 m into the air
+  (some 60 s of it) within one top-rate frame stepped from the moment it falls to its floor
+  (`Formula.FloorRadius`, `ComesDownAt`), its apoapsis lowered by the drag as at normal speed within a
+  metre; at the moon an orbit under its lowest ground coming down where it does at normal speed,
+  for the same reason, within a metre; and a vessel past the solar system's edge in a top-rate frame
+  lost there and logged, the warp kept.
 - **`FormulaTests`:** a vessel out of the physics, moved by formula: one going straight up above the air rising to its top when its orbit says and falling back into the air, never standing still; a satellite on its
   orbit by Kepler (60 s; 600 s as a long test), coming back into the physics where the formula
   had it with no jump and flying on there on the same orbit (after 30 s out; 300 s as a long
@@ -1178,7 +1183,10 @@ say) stalls frames and spoils the timing.
   no reading left, a fresh link-up when opened again), and one closed while it clears let go at
   once; a waiting view dropped from a full strip (a switch to a vessel with none) let go as one
   closed is; a view given to a satellite under formula at the planet, whose physics is made, brought in
-  at once with no link-up.
+  at once with no link-up. At the top rate (`Scene.TopRate`): the moon transfer, flown and nobody watching it, handed
+  across at its crossing's moment (its frame cut there), within a metre of the moon leg's place a minute
+  on, the warp kept; and a warp to a point 30 s past the crossing, crossing on the way and stopping
+  on its time, on the moon leg within a metre.
 - **`MoonTripTests`:** the moon trip flown by `MoonPilots.cs`, each leg from where it is about
   (`MoonTrip`): from a low orbit round the planet (300 m over the air, the moon a transfer's lead
   ahead, with the fuel the satellite mission's ascent leaves the upper stage, `MoonTrip.AscentFuel`)

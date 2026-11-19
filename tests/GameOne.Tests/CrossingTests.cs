@@ -987,4 +987,92 @@ public sealed class CrossingTests(ITestOutputHelper output)
         Assert.Same(second, sim.Flight.Controlled);
         Assert.False(sim.Flight.LinkUp.On);
     }
+
+    // ---- At the formula's rates ----
+
+    /// <summary>
+    /// The leg into the moon's sphere of <paramref name="v"/>'s path from where its motion is now (in
+    /// the physics, its world's, behind the clock by the step's leftover), and that world time.
+    /// </summary>
+    private static (PathLeg Leg, double Since) MoonLegOf(Simulation sim, Vessel v)
+    {
+        var since = MotionTime(sim, v);
+        var (at, velocity) = (v.TrueCentreOfMass.ToSingle(), v.TrueVelocity.ToSingle());
+        var legs = new List<PathLeg>(Scene.PatchedLegs);
+        Patched.Legs(v.Body, at, v.Body.AmongStars(at, velocity), since, legs);
+        Assert.True(legs.Count > 1 && legs[1].Body == Moon, "its path should go into the moon's sphere");
+        return (legs[1], since);
+    }
+
+    private static double MotionTime(Simulation sim, Vessel v) => v.Physics is null ? sim.Flight.WorldTime : sim.Flight.WorldTime - sim.Worlds.Lag;
+
+    /// <summary>
+    /// <paramref name="v"/>, at the moment its motion is at, within a metre of where
+    /// <paramref name="leg"/> (of a path from world time <paramref name="since"/>) has it then, over
+    /// its body's ground: so it was handed across at the leg's start, not a window's end later.
+    /// </summary>
+    private void AssertOnTheLeg(Simulation sim, Vessel v, PathLeg leg, double since)
+    {
+        Assert.Same(leg.Body, v.Body);
+        var t = MotionTime(sim, v);
+        var (stars, _) = leg.Orbit.StateAfter(t - leg.Start);
+        var expected = (Vector3Double)leg.Body.Turned(stars, -(t - since)); // among its stars as its ground was at since: back over its ground at t
+        var off = (v.TrueCentreOfMass - expected).Length();
+        output.WriteLine($"crossing at {leg.Start:0.000} s; at {t:0.000} s, {t - leg.Start:0.0} s on, {off:0.000} m from the leg's place");
+        Assert.True(off < 1.0, $"{off:0.000} m from where the leg has it");
+    }
+
+    [Fact]
+    public void A_crossing_into_the_moon_s_sphere_at_the_top_rate_is_handed_across_at_its_moment_and_the_warp_goes_on()
+    {
+        var (sim, flown) = WarpScenes.MoonTransfer();
+        using var _ = sim;
+        var flight = sim.Flight;
+        var (leg, since) = MoonLegOf(sim, flown);
+        FormulaRateTests.ToTheTop(flight);
+        for (var i = 0; i < 10 && flown.Body != Moon; i++)
+            sim.Step(default);
+        Assert.Same(Moon, flown.Body);
+        Assert.True(flown.OnFormula);
+        Assert.Equal(Scene.TopRate, flight.PlayerRate);
+        Assert.Equal(Scene.TopRate, flight.TimeScale);
+        AssertOnTheLeg(sim, flown, leg, since);
+    }
+
+    [Fact]
+    public void A_satellite_under_formula_crossing_at_the_top_rate_crosses_at_its_moment()
+    {
+        // The transfer nobody watches, the flown satellite in a low orbit round the planet.
+        var (state, time) = MoonTrip.Transferring(0, WarpScenes.TransferSeconds);
+        var (sim, _) = WarpScenes.Flying(MoonTrip.World(time, InOrbit.Round(Home, 1, WarpScenes.LowOrbitHeight), state), 1);
+        using var _s = sim;
+        var flight = sim.Flight;
+        var transfer = Get(sim, 0);
+        Assert.True(transfer.OnFormula);
+        var (leg, since) = MoonLegOf(sim, transfer);
+        FormulaRateTests.ToTheTop(flight);
+        for (var i = 0; i < 10 && transfer.Body != Moon; i++)
+            sim.Step(default);
+        Assert.Same(Moon, transfer.Body);
+        Assert.Equal(Scene.TopRate, flight.TimeScale);
+        AssertOnTheLeg(sim, transfer, leg, since);
+    }
+
+    [Fact]
+    public void A_warp_to_past_the_moon_s_edge_crosses_on_the_way_and_stops_on_its_time()
+    {
+        var (sim, flown) = WarpScenes.MoonTransfer();
+        using var _ = sim;
+        var flight = sim.Flight;
+        var (leg, since) = MoonLegOf(sim, flown);
+        var to = leg.Start + 30.0;
+        sim.Step(new FlightInput(WarpTo: to));
+        for (var i = 0; i < 10 && flight.WarpingTo is not null; i++)
+            sim.Step(default);
+        Assert.Null(flight.WarpingTo);
+        output.WriteLine($"warped to {flight.WorldTime:0.000000} s, asked {to:0.000000} s");
+        Assert.Equal(to, flight.WorldTime, 3);
+        Assert.Equal(1f, flight.PlayerRate);
+        AssertOnTheLeg(sim, flown, leg, since);
+    }
 }

@@ -12,10 +12,14 @@ namespace GameOne;
 /// the orbit, worked out in floats, has it then (<paramref name="OrbitAt"/>, <paramref name="OrbitVelocity"/>):
 /// it is moved by how far the orbit has it from there, so at its start it is where it was to more
 /// than a float holds (handed back to the physics, or saved, at once), and the orbit's rounding is
-/// never carried on.
+/// never carried on. <paramref name="CrossesAt"/> is the world time it crosses a sphere of
+/// influence's edge (<see cref="Patched.NextCrossing"/>, a hair past it, so its place then is over
+/// the edge as <see cref="Bodies.Choose(GroundBody, Vector3, double)"/> reads it), infinity for none
+/// before <paramref name="LookedTo"/>, the world time it was looked for up to.
 /// </summary>
 internal readonly record struct FormulaOrbit(Orbit Orbit, double Since, Quaternion Attitude, Vector3 Spin,
-    Vector3Double At, Vector3Double Velocity, Vector3 OrbitAt, Vector3 OrbitVelocity);
+    Vector3Double At, Vector3Double Velocity, Vector3 OrbitAt, Vector3 OrbitVelocity,
+    double CrossesAt = double.PositiveInfinity, double LookedTo = double.PositiveInfinity);
 
 /// <summary>
 /// How the formula is moving a vessel (<see cref="Vessel.Motion"/>): on its orbit by Kepler, its
@@ -35,6 +39,13 @@ internal struct FormulaMotion
 
     /// <summary>The orbit it is on, while it isn't stepped.</summary>
     public FormulaOrbit OnOrbit;
+
+    /// <summary>
+    /// The world time it crosses a sphere of influence's edge on its orbit (<see cref="FormulaOrbit.CrossesAt"/>),
+    /// for a frame at a formula's rate to be cut at, so it is handed across at that moment;
+    /// infinity while it is stepped (its crossing is asked at each window's end, as each step's is).
+    /// </summary>
+    public readonly double CrossesAt => Stepping ? double.PositiveInfinity : OnOrbit.CrossesAt;
 
     /// <summary>
     /// The stepped state: its centre of mass and velocity over the ground at world time
@@ -131,16 +142,61 @@ internal static class Formula
     /// </summary>
     private const float PlungeReach = 1.5f;
 
-    /// <summary>Its orbit round <paramref name="body"/> with its engine off, from this state (in its frame), at world time <paramref name="now"/> (its velocity and turning over the ground, as the vessel has them).</summary>
-    public static FormulaOrbit Start(GroundBody body, Vector3Double centreOfMass, Vector3Double velocity, Quaternion rotation, Vector3 angularVelocity, double now)
+    /// <summary>
+    /// How far past a sphere's edge its crossing on its orbit is taken (seconds): the crossing
+    /// search's own tolerance, so the place there is over the edge, never a rounding short of it.
+    /// </summary>
+    private const double CrossingMargin = 1e-3;
+
+    /// <summary>
+    /// Its orbit round <paramref name="body"/> with its engine off, from this state (in its frame),
+    /// at world time <paramref name="now"/> (its velocity and turning over the ground, as the vessel
+    /// has them); with its next crossing looked for (<see cref="Crossing"/>) if
+    /// <paramref name="crossings"/>: for one that is to fly it, not one only to be stepped.
+    /// </summary>
+    public static FormulaOrbit Start(GroundBody body, Vector3Double centreOfMass, Vector3Double velocity, Quaternion rotation, Vector3 angularVelocity, double now, bool crossings = true)
     {
         // Among the stars: the orbit takes the stars' velocity, and above the air a craft keeps its
         // attitude among them (see RocketPhysics' Fall), so its turning is kept as it is there.
         var (at, moving) = (centreOfMass.ToSingle(), velocity.ToSingle());
-        var orbit = new Orbit(body, at, body.AmongStars(at, moving), findEnd: false);
+        var stars = body.AmongStars(at, moving);
+        var orbit = new Orbit(body, at, stars, findEnd: false);
         var (orbitAt, orbitVelocity) = OnOrbitAfter(orbit, 0);
-        return new(orbit, now, rotation, angularVelocity + body.Spin, centreOfMass, velocity, orbitAt, orbitVelocity);
+        var (crossesAt, lookedTo) = crossings ? Crossing(body, at, stars, now) : (double.PositiveInfinity, double.PositiveInfinity);
+        return new(orbit, now, rotation, angularVelocity + body.Spin, centreOfMass, velocity, orbitAt, orbitVelocity, crossesAt, lookedTo);
     }
+
+    /// <summary>
+    /// When the orbit from <paramref name="at"/> moving <paramref name="stars"/> among its body's stars
+    /// at world time <paramref name="now"/> crosses a sphere's edge (<see cref="Patched.NextCrossing"/>,
+    /// <see cref="CrossingMargin"/> past it), looked for <see cref="Scene.MapCollisionHorizonSeconds"/>
+    /// ahead (the map's own look ahead: an hour, so a long coast is asked again seldom), and to when.
+    /// </summary>
+    private static (double CrossesAt, double LookedTo) Crossing(GroundBody body, Vector3 at, Vector3 stars, double now)
+    {
+        var lookedTo = now + Scene.MapCollisionHorizonSeconds;
+        return (Patched.NextCrossing(body, at, stars, now, lookedTo) + CrossingMargin, lookedTo);
+    }
+
+    /// <summary>
+    /// How near its body's centre <paramref name="v"/>'s centre of mass may come on its orbit
+    /// (<see cref="OnItsOrbitAt"/>): above the air (a body with air) and its reach clear of the
+    /// body's highest ground, its fine detail included, whichever is higher.
+    /// </summary>
+    internal static double FloorRadius(Vessel v)
+    {
+        var body = v.Body;
+        var clear = body.MaxHeight + v.Reach + Scene.FineDetailMargin;
+        return body.SeaRadius + (body.HasAir ? Math.Max(Scene.AtmosphereHeight, clear) : clear);
+    }
+
+    /// <summary>
+    /// The world time <paramref name="orbit"/> next comes down to <paramref name="floorRadius"/> from
+    /// its body's centre (<see cref="Orbit.FallingTo"/>), however long after its start; null if it
+    /// never comes that low (its periapsis is above it).
+    /// </summary>
+    internal static double? ComesDownAt(in FormulaOrbit orbit, double floorRadius) =>
+        orbit.Orbit.FallingTo(floorRadius) is { } seconds ? orbit.Since + seconds : null;
 
     /// <summary>
     /// How the formula starts on a vessel at <paramref name="body"/> leaving the physics at world time
@@ -151,7 +207,7 @@ internal static class Formula
         new()
         {
             Stepping = !onItsOrbit,
-            OnOrbit = Start(body, centreOfMass, velocity, rotation, angularVelocity, now),
+            OnOrbit = Start(body, centreOfMass, velocity, rotation, angularVelocity, now, crossings: onItsOrbit),
             At = centreOfMass, Velocity = velocity, Change = body.Gravity(centreOfMass.ToSingle()), Time = now, Shown = now, Attitude = rotation,
         };
 
@@ -175,19 +231,36 @@ internal static class Formula
         }
         if (!m.Stepping)
         {
+            // Stepped from the moment it falls to its floor, if that comes by now (into the air, or
+            // within reach of the ground): a dip in and out again between two asks, however far
+            // apart (a window of minutes at a formula's rate), is flown through, not passed over.
+            var since = m.Shown;
             if (!v.EngineLit)
             {
-                var (at, velocity) = Along(m.OnOrbit, worldTime);
-                if (OnItsOrbitAt(v, at.ToSingle(), velocity.ToSingle()))
+                if (ComesDownAt(m.OnOrbit, FloorRadius(v)) is { } down && down <= worldTime)
+                    since = Math.Max(down, m.Shown);
+                else
                 {
-                    ShowOnOrbit(v, ref m, at, velocity, worldTime);
-                    return;
+                    var (at, velocity) = Along(m.OnOrbit, worldTime);
+                    if (OnItsOrbitAt(v, at.ToSingle(), velocity.ToSingle()))
+                    {
+                        ShowOnOrbit(v, ref m, at, velocity, worldTime);
+                        // Its crossing passed with none made (a hair short of the edge as its body
+                        // was chosen), or looked for no further than this: asked again from here.
+                        if (worldTime > m.OnOrbit.CrossesAt || worldTime >= m.OnOrbit.LookedTo)
+                        {
+                            var place = at.ToSingle();
+                            var (crossesAt, lookedTo) = Crossing(v.Body, place, v.Body.AmongStars(place, velocity.ToSingle()), worldTime);
+                            m.OnOrbit = m.OnOrbit with { CrossesAt = crossesAt, LookedTo = lookedTo };
+                        }
+                        return;
+                    }
                 }
             }
-            // Lit, or come down into the air: stepped from here on, from where it was last moved to
-            // (where its orbit had it then: unlit, and above the air).
-            var (from, moving) = Along(m.OnOrbit, m.Shown);
-            (m.Stepping, m.At, m.Velocity, m.Change, m.Time, m.Attitude) = (true, from, moving, v.Body.Gravity(from.ToSingle()), m.Shown, v.FormulaRotation);
+            // Lit, come down to its floor, or held to the ground's top speed: stepped on from there
+            // (where its orbit had it then: unlit, and above its floor).
+            var (from, moving) = Along(m.OnOrbit, since);
+            (m.Stepping, m.At, m.Velocity, m.Change, m.Time, m.Attitude) = (true, from, moving, v.Body.Gravity(from.ToSingle()), since, v.FormulaRotation);
         }
 
         var stepped = false;

@@ -23,7 +23,7 @@ public sealed class FormulaRateTests(ITestOutputHelper output)
     }
 
     /// <summary>The fastest rate, pressed to in frames of no time.</summary>
-    private static void ToTheTop(Flight flight, IReadOnlyList<Vessel>? watched = null)
+    internal static void ToTheTop(Flight flight, IReadOnlyList<Vessel>? watched = null)
     {
         Press(flight, Flight.Rates.Length, watched);
         Assert.Equal(Scene.TopRate, flight.PlayerRate);
@@ -283,6 +283,113 @@ public sealed class FormulaRateTests(ITestOutputHelper output)
         for (var i = 0; i < 30; i++)
             flight.RunFrame(Simulation.FrameSeconds, default);
         Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Equal(Scene.TopRate, flight.TimeScale);
+    }
+
+    /// <summary>
+    /// The satellite launcher's upper stage (numbered <paramref name="id"/>, engine off) at
+    /// <paramref name="body"/>, along <paramref name="way"/> from its centre (on its equator) at
+    /// <paramref name="from"/> metres over its datum, on its way down to a periapsis
+    /// <paramref name="periapsis"/> over its datum on an orbit of eccentricity
+    /// <paramref name="eccentricity"/>, going east: at world time 0.
+    /// </summary>
+    private static VesselState Descending(GroundBody body, int id, Vector3 way, double from, double periapsis, double eccentricity)
+    {
+        double mu = body.Mu, r0 = body.SeaRadius + from, rp = body.SeaRadius + periapsis;
+        var p = rp * (1 + eccentricity);
+        var a = p / (1 - eccentricity * eccentricity);
+        var speed = Math.Sqrt(mu * (2 / r0 - 1 / a));
+        var across = Math.Sqrt(mu * p) / r0;
+        var down = Math.Sqrt(Math.Max(0, speed * speed - across * across));
+        var at = body.Centre + way * (float)r0;
+        var stars = body.East(at) * (float)across - body.Up(at) * (float)down;
+        return CrossingTests.Craft(id, body, at, body.OverGround(at, stars), stars);
+    }
+
+    /// <summary>The flown satellite on a low round orbit round the planet (numbered 0), and <paramref name="other"/> beside it in the world, at world time 0.</summary>
+    private static WorldState WithFlown(VesselState other) =>
+        new() { Time = 0.0, Vessels = [InOrbit.Round(GroundBody.Planet, 0, WarpScenes.LowOrbitHeight), other], NextVesselId = 2, Flights = 1 };
+
+    [Fact]
+    public void An_orbit_dipping_into_the_air_within_a_top_rate_frame_is_stepped_through_its_dip()
+    {
+        // Its periapsis 2,500 m up, under the air's top (3 km), some 60 s of its lap in the air,
+        // and on the far side of the planet from the flown satellite.
+        var planet = GroundBody.Planet;
+        var dipping = Descending(planet, 1, -Vector3.UnitX, Scene.AtmosphereHeight + 600.0, 2500.0, 0.176);
+        var (fast, _) = WarpScenes.Flying(WithFlown(dipping), 0);
+        using var _f = fast;
+        var v = fast.Flight.WorldVessels.Single(x => x.Id == 1);
+        Assert.True(v.OnFormula);
+        var before = v.Apoapsis;
+        ToTheTop(fast.Flight);
+        var start = fast.Flight.WorldTime;
+        fast.Step(default); // one frame, the dip within it
+        Assert.Equal(Scene.TopRate, fast.Flight.TimeScale);
+        Assert.True(fast.Flight.WorldTime - start > 200, "the frame should be minutes long");
+        Assert.Equal(FlightState.Flying, v.State);
+        Assert.False(v.Motion.Stepping, "it should be back on its orbit after its dip");
+        var after = v.Apoapsis;
+
+        // The same at normal speed, under formula all the same (nobody watches it).
+        var (slow, _) = WarpScenes.Flying(WithFlown(dipping), 0);
+        using var _s = slow;
+        var w = slow.Flight.WorldVessels.Single(x => x.Id == 1);
+        var (inAir, stepped) = (0.0, false);
+        Assert.True(slow.Run((_, _) => default, f =>
+        {
+            if (w.Motion.Stepping)
+                (inAir, stepped) = (inAir + Simulation.FrameSeconds, true);
+            return stepped && !w.Motion.Stepping && f.WorldTime > start + 10;
+        }, maxSeconds: 200), "it never came out of the air at normal speed");
+        Assert.True(w.OnFormula);
+        output.WriteLine($"apoapsis {before:0.000} m before, {after:0.000} m after at the top rate, {w.Apoapsis:0.000} m at normal speed; {inAir:0.0} s stepped");
+        Assert.True(before - after > 1f, $"its apoapsis only fell {before - after:0.000} m: the dip wasn't flown through the air");
+        Assert.True(Math.Abs(after - w.Apoapsis) < 1f, $"{Math.Abs(after - w.Apoapsis):0.000} m from its apoapsis at normal speed");
+    }
+
+    [Fact]
+    public void At_the_moon_an_orbit_under_its_highest_ground_is_stepped_and_its_touch_judged()
+    {
+        // Coming down from 300 m over its orbit's floor to a periapsis under its lowest ground.
+        var moon = GroundBody.Moon;
+        var floor = moon.MaxHeight + 50.0 + Scene.FineDetailMargin;
+        var falling = Descending(moon, 1, Vector3.UnitX, floor + 300.0, moon.LowestRadius - moon.SeaRadius - 200.0, 0.3);
+        var (fast, _) = WarpScenes.Flying(WithFlown(falling), 0);
+        using var _f = fast;
+        var v = fast.Flight.WorldVessels.Single(x => x.Id == 1);
+        Assert.True(v.OnFormula);
+        ToTheTop(fast.Flight);
+        fast.Step(default);
+        Assert.Equal(Scene.TopRate, fast.Flight.TimeScale);
+        Assert.Equal(FlightState.Crashed, v.State);
+
+        var (slow, _) = WarpScenes.Flying(WithFlown(falling), 0);
+        using var _s = slow;
+        var w = slow.Flight.WorldVessels.Single(x => x.Id == 1);
+        Assert.True(slow.Run((_, _) => default, _ => w.State == FlightState.Crashed, maxSeconds: 200), "it never came down at normal speed");
+        var off = (v.TrueCentreOfMass - w.TrueCentreOfMass).Length();
+        output.WriteLine($"{v.CrashReason} / {w.CrashReason}; {off:0.000} m apart");
+        Assert.Equal(w.CrashReason, v.CrashReason);
+        Assert.True(off < 1.0, $"it came down {off:0.000} m from where it did at normal speed");
+    }
+
+    [Fact]
+    public void A_vessel_past_the_solar_system_s_edge_in_a_top_rate_frame_is_lost_there()
+    {
+        var far = SolarEdgeTests.AtTheEdge(0, 50_000, 2000f);
+        var world = new WorldState
+        {
+            Time = SolarEdgeTests.Now, Vessels = [InOrbit.Round(GroundBody.Planet, 1, WarpScenes.LowOrbitHeight), far], NextVesselId = 2, Flights = 2,
+        };
+        var (sim, _) = WarpScenes.Flying(world, 1);
+        using var _s = sim;
+        var flight = sim.Flight;
+        Assert.True(flight.WorldVessels.Single(v => v.Id == 0).OnFormula);
+        ToTheTop(flight);
+        sim.Step(default);
+        SolarEdgeTests.LeftAndLogged(flight, 0);
+        Assert.Equal(Scene.TopRate, flight.PlayerRate);
         Assert.Equal(Scene.TopRate, flight.TimeScale);
     }
 }

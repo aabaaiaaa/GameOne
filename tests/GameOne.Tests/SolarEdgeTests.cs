@@ -15,7 +15,7 @@ public sealed class SolarEdgeTests(ITestOutputHelper output)
 {
     private static GroundBody Planet => GroundBody.Planet;
     private static readonly Vector3 Up = Vector3.UnitY, East = Vector3.UnitX;
-    private const double Now = 5000.0;
+    internal const double Now = 5000.0;
 
     /// <summary>A point over the pad, <paramref name="height"/> above the sea.</summary>
     private static Vector3 Above(float height) => Planet.Centre + Up * (Planet.SeaRadius + height);
@@ -205,7 +205,7 @@ public sealed class SolarEdgeTests(ITestOutputHelper output)
     /// metres inside the edge at world time <paramref name="now"/> (past it, if negative), as near
     /// as a float's kilometre step there allows, moving straight out at <paramref name="outward"/>.
     /// </summary>
-    private static VesselState AtTheEdge(int id, double inside, float outward, double now = Now, int flight = 1)
+    internal static VesselState AtTheEdge(int id, double inside, float outward, double now = Now, int flight = 1)
     {
         var north = Planet.NorthPole;
         var (best, bestMiss) = (Vector3.Zero, double.MaxValue);
@@ -222,7 +222,7 @@ public sealed class SolarEdgeTests(ITestOutputHelper output)
     private static WorldState EdgeWorld(params VesselState[] vessels) =>
         new() { Time = Now, Vessels = vessels, NextVesselId = vessels.Max(v => v.Id) + 1, Flights = 2 };
 
-    private static void LeftAndLogged(Flight flight, int id, int entries = 1)
+    internal static void LeftAndLogged(Flight flight, int id, int entries = 1)
     {
         Assert.DoesNotContain(flight.WorldVessels, v => v.Id == id);
         var name = $"{Vessel.NameOf(Vehicle.TwoStage, 1, 1)} {id}";

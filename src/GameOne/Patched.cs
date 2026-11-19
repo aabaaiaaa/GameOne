@@ -89,6 +89,45 @@ internal static class Patched
     /// </summary>
     public static double? Crossing(in PathLeg leg) => Next(leg) is { } found ? found.Time : null;
 
+    /// <summary>
+    /// When (in world time) the path of something at <paramref name="position"/> in
+    /// <paramref name="body"/>'s frame, moving at <paramref name="starsVelocity"/> among its stars at
+    /// world time <paramref name="now"/>, first crosses a sphere of influence's edge (into a child's,
+    /// out of its own) before <paramref name="horizon"/> (a world time), by the search
+    /// <see cref="Legs"/> makes for its first leg's end; infinity if it doesn't. An orbit that can't
+    /// reach any edge (nowhere near a child's distance, nor out to its own sphere's leaving edge)
+    /// is told so from its shape alone, without finding where it meets the ground: most orbits
+    /// round a body are. Allocates nothing.
+    /// </summary>
+    internal static double NextCrossing(GroundBody body, Vector3 position, Vector3 starsVelocity, double now, double horizon)
+    {
+        if (!MayCross(new Orbit(body, position, starsVelocity, findEnd: false), body, now))
+            return double.PositiveInfinity;
+        return Next(new PathLeg(body, new Orbit(body, position, starsVelocity), now, horizon)) is { } found ? found.Time : double.PositiveInfinity;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="orbit"/> (round <paramref name="body"/>, from world time
+    /// <paramref name="now"/>) gets out to its body's leaving edge, or as near a child as the child's
+    /// sphere, by its shape: the test <see cref="Enters"/> starts with, as the children go round on circles.
+    /// </summary>
+    private static bool MayCross(in Orbit orbit, GroundBody body, double now)
+    {
+        if (body.Parent is not null && orbit.HighestDistance >= body.SphereRadius * (double)Scene.SphereLeaveFactor)
+            return true;
+        var bodies = Bodies.All;
+        for (var i = 0; i < bodies.Count; i++)
+        {
+            var child = bodies[i];
+            if (child.Parent != body)
+                continue;
+            var distance = (ChildAt(body, child, now, now).Centre - body.Centre).Length();
+            if (!(orbit.LowestDistance > distance + child.SphereRadius || orbit.HighestDistance < distance - child.SphereRadius))
+                return true;
+        }
+        return false;
+    }
+
     /// <summary>The leg's first crossing, and the body it crosses to.</summary>
     private static (double Time, GroundBody Into)? Next(in PathLeg leg)
     {
