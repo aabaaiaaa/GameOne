@@ -370,7 +370,7 @@ internal sealed class Hud : IDisposable
 
     private bool _settingsChanged;
 
-    /// <summary>What was clicked on the markers since the last call: a new target, or none wanted. For the flight's input.</summary>
+    /// <summary>What was double clicked on the markers since the last call: a new target, or none wanted. For the flight's input.</summary>
     public (NavTarget? Set, bool Clear) TakeTargetClick() => _markers.TakeClick();
 
     /// <summary>The flown vessel's actions menu (a right click on it in the main view), drawn as a popup where it was clicked.</summary>
@@ -3000,8 +3000,8 @@ internal sealed class Hud : IDisposable
         9 => "Reset camera    (strip button) the camera back on your vessel"u8,
         10 => "Middle drag     look around: turn the view in place"u8,
         11 => "M               the map, or back to the chase view, of what the camera is on"u8,
-        12 => "Click a marker  make it your target (again, or elsewhere: none)"u8,
-        13 => "Click a body    target it, by its path round in the map or its disc"u8,
+        12 => "Double click    a marker: make it your target (again: none; one click: no change)"u8,
+        13 => "Double click    a body: target it, by its path round in the map or its disc"u8,
         14 => "Click the path  plan a burn there (zoomed out); pull its handles"u8,
         15 => "Space           launch, then drop a stage (any time)"u8,
         16 => "G               landing legs"u8,

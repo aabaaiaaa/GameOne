@@ -61,7 +61,7 @@
 0    until Horizontal >= 155 within 30
 0    tap x              # engine off: it arcs out over the Sunrise Sea, on over the drone ship
 0    rdrag 0 120        # look down a little: the drone ship's marker ahead, a couple of km off ...
-1    click marker "Drone ship" # ... clicked to target it, as a player does
+1    dclick marker "Drone ship" # ... double clicked to target it, as a player does
 0    until Target = "Drone ship" within 5
 0    rdrag 0 80         # look down further ...
 0    until "To target" <= 1000 within 30 # (it passes some 850 m over the ship, at the top of its arc)

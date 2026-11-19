@@ -433,7 +433,7 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
             }
 
             // At the planet: every body has its marker by its name, where it is in the view's
-            // frame; the moon's is clicked to target it, the planet's (the body it is at) targets nothing.
+            // frame; the moon's is double clicked to target it, the planet's (the body it is at) targets nothing.
             Gather();
             foreach (var body in Bodies.All)
             {
@@ -444,7 +444,7 @@ public sealed class MoonTargetTests(ITestOutputHelper output)
             Assert.Null(candidates.Single(c => c.Name == Planet.Name).Target);
             var moon = candidates.Single(c => c.Name == Moon.Name).Target;
             Assert.Equal(NavTarget.OfBody(Moon), moon);
-            Assert.Equal((moon, false), Markers.Click(onMarker: true, moon, flight.Target, emptyLetsGo: true));
+            Assert.Equal((moon, false), Markers.Click(twice: true, first: moon, moon, flight.Target));
             sim.Step(new FlightInput(SetTarget: moon));
             Assert.Equal(moon, flight.Target);
             Assert.Equal(Moon.Name, Readout.FlightReadings(flight)["Target"]);

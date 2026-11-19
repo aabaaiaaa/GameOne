@@ -52,6 +52,7 @@ test named in its header, clicking its Play by the game's marker for it.
 | `click <x> <y>` | Move there, then press and release the left button, a few frames apart (as a UI button wants), at (x, y) pixels off the middle. |
 | `click marker <label>` | Click a marker the game draws over its view, wherever it is at that moment, by the reading `Marker <label>` (see below; a label with spaces in `"quotes"`): waits up to 5 s for it to be on the screen; if it never is, it lists the markers shown, saves `failed.png`, closes the game and the run fails. |
 | `rclick <x> <y>` / `rclick marker <label>` | The same with the right button: the pointer moved there first, then the right button down and up a few frames apart, not moving (a right-click menu, say). |
+| `dclick <x> <y>` / `dclick marker <label>` | A double click with the left button, as GameOne picks a target (by the marker: waiting for it as `click marker` does): the pointer moved there first, then two presses 80 ms apart, within the double click time. |
 | `move marker <label>` | Move the pointer onto a marker, wherever it is (to hover over it), waiting for it as `click marker` does. |
 | `drag marker <label> <dx> <dy>` | Drag a marker with the left button by (dx, dy) pixels, from wherever it is once the pointer has arrived on it (as `drag`, over about 0.4 s), waiting for it as `click marker` does. |
 | `scroll <notches>` | Turn the mouse wheel: positive away from you, negative towards you. |
@@ -99,7 +100,7 @@ each one is, as `Marker <label>` = `<x> <y>` (pixels off the middle of the windo
 script's clicks are; only while it is on the screen), lets a script click it by name:
 
 ```
-0    click marker "Drone ship"             # wherever it is now
+0    dclick marker "Drone ship"            # double clicked to target it, wherever it is now
 0    until Target = "Drone ship" within 5
 0    rclick marker "Flown vessel"          # a right click on it, wherever it is
 ```

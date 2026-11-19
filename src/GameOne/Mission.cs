@@ -254,7 +254,7 @@ internal sealed class Mission
     public static readonly Mission FreePlay = new()
     {
         Name = "FREE PLAY",
-        Briefing = "No objectives: the satellite launcher, to fly as you like. Stage it (SPACE) to fly its parts (Tab); click a pad's marker to make it your target.",
+        Briefing = "No objectives: the satellite launcher, to fly as you like. Stage it (SPACE) to fly its parts (Tab); double click a pad's marker to make it your target.",
         Vehicle = Vehicle.ThreeStage,
         Steps = [],
     };

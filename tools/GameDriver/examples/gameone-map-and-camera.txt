@@ -44,7 +44,7 @@
 9.5  scroll -8
 14   readings map-out
 14.5 shot map-out
-15   click marker "Moon line"
+15   dclick marker "Moon line"
 0    until Target = Moon within 10
 4    shot targeted
 0    until "Path marks" has AN within 60

@@ -8,8 +8,8 @@ namespace GameOne;
 /// <summary>
 /// Markers over the view for things in the distance, each with its name and how far it is from the
 /// vessel being flown: the bodies (the planet and the moon), the other vessels in the world, and the
-/// launch pad and landing zones. Clicking one makes it the flown vessel's target (clicking it again,
-/// or anywhere else, lets it go).
+/// launch pad and landing zones. Double clicking one makes it the flown vessel's target (double
+/// clicking it again lets it go; a single click, on it or anywhere else, never changes the target).
 /// </summary>
 /// <remarks>
 /// <para>A marker shows only while its object is too small on the screen to see for itself, fading
@@ -65,6 +65,16 @@ internal sealed class Markers
     private bool _clear;
     private Vector2 _cursor, _pressAt;
     private bool _pressed;
+    // The left presses in a row (see PressCount: the second of them a double click), the last one's
+    // time and place, and whether the second came before a Draw judged the first (both then judged
+    // as one, where the second was); what the last press judged was on (a double click picks only
+    // what both its presses were on); and ImGui's double click time and distance, as last read.
+    private int _pressCount;
+    private double _lastPressSeconds = double.NegativeInfinity;
+    private Vector2 _lastPressAt;
+    private bool _pairUnjudged;
+    private NavTarget? _firstOn;
+    private float _doubleTime = 0.30f, _doubleDistance = 6f;
 
     /// <summary>
     /// Follows the mouse from the window's own events, as the steering rings and the nodes do (see
@@ -82,8 +92,13 @@ internal sealed class Markers
     {
         window.OnMouseButton += (_, button, action, _) =>
         {
-            if (button == GlfwMouseButton.Left && action == GlfwButtonAction.Press)
-                (_pressed, _pressAt) = (true, _cursor);
+            if (button != GlfwMouseButton.Left || action != GlfwButtonAction.Press)
+                return;
+            var now = System.Diagnostics.Stopwatch.GetTimestamp() / (double)System.Diagnostics.Stopwatch.Frequency;
+            _pressCount = PressCount(_pressCount, now - _lastPressSeconds, Vector2.Distance(_cursor, _lastPressAt), _doubleTime, _doubleDistance);
+            (_lastPressSeconds, _lastPressAt) = (now, _cursor);
+            _pairUnjudged = _pressed;
+            (_pressed, _pressAt) = (true, _cursor);
         };
         window.OnCursorPos += (_, pos) => _cursor = new Vector2((float)pos.X, (float)pos.Y);
     }
@@ -146,29 +161,37 @@ internal sealed class Markers
     }
 
     /// <summary>
-    /// What a left press does to the target (see <see cref="Click"/>), by what it is on, the first
-    /// of: the coming mark (<paramref name="coming"/>), a marker or its label
-    /// (<paramref name="onMarker"/>, targeting <paramref name="marker"/> if it can be), a body (its
-    /// path in the map or its disc, <paramref name="body"/>); else nothing, letting go of the
-    /// target where <paramref name="emptyLetsGo"/>.
+    /// What a left press is on, for a target, the first of: the coming mark
+    /// (<paramref name="coming"/>), a marker or its label (<paramref name="onMarker"/>, its
+    /// <paramref name="marker"/>: none for a marker of nothing to target, the body the flown vessel
+    /// is at), a body (its path in the map or its disc, <paramref name="body"/>); else nothing.
     /// </summary>
-    internal static (NavTarget? Set, bool Clear) Pressed(NavTarget? coming, bool onMarker, NavTarget? marker, NavTarget? body, NavTarget? current, bool emptyLetsGo) =>
-        coming is { } c ? Click(onMarker: true, c, current, emptyLetsGo: false)
-        : onMarker ? Click(onMarker: true, marker, current, emptyLetsGo: false)
-        : body is { } b ? Click(onMarker: true, b, current, emptyLetsGo: false)
-        : Click(onMarker: false, null, current, emptyLetsGo);
+    internal static NavTarget? PressedOn(NavTarget? coming, bool onMarker, NavTarget? marker, NavTarget? body) =>
+        coming ?? (onMarker ? marker : body);
 
     /// <summary>
-    /// What a click does to the flown vessel's target (<paramref name="current"/>): on a marker
-    /// (<paramref name="onMarker"/>) for <paramref name="clicked"/>, it is made the target, or let
-    /// go if it already is (a marker for nothing to target, the body the flown vessel is at, does nothing); off them
-    /// all, the target is let go if <paramref name="emptyLetsGo"/> (markers shown, and not a click on
-    /// the steering rings).
+    /// What a left press does to the flown vessel's target (<paramref name="current"/>): only the
+    /// second press of a double click (<paramref name="twice"/>) does anything, and only on
+    /// something to target (<paramref name="clicked"/>, see <see cref="PressedOn"/>) that its first
+    /// press was on too (<paramref name="first"/>: a first press on a node, the path or the steering
+    /// rings is theirs, so the pair is no pick). That is made the target, or let go if it already
+    /// is. A single click, or a double click off them all, never changes the target, so no click
+    /// meant for something else (a node low over the planet) loses it.
     /// </summary>
-    internal static (NavTarget? Set, bool Clear) Click(bool onMarker, NavTarget? clicked, NavTarget? current, bool emptyLetsGo) =>
-        onMarker
-            ? clicked is { } c ? current == c ? (null, true) : (c, false) : (null, false)
-            : (null, emptyLetsGo && current is not null);
+    internal static (NavTarget? Set, bool Clear) Click(bool twice, NavTarget? first, NavTarget? clicked, NavTarget? current) =>
+        twice && clicked is { } c && first == c
+            ? current == c ? (null, true) : (c, false)
+            : (null, false);
+
+    /// <summary>
+    /// How many left presses in a row a press makes, after <paramref name="count"/> of them, the
+    /// last <paramref name="since"/> seconds and <paramref name="distance"/> pixels before it: one
+    /// more within ImGui's double click time and distance (<paramref name="doubleTime"/>,
+    /// <paramref name="doubleDistance"/>), else a new first. The second is a double click; a third
+    /// is none (as ImGui counts them), so three quick clicks don't pick and then let go.
+    /// </summary>
+    internal static int PressCount(int count, double since, float distance, float doubleTime, float doubleDistance) =>
+        count > 0 && since < doubleTime && distance < doubleDistance ? count + 1 : 1;
 
     /// <summary>Where the pointer was last seen (from the window's own events: see the constructor), in pixels from the screen's top left.</summary>
     public Vector2 Pointer => _cursor;
@@ -208,6 +231,7 @@ internal sealed class Markers
     public void Hide()
     {
         _pressed = false;
+        _firstOn = null;
         PointerOver = false;
         _hovered = null;
         _drawn.Clear();
@@ -217,13 +241,17 @@ internal sealed class Markers
     /// Lays out and draws this frame's markers (with markers off, none; their labels into
     /// <paramref name="labels"/>, drawn with the path's), then the coming mark on the
     /// vessel coming at the flown one (whatever the settings: see <see cref="DrawComing"/>), and takes
-    /// a click on one (or off them all, unless it was on the steering rings, <paramref name="ringsInUse"/>,
-    /// or markers are off). Nothing is clickable while <paramref name="menuOpen"/>.
+    /// a double click on one (see <see cref="Click"/>; a press on the nodes or the steering rings,
+    /// <paramref name="ringsInUse"/>, is on none). Nothing is clickable while <paramref name="menuOpen"/>.
     /// </summary>
     public void Draw(ImDrawListPtr draw, Flight flight, ChaseCamera camera, Vector2 display, Settings settings, bool ringsInUse, bool menuOpen, BodyFrames frames, MapLabels labels, SystemMap? map = null)
     {
-        var pressed = _pressed;
-        _pressed = false;
+        var (pressed, twice, together, first) = (_pressed, _pressCount == 2, _pairUnjudged, _firstOn);
+        (_pressed, _pairUnjudged) = (false, false);
+        var io = ImGui.GetIO();
+        (_doubleTime, _doubleDistance) = (io.MouseDoubleClickTime, io.MouseDoubleClickMaxDist);
+        if (pressed)
+            _firstOn = null; // until judged on something, below
         PointerOver = false;
         _hovered = null;
         _labels = labels;
@@ -238,7 +266,6 @@ internal sealed class Markers
         Gather(flight, settings, frames, _candidates); // none with markers off: but the coming mark, below
 
         var view = camera.ViewProjection(display);
-        var io = ImGui.GetIO();
         var (pointer, pressAt) = (_cursor, _pressAt);
         var from = DistancesFrom(flight, camera);
         _taken.Clear();
@@ -308,8 +335,10 @@ internal sealed class Markers
             && Bodies.All[disc.Id] != flight.Body
             ? NavTarget.OfBody(Bodies.All[disc.Id])
             : (NavTarget?)null;
-        var (set, clear) = Pressed(pressedComing, pressedOn is not null, pressedOn?.Target, onLine ?? onDisc, flight.Target,
-            emptyLetsGo: settings.Markers && !ringsInUse && !pressOnPile);
+        var on = PressedOn(pressedComing, pressedOn is not null, pressedOn?.Target, onLine ?? onDisc);
+        // Both presses of a double click between two Draws are judged as one, where the second was.
+        var (set, clear) = Click(twice, together ? on : first, on, flight.Target);
+        _firstOn = on;
         if (set is not null)
             _set = set;
         _clear |= clear; // held until TakeClick, never unset by a later frame

@@ -369,30 +369,44 @@ public sealed class ComingTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void A_click_on_a_marker_or_the_red_mark_picks_its_vessel_and_off_them_all_lets_the_target_go()
+    public void Only_a_double_click_on_a_marker_or_the_red_mark_picks_its_vessel_or_lets_it_go()
     {
-        // What a click does, by where it was (the red mark is clicked as its vessel's marker: Markers.Draw).
+        // What a press does, by where it and the press before it were (the red mark is clicked as its
+        // vessel's marker: Markers.Draw).
         var (one, two) = (new NavTarget(TargetKind.Vessel, 1), new NavTarget(TargetKind.Vessel, 2));
-        Assert.Equal(((NavTarget?)one, false), Markers.Click(onMarker: true, one, current: null, emptyLetsGo: true)); // targeted
-        Assert.Equal(((NavTarget?)one, false), Markers.Click(onMarker: true, one, current: two, emptyLetsGo: true)); // another instead
-        Assert.Equal(((NavTarget?)null, true), Markers.Click(onMarker: true, one, current: one, emptyLetsGo: false)); // already the target: let go
-        Assert.Equal(((NavTarget?)null, false), Markers.Click(onMarker: true, clicked: null, current: one, emptyLetsGo: true)); // the planet's: nothing, never a click off them
-        Assert.Equal(((NavTarget?)null, true), Markers.Click(onMarker: false, clicked: null, current: one, emptyLetsGo: true)); // off them all
-        Assert.Equal(((NavTarget?)null, false), Markers.Click(onMarker: false, clicked: null, current: one, emptyLetsGo: false)); // on the rings, or markers off
-        Assert.Equal(((NavTarget?)null, false), Markers.Click(onMarker: false, clicked: null, current: null, emptyLetsGo: true)); // nothing to let go
+        var none = ((NavTarget?)null, false);
+        Assert.Equal(none, Markers.Click(twice: false, first: null, one, current: null)); // a single click on a marker: nothing
+        Assert.Equal(none, Markers.Click(twice: false, first: null, one, current: two)); // nor instead of the target
+        Assert.Equal(none, Markers.Click(twice: false, first: null, one, current: one)); // nor on the target's own
+        Assert.Equal(none, Markers.Click(twice: false, first: null, clicked: null, current: one)); // a single click off them all: kept
+        Assert.Equal(((NavTarget?)one, false), Markers.Click(twice: true, first: one, one, current: null)); // a double click: targeted
+        Assert.Equal(((NavTarget?)one, false), Markers.Click(twice: true, first: one, one, current: two)); // another instead
+        Assert.Equal(((NavTarget?)null, true), Markers.Click(twice: true, first: one, one, current: one)); // the target's own: let go
+        Assert.Equal(none, Markers.Click(twice: true, first: null, clicked: null, current: one)); // a double click off them all: kept
+        Assert.Equal(none, Markers.Click(twice: true, first: null, one, current: two)); // its first press on a node or the path: theirs
+        Assert.Equal(none, Markers.Click(twice: true, first: two, one, current: null)); // its first press on another marker
     }
 
     [Fact]
-    public void A_press_goes_to_the_red_mark_then_a_marker_then_a_body_s_line_or_disc()
+    public void Presses_in_a_row_count_by_ImGui_s_double_click_time_and_distance()
+    {
+        Assert.Equal(1, Markers.PressCount(0, 0.1, 0f, 0.3f, 6f)); // the first
+        Assert.Equal(2, Markers.PressCount(1, 0.2, 2f, 0.3f, 6f)); // a double click
+        Assert.Equal(3, Markers.PressCount(2, 0.2, 2f, 0.3f, 6f)); // a third: no double click
+        Assert.Equal(1, Markers.PressCount(1, 0.4, 2f, 0.3f, 6f)); // too late: a new first
+        Assert.Equal(1, Markers.PressCount(1, 0.2, 7f, 0.3f, 6f)); // too far: a new first
+    }
+
+    [Fact]
+    public void A_press_is_on_the_red_mark_then_a_marker_then_a_body_s_line_or_disc()
     {
         var (coming, marker) = (new NavTarget(TargetKind.Vessel, 1), new NavTarget(TargetKind.Vessel, 2));
         var moon = NavTarget.OfBody(GroundBody.Moon);
-        Assert.Equal(((NavTarget?)coming, false), Markers.Pressed(coming, onMarker: true, marker, moon, current: null, emptyLetsGo: true));
-        Assert.Equal(((NavTarget?)marker, false), Markers.Pressed(null, onMarker: true, marker, moon, current: null, emptyLetsGo: true));
-        Assert.Equal(((NavTarget?)null, false), Markers.Pressed(null, onMarker: true, marker: null, moon, current: coming, emptyLetsGo: true)); // a marker of nothing to target, over the moon: nothing
-        Assert.Equal(((NavTarget?)moon, false), Markers.Pressed(null, onMarker: false, null, moon, current: coming, emptyLetsGo: true)); // its disc, its ring faded
-        Assert.Equal(((NavTarget?)null, true), Markers.Pressed(null, onMarker: false, null, moon, current: moon, emptyLetsGo: false)); // already the target: let go
-        Assert.Equal(((NavTarget?)null, true), Markers.Pressed(null, onMarker: false, null, body: null, current: moon, emptyLetsGo: true)); // off them all
+        Assert.Equal(coming, Markers.PressedOn(coming, onMarker: true, marker, moon));
+        Assert.Equal(marker, Markers.PressedOn(null, onMarker: true, marker, moon));
+        Assert.Null(Markers.PressedOn(null, onMarker: true, marker: null, moon)); // a marker of nothing to target, over the moon: nothing
+        Assert.Equal(moon, Markers.PressedOn(null, onMarker: false, null, moon)); // its disc, its ring faded
+        Assert.Null(Markers.PressedOn(null, onMarker: false, null, body: null)); // off them all
     }
 
     [Fact]

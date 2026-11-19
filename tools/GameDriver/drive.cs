@@ -209,7 +209,7 @@ bool Play()
                 Thread.Sleep(60);
                 Key(step[2], down: false);
                 break;
-            case "click" or "rclick" or "move" or "drag" when step.Length > 2 && step[2] == "marker":
+            case "click" or "dclick" or "rclick" or "move" or "drag" when step.Length > 2 && step[2] == "marker":
                 if (!AtMarker(step))
                 {
                     failed = true;
@@ -234,6 +234,11 @@ bool Play()
             case "release": Mouse(WM_LBUTTONUP, 0, int.Parse(step[2]), int.Parse(step[3])); break;
             case "click" or "rclick":
                 Click(int.Parse(step[2]), int.Parse(step[3]), step[1] == "rclick" ? Button.Right : Button.Left);
+                break;
+            case "dclick":
+                Mouse(WM_MOUSEMOVE, 0, int.Parse(step[2]), int.Parse(step[3]));
+                Thread.Sleep(80);
+                DoubleClick(int.Parse(step[2]), int.Parse(step[3]));
                 break;
             case "scroll": Scroll(int.Parse(step[2])); break;
             case "shot": Screenshot(Path.Combine(outDir, (step.Length > 2 ? step[2] : $"t{at}") + ".png")); break;
@@ -304,7 +309,23 @@ void Click(int x, int y, Button button)
     Mouse(upMessage, 0, x, y);
 }
 
-// "click marker <label>" (or "rclick marker <label>", with the right button): clicks a marker over
+// A double click with the left button at (x, y), the pointer already there: two presses 80 ms
+// apart, well within the double click time (ImGui's 0.3 s, which GameOne goes by), each its own
+// frame or two at 60 fps.
+void DoubleClick(int x, int y)
+{
+    for (var i = 0; i < 2; i++)
+    {
+        if (i > 0)
+            Thread.Sleep(40);
+        Mouse(WM_LBUTTONDOWN, MK_LBUTTON, x, y);
+        Thread.Sleep(40);
+        Mouse(WM_LBUTTONUP, 0, x, y);
+    }
+}
+
+// "click marker <label>" (or "rclick marker <label>", with the right button, or "dclick marker
+// <label>", a double click with the left, as GameOne picks a target): clicks a marker over
 // the game's view (something it shows over a moving scene, so it is never in the same place twice),
 // wherever it is at that moment, as the game reads it out: "Marker <label>" = "<x> <y>", in pixels
 // off the middle of the window, while it is on the screen. It waits up to 5 s for the marker to be
@@ -364,6 +385,8 @@ bool AtMarker(string[] step)
         Thread.Sleep(80);
         Drag(int.Parse(step[4]), int.Parse(step[5]), Button.Left, at.X, at.Y);
     }
+    else if (command == "dclick")
+        DoubleClick(at.X, at.Y);
     else if (command != "move")
     {
         var (held, downMessage, upMessage) = command == "rclick" ? (MK_RBUTTON, WM_RBUTTONDOWN, WM_RBUTTONUP) : (MK_LBUTTON, WM_LBUTTONDOWN, WM_LBUTTONUP);
@@ -448,7 +471,7 @@ static (string[][] Steps, string? Refusal) Read(string path)
 // The commands a script's steps may give (see README.md), so a mistyped one is refused by the check
 // rather than skipped when played.
 static bool IsCommand(string word) => word is "until" or "down" or "up" or "tap" or "drag" or "rdrag" or "mdrag"
-    or "move" or "press" or "release" or "click" or "rclick" or "scroll" or "shot" or "readings" or "quit";
+    or "move" or "press" or "release" or "click" or "dclick" or "rclick" or "scroll" or "shot" or "readings" or "quit";
 
 // A script line's words: split on spaces, except inside "double quotes".
 static string[] Words(string line)

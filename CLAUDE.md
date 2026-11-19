@@ -270,7 +270,7 @@ dotnet run --project src/GameOne
   name, the seconds to go and its distance, drawn whatever the markers' settings (markers off
   too), never faded as its vessel grows on the screen nor hidden behind the planet (it is wanted
   most as it passes close). It is that vessel's one mark, not two (its ordinary marker, its
-  target's too, left out while it comes), clicked as its marker would be (`Markers.Click`), and
+  target's too, left out while it comes), double clicked as its marker would be (`Markers.Click`), and
   listed among the readout's markers for a script. The compass tape has a red tick at the bearing
   it comes from (`Hud.TapeOffset`: held at the tape's end when behind; none from straight above or
   below). They say what is coming, from where and when, never which way to go (see "Low

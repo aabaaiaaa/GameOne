@@ -150,7 +150,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
                 Console.Error.WriteLine($"Couldn't save the settings: {e.Message}");
             }
         }
-        // A marker clicked last frame: the flown vessel's new target (or none).
+        // A marker double clicked last frame: the flown vessel's new target (or none).
         var (target, clearTarget) = hud.TakeTargetClick();
         var paused = hud.MenuOpen;
         // A small view clicked last frame flies its vessel.

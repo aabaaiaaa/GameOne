@@ -85,10 +85,11 @@ tiles', the contact's and the rules' pieces: `Readout.ReadTimings`), so a
 script saves them (`readings <name>`) or waits on them rather than reading the panel, which moves
 about to keep clear of the other panels; and each marker drawn on the screen this frame, `Marker
 <name>` = `x y` (pixels from the window's middle, as the driver's clicks are; the first drawn of
-two with one name), for `click marker`; the red mark is listed among them too, by the log's name
+two with one name), for `click marker` and `dclick marker`; the red mark is listed among them too, by the log's name
 (`Marker Booster 1`, which no ordinary marker has), as it is clicked as its vessel's marker. Every
 body's marker is among them by the body's name (`Marker Planet`, `Marker Moon`), while it is
-small enough on the screen to be marked; any but the flown vessel's own body's targets that body.
+small enough on the screen to be marked; any but the flown vessel's own body's targets that body
+(double clicked, as every target is: see "Markers" below).
 The flown mission's points of interest are among them by name too, LAND ON THE MOON's `Marker
 Landing spot` (from the planet as well as round the moon), a target as a site is.
 What is drawn over the view to click or drag that isn't a marker reads out the same way, only
@@ -96,7 +97,7 @@ while it is on the screen (`Hud.PointsDrawn`): the flown vessel's path's marks, 
 `Path Pe`, `Path AN`, `Path DN`, `Path Air` (the point on the path each marks: a click there,
 zoomed out, places a node); the nodes, `Marker Node 1`, `Node 2`... (dragged with `drag marker
 "Node 1" 40 0`); each body's path on the map, `Marker Moon line` (a point on the line away from
-the body: a click there targets it); and, while the steering rings show, `Marker Heading ring`
+the body: a double click there targets it); and, while the steering rings show, `Marker Heading ring`
 and `Marker Pitch ring` (a point on each, clear of the other: `move marker "Flown vessel"` shows
 them, then `click marker "Heading ring"` sets the rings' hold). The hold buttons are `Marker Hold
 Prograde`, `Marker Hold Retrograde` and `Marker Hold Manoeuvre`, and the frame buttons `Marker
@@ -240,21 +241,23 @@ centred on the smaller height):
   200`), as `gameone-lander.txt` does. The camera comes no nearer than its least distance, however
   far it is scrolled in; F2 hides the HUD for a clear shot (and with it every marker: show it again
   before a `click marker`).
-- **Markers:** a script picks a target as a player does, by clicking its marker: `click marker
-  "<name>"` clicks it wherever it is then (markers move with the camera), by the readout's `Marker
-  <name>`. A marker shows only while its object is too small to see for itself, so from the pad
-  the landing zone (320 m off) has none: zoom out (M) first, and the drone ship's shows from the
-  air, looking east (see `gameone-terrain.txt`). A click on a marker under a panel or the big
+- **Markers:** a script picks a target as a player does, by double clicking its marker: `dclick
+  marker "<name>"` double clicks it wherever it is then (markers move with the camera), by the
+  readout's `Marker <name>`. A single click (`click marker`) on a marker, or any click off them
+  all, never changes the target (it would be lost to clicks meant for the nodes), and a double
+  click whose first press is on a node or the path is the node editor's. A marker shows only
+  while its object is too small to see for itself, so from the pad the landing zone (320 m off)
+  has none: zoom out (M) first, and the drone ship's shows from the air, looking east (see `gameone-terrain.txt`). A click on a marker under a panel or the big
   message is the panel's. A vessel coming at the flown one has the red mark instead of its own
-  marker, whatever the markers' settings: click it as `click marker "Booster 1"` (its name and
-  id, as `Coming mark` gives it), which targets that vessel, or lets it go if it is the target.
-  The moon is targeted by `click marker "Moon"` (from the planet; the planet by `"Planet"` from
+  marker, whatever the markers' settings: double click it as `dclick marker "Booster 1"` (its name
+  and id, as `Coming mark` gives it), which targets that vessel, or lets it go if it is the target.
+  The moon is targeted by `dclick marker "Moon"` (from the planet; the planet by `"Planet"` from
   the moon): `Target` then reads `Moon`, `To target` the straight line to its centre, and once
   zoomed out the map shows its window and closest approach, as for a vessel.
 - **The map, the camera and the nodes** (`gameone-map-and-camera.txt`, then
   `gameone-map-and-camera-carry-on.txt` in the same folder): LAND ON THE MOON flown to a low orbit
   by readings (a short lean east, the Prograde hold, staging, cut at the apoapsis wanted, burn
-  again from it until the periapsis clears the air); in the map the moon targeted by `click
+  again from it until the periapsis clears the air); in the map the moon targeted by `dclick
   marker "Moon line"` and the AN and DN read from `Path marks`; the camera put on the moon and
   then the landing spot by right clicks, M for the spot's chase view, and `Marker Reset camera`;
   two nodes placed by clicking `Path AN` and `Path DN`, the first dragged (`drag marker "Node 1"`)
