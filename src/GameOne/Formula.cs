@@ -145,6 +145,9 @@ internal static class Formula
     /// <summary>
     /// How far past a sphere's edge its crossing on its orbit is taken (seconds): the crossing
     /// search's own tolerance, so the place there is over the edge, never a rounding short of it.
+    /// Should <see cref="Bodies.Choose(GroundBody, Vector3, double)"/> still keep it at its body
+    /// then, it is asked again once past (see <see cref="Advance"/>), and crosses at a later
+    /// window's end: a fallback, a window late at worst.
     /// </summary>
     private const double CrossingMargin = 1e-3;
 
@@ -245,9 +248,11 @@ internal static class Formula
                     if (OnItsOrbitAt(v, at.ToSingle(), velocity.ToSingle()))
                     {
                         ShowOnOrbit(v, ref m, at, velocity, worldTime);
-                        // Its crossing passed with none made (a hair short of the edge as its body
-                        // was chosen), or looked for no further than this: asked again from here.
-                        if (worldTime > m.OnOrbit.CrossesAt || worldTime >= m.OnOrbit.LookedTo)
+                        // Asked again from here: its look ahead about to run out (within a window,
+                        // so it always covers the next whole window, and a crossing just past its
+                        // end is still cut at: see Flight's NextCut), or its crossing passed with
+                        // none made (the body chosen there still this one: a window late, at worst).
+                        if (worldTime > m.OnOrbit.CrossesAt || m.OnOrbit.LookedTo - worldTime < Scene.FormulaWindowSeconds)
                         {
                             var place = at.ToSingle();
                             var (crossesAt, lookedTo) = Crossing(v.Body, place, v.Body.AmongStars(place, velocity.ToSingle()), worldTime);
@@ -257,8 +262,9 @@ internal static class Formula
                     }
                 }
             }
-            // Lit, come down to its floor, or held to the ground's top speed: stepped on from there
-            // (where its orbit had it then: unlit, and above its floor).
+            // Lit, come down to its floor (stepped from that moment), or not on its orbit at the
+            // time asked for another reason (held to the ground's top speed low over the ground,
+            // which OnItsOrbitAt tells only there): stepped on from when it was last moved to.
             var (from, moving) = Along(m.OnOrbit, since);
             (m.Stepping, m.At, m.Velocity, m.Change, m.Time, m.Attitude) = (true, from, moving, v.Body.Gravity(from.ToSingle()), since, v.FormulaRotation);
         }

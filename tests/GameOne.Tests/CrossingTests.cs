@@ -60,13 +60,13 @@ public sealed class CrossingTests(ITestOutputHelper output)
 
     /// <summary>
     /// A place <paramref name="offset"/> from the moon's centre, moving at <paramref name="stars"/>
-    /// among the moon's stars, at world time 0: in <paramref name="body"/>'s frame (its place, and
+    /// among the moon's stars, at world time <paramref name="t"/>: in <paramref name="body"/>'s frame (its place, and
     /// its velocity over its ground).
     /// </summary>
-    internal static (Vector3 At, Vector3 Velocity) FromMoon(Vector3 offset, Vector3 stars, GroundBody body)
+    internal static (Vector3 At, Vector3 Velocity) FromMoon(Vector3 offset, Vector3 stars, GroundBody body, double t = 0.0)
     {
         var at = Moon.Centre + offset;
-        var change = Bodies.Change(Moon, body, 0.0);
+        var change = Bodies.Change(Moon, body, t);
         return (change.Point(at).ToSingle(), change.Velocity(at, Moon.OverGround(at, stars)).ToSingle());
     }
 
@@ -994,12 +994,12 @@ public sealed class CrossingTests(ITestOutputHelper output)
     /// The leg into the moon's sphere of <paramref name="v"/>'s path from where its motion is now (in
     /// the physics, its world's, behind the clock by the step's leftover), and that world time.
     /// </summary>
-    private static (PathLeg Leg, double Since) MoonLegOf(Simulation sim, Vessel v)
+    private static (PathLeg Leg, double Since) MoonLegOf(Simulation sim, Vessel v, double horizon = double.PositiveInfinity)
     {
         var since = MotionTime(sim, v);
         var (at, velocity) = (v.TrueCentreOfMass.ToSingle(), v.TrueVelocity.ToSingle());
         var legs = new List<PathLeg>(Scene.PatchedLegs);
-        Patched.Legs(v.Body, at, v.Body.AmongStars(at, velocity), since, legs);
+        Patched.Legs(v.Body, at, v.Body.AmongStars(at, velocity), since, legs, horizon);
         Assert.True(legs.Count > 1 && legs[1].Body == Moon, "its path should go into the moon's sphere");
         return (legs[1], since);
     }
@@ -1056,6 +1056,44 @@ public sealed class CrossingTests(ITestOutputHelper output)
         Assert.Same(Moon, transfer.Body);
         Assert.Equal(Scene.TopRate, flight.TimeScale);
         AssertOnTheLeg(sim, transfer, leg, since);
+    }
+
+    [Fact]
+    public void A_crossing_just_past_where_its_orbit_was_looked_along_to_is_still_handed_across_at_its_moment()
+    {
+        // The upper stage at the planet, nobody watching it, its crossing into the moon's sphere
+        // just past where its formula orbit is first looked along to (a load's start, plus
+        // Scene.MapCollisionHorizonSeconds): its state there put a hair outside the sphere, coming
+        // in at Speed past the moon's side, and run back by Kepler round the planet to world time 0.
+        const double Past = 0.3;
+        var crosses = Scene.MapCollisionHorizonSeconds + Past;
+        var (out_, across) = Ways();
+        const float Aside = 4_500f;
+        var into = MathF.Sqrt(Edge * Edge - Aside * Aside);
+        var (there, moving) = FromMoon(out_ * (into + 0.5f) + across * Aside, -out_ * Speed, Home, crosses);
+        var orbit = new Orbit(Home, there, Home.AmongStars(there, moving), findEnd: false);
+        var (back, stars) = orbit.StateAfter(-crosses); // among the stars as the ground was then
+        var at = Home.Turned(back, crosses);
+        var start = Craft(0, Home, at, Home.OverGround(at, Home.TurnedDirection(stars, crosses)), -out_);
+        var (sim, _) = WarpScenes.Flying(World(InOrbit.Round(Home, 1, WarpScenes.LowOrbitHeight), start), 1);
+        using var _s = sim;
+        var flight = sim.Flight;
+        var v = Get(sim, 0);
+        Assert.True(v.OnFormula);
+        var lookedTo = v.FormulaOrbit.LookedTo;
+        var (leg, since) = MoonLegOf(sim, v, horizon: sim.Flight.WorldTime + 2 * Scene.MapCollisionHorizonSeconds);
+        output.WriteLine($"looked along to {lookedTo:0.000} s; crosses at {leg.Start:0.000} s");
+        Assert.InRange(leg.Start, lookedTo, lookedTo + 1.0); // in the slot just past the look's end
+        FormulaRateTests.ToTheTop(flight);
+        // Whole top-rate frames to within one of it, then one ending 30 s past it (it passes
+        // through the sphere's side within a frame).
+        while (leg.Start + 30.0 - flight.WorldTime > Scene.TopRate * Simulation.FrameSeconds)
+            sim.Step(default);
+        sim.RealFrame = (float)((leg.Start + 30.0 - flight.WorldTime) / Scene.TopRate);
+        sim.Step(default);
+        Assert.Same(Moon, v.Body);
+        Assert.Equal(Scene.TopRate, flight.TimeScale);
+        AssertOnTheLeg(sim, v, leg, since);
     }
 
     [Fact]

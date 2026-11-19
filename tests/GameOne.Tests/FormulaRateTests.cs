@@ -348,6 +348,74 @@ public sealed class FormulaRateTests(ITestOutputHelper output)
         Assert.True(Math.Abs(after - w.Apoapsis) < 1f, $"{Math.Abs(after - w.Apoapsis):0.000} m from its apoapsis at normal speed");
     }
 
+    /// <summary>
+    /// On an ellipse of eccentricity <paramref name="e"/> round <paramref name="body"/> with its
+    /// periapsis <paramref name="periapsis"/> from its centre: how long it takes to come down from
+    /// <paramref name="radius"/> to its periapsis (Kepler's equation), and the radius it is at
+    /// <paramref name="seconds"/> before its periapsis.
+    /// </summary>
+    private static (Func<double, double> SecondsDown, Func<double, double> RadiusBefore) Ellipse(GroundBody body, double periapsis, double e)
+    {
+        var a = periapsis / (1 - e);
+        var n = Math.Sqrt(body.Mu / (a * a * a));
+        double Down(double r)
+        {
+            var eccentric = Math.Acos(Math.Clamp((1 - r / a) / e, -1, 1));
+            return (eccentric - e * Math.Sin(eccentric)) / n;
+        }
+        double Before(double seconds)
+        {
+            var mean = seconds * n;
+            var eccentric = mean;
+            for (var i = 0; i < 50; i++)
+                eccentric -= (eccentric - e * Math.Sin(eccentric) - mean) / (1 - e * Math.Cos(eccentric));
+            return a * (1 - e * Math.Cos(eccentric));
+        }
+        return (Down, Before);
+    }
+
+    [Fact]
+    public void An_orbit_dipping_into_the_air_between_two_window_ends_is_stepped_through_its_dip()
+    {
+        // Its periapsis 10 m under the air's top: a few seconds in the air, wholly between two of
+        // a top-rate frame's window ends (its periapsis 12 s on, the frame's second window from 8
+        // to 16 s), so neither end finds it in the air. Passed over, its orbit would be unchanged.
+        var planet = GroundBody.Planet;
+        const double Periapsis = Scene.AtmosphereHeight - 10.0, E = 0.3, ToPeriapsis = 12.0;
+        var rp = planet.SeaRadius + Periapsis;
+        var (secondsDown, radiusBefore) = Ellipse(planet, rp, E);
+        var dipping = Descending(planet, 1, -Vector3.UnitX, radiusBefore(ToPeriapsis) - planet.SeaRadius, Periapsis, E);
+        var (fast, _) = WarpScenes.Flying(WithFlown(dipping), 0);
+        using var _f = fast;
+        var v = fast.Flight.WorldVessels.Single(x => x.Id == 1);
+        Assert.True(v.OnFormula);
+        var floor = Formula.FloorRadius(v);
+        Assert.Equal(planet.SeaRadius + Scene.AtmosphereHeight, floor, 3); // the floor is the air's top
+        var down = Formula.ComesDownAt(v.FormulaOrbit, floor)!.Value;
+        var up = down + 2 * secondsDown(floor);
+        var before = v.Apoapsis;
+        ToTheTop(fast.Flight);
+        var start = fast.Flight.WorldTime;
+        var window = (int)Math.Floor((down - start) / Scene.FormulaWindowSeconds);
+        output.WriteLine($"in the air from {down - start:0.000} s to {up - start:0.000} s into the frame ({up - down:0.000} s), window {window}");
+        Assert.Equal(window, (int)Math.Floor((up - start) / Scene.FormulaWindowSeconds)); // between two window ends
+        fast.Step(default);
+        Assert.Equal(Scene.TopRate, fast.Flight.TimeScale);
+        Assert.Equal(FlightState.Flying, v.State);
+        Assert.False(v.Motion.Stepping);
+        var after = v.Apoapsis;
+
+        var (slow, _) = WarpScenes.Flying(WithFlown(dipping), 0);
+        using var _s = slow;
+        var w = slow.Flight.WorldVessels.Single(x => x.Id == 1);
+        Assert.True(slow.Run((_, _) => default, f => f.WorldTime > up + 1.0, maxSeconds: 60));
+        Assert.True(w.OnFormula);
+        Assert.False(w.Motion.Stepping);
+        output.WriteLine($"apoapsis {before:0.0000} m before, {after:0.0000} m after at the top rate, {w.Apoapsis:0.0000} m at normal speed");
+        Assert.True(before - after > 0.01f, $"its apoapsis fell only {before - after:0.0000} m: the dip was passed over");
+        Assert.True(Math.Abs(after - w.Apoapsis) < 0.01f, $"{Math.Abs(after - w.Apoapsis):0.0000} m from its apoapsis at normal speed");
+    }
+
     [Fact]
     public void At_the_moon_an_orbit_under_its_highest_ground_is_stepped_and_its_touch_judged()
     {
