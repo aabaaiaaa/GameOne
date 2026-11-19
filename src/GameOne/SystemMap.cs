@@ -19,7 +19,10 @@ namespace GameOne;
 /// <list type="bullet">
 /// <item>Each vessel under formula has a lap: the orbit it is on round its own body, among that
 /// body's stars as they are at world time 0, a lap on (or out to where it leaves its body's pull,
-/// or to the first child's sphere it would enter: only its leg round its own body is drawn). It is
+/// to the first child's sphere it would enter, or down to its body's lowest surface: only its leg
+/// round its own body, and only what is above the ground is drawn), in as many points as keep
+/// each piece within a circle's sag of the curve, its apoapsis's pieces too (see
+/// <see cref="Orbit.Samples"/>). It is
 /// made again only as its orbit changes (its body, or its orbit's shape and energy). Each frame,
 /// every body's laps are placed in the view by one transform for the body, whatever the line's frame:
 /// at the map's scale a lap among the stars is what it shows over the ground too.</item>
@@ -241,7 +244,8 @@ internal sealed class SystemMap
     /// round its body from where it is, or out to where it leaves its body's pull (its sphere's leaving
     /// edge, or <see cref="Orbit.MaxRange"/> round the root), or to where it would first enter a
     /// child's sphere (looked for only where its farthest point reaches that far out), or to the
-    /// solar system's edge (<see cref="Patched.LeavesAt"/>), whichever is first: only its leg
+    /// solar system's edge (<see cref="Patched.LeavesAt"/>), or to where it comes down to its
+    /// body's lowest surface (<see cref="GroundBody.LowestRadius"/>), whichever is first: only its leg
     /// round its own body. Straight up and down, its line. Among its body's stars at world time 0.
     /// </summary>
     private void MakeLap(Lap lap, Vessel v, double now)
@@ -296,11 +300,36 @@ internal sealed class SystemMap
         }
         if (leaves is { } edge && Unwrapped(orbit.AnomalyAfter(edge - now), from) is var atEdge && atEdge < to)
             (to, lap.Open, lap.LeavesSystem) = (atEdge, true, true);
+        // Down to its body's lowest surface, where every path ends at the latest (its sea, or with
+        // none its lowest ground; the terrain isn't sampled for a lap): a stage falling back is
+        // drawn from where it is to where it comes down, not on round under the ground and back up
+        // the way it came, a second strand beside the first.
+        if (DownAt(orbit, body.LowestRadius, from) is { } down && down < to)
+            (to, lap.Open) = (down, true);
+        // Even in its spacing (see Orbit.Samples), so its pieces bow out from it no more at a
+        // narrow ellipse's apoapsis than at its periapsis.
+        var (first, last) = (orbit.Spacing(from), orbit.Spacing(to));
         for (var k = 0; k <= LapSegments; k++)
         {
-            var anomaly = from + (to - from) * k / LapSegments;
+            var anomaly = k == 0 ? from : k == LapSegments ? to : orbit.AnomalyAtSpacing(first + (last - first) * k / LapSegments);
             Add(lap, body, orbit.At(anomaly), (float)orbit.TimeTo(anomaly));
         }
+    }
+
+    /// <summary>
+    /// The true anomaly (just after <paramref name="from"/>, within a lap) where <paramref name="orbit"/>
+    /// comes down through <paramref name="radius"/> from its body's centre, if its periapsis is under it
+    /// and it is above it now.
+    /// </summary>
+    private static double? DownAt(in Orbit orbit, double radius, double from)
+    {
+        if (orbit.PeriapsisDistance >= radius || orbit.Eccentricity <= 0)
+            return null;
+        var cos = (orbit.SemiLatusRectum / radius - 1) / orbit.Eccentricity;
+        if (cos >= 1 || orbit.SemiLatusRectum / (1 + orbit.Eccentricity * Math.Cos(from)) < radius)
+            return null; // never up to it, or under it already
+        var down = Math.Tau - Math.Acos(Math.Max(cos, -1)); // on the way in to the periapsis
+        return Unwrapped(down, from);
     }
 
     /// <summary>An anomaly <paramref name="anomaly"/> given as it comes (to a turn), moved by whole turns to just after <paramref name="from"/>.</summary>

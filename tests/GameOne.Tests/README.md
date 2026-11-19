@@ -214,7 +214,7 @@ say) stalls frames and spoils the timing.
   on each eighth of a circle run either way, none across a line with no length; a straight
   stretch, as an orbit near edge-on, its points' ways out mostly one side and some the other,
   shaded on the most's side all along, and over the line with no say).
-- **`OrbitTests`:** a path straight up and down moved by Kepler's equation for a line (falling back, just escaping and escaping: within 0.5 m and 0.01 m/s of the line stepped finely, its top where that has it, and the time it rises through 97% of the way up found to a centimetre, from three heights at three shares of the escape speed); reaching a stable orbit and staying in it for a whole lap; in the same flight,
+- **`OrbitTests`:** a narrow ellipse (0.93, a stage thrown high and falling back) sampled 48 pieces a lap with no piece further from the curve than a circle its major axis across would be, where sampled evenly in its true anomaly its pieces bow out more than five times that; a path straight up and down moved by Kepler's equation for a line (falling back, just escaping and escaping: within 0.5 m and 0.01 m/s of the line stepped finely, its top where that has it, and the time it rises through 97% of the way up found to a centimetre, from three heights at three shares of the escape speed); reaching a stable orbit and staying in it for a whole lap; in the same flight,
   dropping the booster at its landing-fuel mark, landing it on the drone ship and then reaching
   orbit (every step, the bonuses too); landing the booster off the pad, or crashing it, still
   succeeding but scoring less; failing without staging, the upper stage lighting after
@@ -1003,7 +1003,10 @@ say) stalls frames and spoils the timing.
   line; one under formula escaping, sideways and straight up, drawn only out to the solar
   system's edge (within 1% of its radius from the sun), in no more than a lap's points, and burning, its lap made again to the edge every frame allocating nothing; a stage with its engine off keeping its lap for 120 frames and a burning one's made again
   as its orbit changes; a lap behind the planet cut there and drawn only where it is seen; an
-  open lap drawn from where its vessel is now; a body's marker labelled with the distance to its
+  open lap drawn from where its vessel is now; a stage thrown high on a narrow ellipse (0.93) and
+  falling back under formula drawn from where it is over its apoapsis to the ground and no
+  further (not on round under it, a second strand), no piece more than a circle its major axis
+  across would bow out from the curve; a body's marker labelled with the distance to its
   surface (on the moon the lander's height over its datum, from the pad the pad's over the sea);
   and building and laying out the map allocating nothing; a click on the moon's drawn path (or a
   few pixels off it) the moon's, never the flown vessel's own body's, a click off every line

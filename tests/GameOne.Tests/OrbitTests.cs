@@ -335,4 +335,79 @@ public sealed class OrbitTests(ITestOutputHelper output)
                 Assert.Null(orbit.RisingTo(top + 1));
             }
     }
+
+    [Fact]
+    public void A_narrow_ellipse_is_sampled_with_no_piece_bowing_out_more_than_its_circle_s_would()
+    {
+        // A stage thrown high from 6 km over the pad, 200 m/s up and 80 m/s east among the stars:
+        // a narrow ellipse (its eccentricity about 0.93), up to its apoapsis some 15 km over the
+        // ground and back down. Sampled as the map samples a vessel's path (48 pieces a lap), no
+        // piece is further from the curve than a piece of a circle its major axis across would be
+        // (the radius times the piece's angle squared over eight), at the apoapsis as at the
+        // periapsis. Sampled evenly in its true anomaly, the pieces round its apoapsis would each
+        // bow out a good many times that: a corner.
+        const int Segments = 48;
+        var planet = GroundBody.Planet;
+        var at = Planet.Up(Vector3.Zero) * 6000f;
+        var orbit = new Orbit(planet, at, Planet.Up(at) * 200f + Planet.East(at) * 80f);
+        Assert.True(orbit.EndsOnGround, "it should come down");
+        var a = (orbit.PeriapsisDistance + orbit.ApoapsisDistance) / 2;
+        var bound = a * Math.Pow(Math.Tau / Segments, 2) / 8;
+
+        // How far the curve between two points of it, at true anomalies from and to, is from the chord.
+        double Sag(double from, double to)
+        {
+            var (p, q) = (orbit.At(from), orbit.At(to));
+            var worst = 0.0;
+            for (var k = 1; k < 32; k++)
+            {
+                var c = orbit.At(from + (to - from) * k / 32);
+                var along = Math.Clamp(Vector3.Dot(c - p, q - p) / (q - p).LengthSquared(), 0f, 1f);
+                worst = Math.Max(worst, Vector3.Distance(c, p + (q - p) * along));
+            }
+            return worst;
+        }
+        var samples = new List<(Vector3 At, double Seconds)>();
+        orbit.Samples(samples, 0, double.PositiveInfinity, Segments);
+        var anomalies = samples.Select(s => orbit.AnomalyAfter(s.Seconds)).ToList();
+        var sampled = Enumerable.Range(1, anomalies.Count - 1).Max(i => Sag(anomalies[i - 1], anomalies[i]));
+        var (start, end) = (orbit.Now, orbit.EndAnomaly);
+        var pieces = Math.Max(2, (int)Math.Ceiling(Segments * (end - start) / Math.Tau));
+        var even = Enumerable.Range(1, pieces).Max(i => Sag(start + (end - start) * (i - 1) / pieces, start + (end - start) * i / pieces));
+        output.WriteLine($"eccentricity {orbit.Eccentricity:0.000}, apoapsis {orbit.ApoapsisDistance - planet.SeaRadius:0} m up: {samples.Count} points, " +
+            $"the worst piece {sampled:0.0} m off the curve (a circle's {bound:0.0} m); even in the true anomaly, {pieces} pieces, {even:0.0} m");
+        Assert.InRange(orbit.Eccentricity, 0.85, 0.99);
+        Assert.InRange(sampled, 0, bound * 1.05);
+        Assert.True(even > 5 * bound, "the case should show the corners even sampling in the true anomaly makes");
+        Assert.Equal(0.0, samples[0].Seconds);
+        Assert.InRange(Vector3.Distance(samples[^1].At, orbit.At(end)), 0f, 0.01f);
+
+        // A nearly parabolic one (0.99) through its periapsis, 5 km over the pad, sampled as the
+        // flown path is (256 pieces a lap): where its eccentric anomaly crawls, at its periapsis,
+        // its pieces are no further off the curve than even ones in its true anomaly would be.
+        var low = Planet.Up(Vector3.Zero) * 5000f;
+        var r = Vector3.Distance(low, planet.Centre);
+        var near = new Orbit(planet, low, Planet.East(low) * (float)Math.Sqrt(planet.Mu * 1.99 / r));
+        var arc = near.TimeTo(near.Now + 2);
+        near.Samples(samples, 0, arc, 256);
+        double NearSag(double from, double to)
+        {
+            var (p, q) = (near.At(from), near.At(to));
+            var worst = 0.0;
+            for (var k = 1; k < 32; k++)
+            {
+                var c = near.At(from + (to - from) * k / 32);
+                var along = Math.Clamp(Vector3.Dot(c - p, q - p) / (q - p).LengthSquared(), 0f, 1f);
+                worst = Math.Max(worst, Vector3.Distance(c, p + (q - p) * along));
+            }
+            return worst;
+        }
+        anomalies = samples.Select(s => near.AnomalyAfter(s.Seconds)).ToList();
+        var nearSampled = Enumerable.Range(1, anomalies.Count - 1).Max(i => NearSag(anomalies[i - 1], anomalies[i]));
+        var nearPieces = (int)Math.Ceiling(256 * 2 / Math.Tau);
+        var nearEven = Enumerable.Range(1, nearPieces).Max(i => NearSag(near.Now + 2.0 * (i - 1) / nearPieces, near.Now + 2.0 * i / nearPieces));
+        output.WriteLine($"eccentricity {near.Eccentricity:0.000} through its periapsis: {samples.Count} points, the worst piece {nearSampled:0.000} m off the curve; even in the true anomaly, {nearPieces} pieces, {nearEven:0.000} m");
+        Assert.InRange(near.Eccentricity, 0.985, 0.995);
+        Assert.InRange(nearSampled, 0, nearEven * 1.05 + 1e-3);
+    }
 }

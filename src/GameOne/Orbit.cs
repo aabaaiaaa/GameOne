@@ -387,7 +387,15 @@ internal readonly struct Orbit
     /// <summary>
     /// Fills <paramref name="points"/> with the path from <paramref name="from"/> to
     /// <paramref name="to"/> seconds from now (no further than where the path ahead ends), each
-    /// point with its time from now: about <paramref name="segments"/> pieces a lap.
+    /// point with its time from now: about <paramref name="segments"/> pieces a lap, laid evenly
+    /// in its <see cref="Spacing"/>, so each piece is no more than a lap's share of the turn in
+    /// its true anomaly and in its eccentric anomaly alike. In the eccentric anomaly an ellipse is
+    /// a circle its major axis across, squashed along its minor axis, so no piece bows out from
+    /// the curve by more than that circle's piece would (its radius times the piece's angle
+    /// squared over eight): at a narrow ellipse's apoapsis (a stage thrown high, falling back),
+    /// where the true anomaly crawls, even pieces of it would each turn the line by tens of
+    /// degrees, a corner. In the true anomaly, the pieces are fine at its periapsis, where a
+    /// nearly parabolic one's eccentric anomaly crawls.
     /// </summary>
     public void Samples(List<(Vector3 At, double Seconds)> points, double from, double to, int segments = 256)
     {
@@ -399,15 +407,83 @@ internal readonly struct Orbit
         }
         var start = from <= 0 ? _now : AnomalyAfter(from);
         var end = double.IsFinite(to) ? Math.Min(AnomalyAfter(to), _end) : _end;
-        var span = end - start;
-        if (span <= 0)
+        if (end - start <= 0)
             return;
+        var (first, last) = (Spacing(start), Spacing(end));
+        var span = last - first;
         var count = Math.Max(2, (int)Math.Ceiling(segments * span / (2 * Math.PI)));
         for (var i = 0; i <= count; i++)
         {
-            var anomaly = start + span * i / count;
+            var anomaly = i == 0 ? start : i == count ? end : AnomalyAtSpacing(first + span * i / count);
             points.Add((At(anomaly), TimeTo(anomaly)));
         }
+    }
+
+    /// <summary>
+    /// Where the true anomaly <paramref name="anomaly"/> is along the path, measured so that a step
+    /// of it is no smaller than the step it makes in the true anomaly nor in the eccentric anomaly
+    /// (an ellipse's): by the true anomaly but round its apoapsis, between the two places where they
+    /// turn at the same rate, where it goes by the eccentric anomaly, which turns faster there (so
+    /// a lap of it is more than a turn, the more the narrower the ellipse). A hyperbola's, and a
+    /// circle's, is its true anomaly. See <see cref="Samples"/>; <see cref="AnomalyAtSpacing"/> is
+    /// the other way.
+    /// </summary>
+    internal double Spacing(double anomaly)
+    {
+        if (!Banded(out var band, out var bandEccentric, out var lap))
+            return anomaly;
+        var turns = Math.Floor(anomaly / (2 * Math.PI));
+        var r = anomaly - turns * 2 * Math.PI; // within the lap, from its periapsis
+        var within = r <= band ? r
+            : r < 2 * Math.PI - band ? band + EccentricAnomaly(r) - bandEccentric
+            : r + lap - 2 * Math.PI;
+        return turns * lap + within;
+    }
+
+    /// <summary>The true anomaly at <paramref name="spacing"/> along the path (see <see cref="Spacing"/>).</summary>
+    internal double AnomalyAtSpacing(double spacing)
+    {
+        if (!Banded(out var band, out var bandEccentric, out var lap))
+            return spacing;
+        var turns = Math.Floor(spacing / lap);
+        var q = spacing - turns * lap;
+        var r = q <= band ? q
+            : q < band + 2 * Math.PI - 2 * bandEccentric ? TrueAnomaly(q - band + bandEccentric)
+            : q - lap + 2 * Math.PI;
+        return turns * 2 * Math.PI + r;
+    }
+
+    /// <summary>
+    /// For an ellipse (not a circle): the true anomaly where its eccentric anomaly starts turning
+    /// faster than it, on the way out to the apoapsis (and the turn less that, on the way back), that
+    /// eccentric anomaly, and a lap of <see cref="Spacing"/>.
+    /// </summary>
+    private bool Banded(out double band, out double bandEccentric, out double lap)
+    {
+        (band, bandEccentric, lap) = (0, 0, 0);
+        if (_e <= 1e-9 || _e >= 1)
+            return false;
+        // The eccentric anomaly turns at sqrt(1 - e^2) / (1 + e cos v) the true anomaly's rate.
+        band = Math.Acos((Math.Sqrt(1 - _e * _e) - 1) / _e);
+        bandEccentric = EccentricAnomaly(band);
+        lap = 2 * Math.PI + 2 * (band - bandEccentric);
+        return true;
+    }
+
+    /// <summary>An ellipse's eccentric anomaly at the true anomaly <paramref name="anomaly"/>, counted on by the same whole turns.</summary>
+    private double EccentricAnomaly(double anomaly)
+    {
+        var turns = Math.Round(anomaly / (2 * Math.PI));
+        var (sin, cos) = Math.SinCos((anomaly - turns * 2 * Math.PI) / 2); // half of it, within a quarter turn either way: cos >= 0
+        return 2 * Math.Atan2(Math.Sqrt(1 - _e) * sin, Math.Sqrt(1 + _e) * cos) + turns * 2 * Math.PI;
+    }
+
+    /// <summary>An ellipse's true anomaly at the eccentric anomaly <paramref name="eccentric"/>, counted on by the same whole turns.</summary>
+    private double TrueAnomaly(double eccentric)
+    {
+        var turns = Math.Round(eccentric / (2 * Math.PI));
+        var (sin, cos) = Math.SinCos((eccentric - turns * 2 * Math.PI) / 2);
+        return 2 * Math.Atan2(Math.Sqrt(1 + _e) * sin, Math.Sqrt(1 - _e) * cos) + turns * 2 * Math.PI;
     }
 
     /// <summary>How far from its body's centre it is in <paramref name="direction"/> (in its plane), or infinity if it never goes that way.</summary>

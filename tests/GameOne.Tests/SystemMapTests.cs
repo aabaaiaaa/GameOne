@@ -768,4 +768,66 @@ public sealed class SystemMapTests(ITestOutputHelper output)
         var empty = new SystemMap();
         Assert.Null(empty.BodyLineAt(new Vector2(10f, 10f), 8f));
     }
+
+    [Fact]
+    public void A_stage_falling_back_under_formula_is_drawn_smooth_to_where_it_comes_down()
+    {
+        // A stage thrown high on the far side of the planet (under formula, far from the new rocket
+        // on Home's pad), 6 km up, 200 m/s up and 80 m/s across among the stars: a narrow ellipse
+        // whose periapsis is deep under the ground. Its lap on the map goes from where it is up
+        // over its apoapsis and down to the ground, where it ends: not on round under the ground
+        // and back up the way it came (a second strand beside the first), and with no piece bowing
+        // out from the curve more than a circle its major axis across would (no corner at the top).
+        var planet = GroundBody.Planet;
+        var down = Vector3.Normalize(-Planet.Up(Vector3.Zero));
+        var centre = planet.Centre + down * (planet.SeaRadius + 6000f);
+        var across = Vector3.Normalize(Vector3.Cross(down, planet.NorthPole));
+        var thrown = InOrbit.At(InOrbit.Round(planet, 0, 2000f), centre, down * 200f + across * 80f); // out from the planet, and across
+        using var sim = WorldWith(1234.5, thrown);
+        var flight = sim.Flight;
+        var v = flight.WorldVessels.Single(w => w.Id == 0);
+        Assert.True(v.OnFormula, "it should be under formula, far from the pad");
+        var frames = new BodyFrames();
+        frames.Begin(flight.WorldTime, planet);
+        var map = new SystemMap();
+        map.Build(flight, frames, planet.Centre + planet.NorthPole * 100_000f);
+        var points = new List<Vector3>();
+        Assert.True(map.PathOf(v, points));
+
+        var orbit = Orbit.OverGround(planet, v.CentreOfMass, v.Velocity, findEnd: false);
+        var a = (orbit.PeriapsisDistance + orbit.ApoapsisDistance) / 2;
+        var bound = a * Math.Pow(Math.Tau / SystemMap.LapSegments, 2) / 8;
+        double Anomaly(Vector3 p)
+        {
+            var angle = orbit.AngleToward(p - planet.Centre);
+            while (angle < orbit.Now - 1e-6)
+                angle += Math.Tau;
+            return angle;
+        }
+        var worst = 0.0;
+        for (var i = 1; i < points.Count; i++)
+        {
+            var (p, q) = (points[i - 1], points[i]);
+            if (Vector3.Distance(p, q) < 1e-3f)
+                continue; // the point where it is now, and its lap's first, together
+            var (from, to) = (Anomaly(p), Anomaly(q));
+            for (var k = 1; k < 32; k++)
+            {
+                var c = orbit.At(from + (to - from) * k / 32);
+                var along = Math.Clamp(Vector3.Dot(c - p, q - p) / (q - p).LengthSquared(), 0f, 1f);
+                worst = Math.Max(worst, Vector3.Distance(c, p + (q - p) * along));
+            }
+        }
+        var lowest = points.Min(p => Vector3.Distance(p, planet.Centre)) - planet.LowestRadius;
+        var end = Vector3.Distance(points[^1], planet.Centre) - planet.LowestRadius;
+        var top = points.Max(p => Vector3.Distance(p, planet.Centre)) - orbit.ApoapsisDistance;
+        output.WriteLine($"eccentricity {orbit.Eccentricity:0.000}: {points.Count} points, the worst piece {worst:0.0} m off the curve (a circle's {bound:0.0} m); " +
+            $"its end {end:0.00} m over its body's lowest surface, its lowest point {lowest:0.00} m over it, its highest {top:0.0} m from the apoapsis");
+        Assert.InRange(orbit.Eccentricity, 0.85, 0.99);
+        Assert.InRange(worst, 0, bound * 1.05);
+        Assert.InRange(end, -1f, 1f);
+        Assert.InRange(lowest, -1f, 1f);
+        Assert.InRange(top, -50f, 1f);
+        Assert.True(Vector3.Distance(points[0], v.CentreOfMass) < 1f, "it starts where the stage is");
+    }
 }
