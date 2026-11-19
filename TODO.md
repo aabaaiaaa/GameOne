@@ -19,7 +19,14 @@ and zones at the highest ground under them on foundations that step back into th
 pad, zone and drone ship lit: floor lights, floodlight masts where the ground allows, tower lights,
 far glows and floodlight shadows), merged 2026-10-29; the solar system and a moon (the sun, the
 planet and the moon as bodies on their paths, the moon's own ground, eclipses both ways, flying
-there and landing, and the lander and its mission), merged 2026-11-16.)
+there and landing, and the lander and its mission), merged 2026-11-16; missions that carry on (runs
+in progress kept with the world, carried on, completed, abandoned, started again or rewound), the
+map and the camera (the camera on any vessel, body, site or point of interest, held among the
+stars on a body; targets picked by a double click; each path's legs drawn round their own bodies
+among the stars, smooth at every zoom; warping to a point on the path), and the solar system's edge
+and double state (a vessel past 1e10 m from the sun leaves it, logged; each craft's place and
+velocity kept in double; no speed cap in open space, 4,000 m/s held low over the ground; Auto's
+frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
 
 - **Using Jolt fully** (the user, 2026-11-02, after BRUTAL v2026.10.1: every Jolt call now works;
   see CLAUDE.md's Jolt notes). The user hopes it also helps performance: measure each against
