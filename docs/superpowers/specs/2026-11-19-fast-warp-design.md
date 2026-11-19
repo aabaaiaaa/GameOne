@@ -33,9 +33,8 @@ by formula, over the whole frame at once, from event to event.
    ×8,192, **×16,384** (one past ×8,192, the user's choice: a lap of the sun in 0.88 s; at ×1,024
    the moon's lap takes 1.6 s). If the measurements let the physics go to ×8, the formula starts
    at ×16; the ladder is the same either way.
-3. **Holding a rate key steps on** (`,` / `.`, about every quarter second held), as 14 presses
-   from ×1 to the top is a lot. A new key behaviour: in the HUD's controls list and the README.
-   A warp to a point on the path (`FlightInput.WarpTo`) goes at the new top rate.
+3. **One step a press, as today** (the user: "Just one at a time"; holding a rate key does not
+   step on). A warp to a point on the path (`FlightInput.WarpTo`) goes at the new top rate.
 4. **Where the formula's rates work** (the user: "the 'above the air' should be targeted at
    vessels flying in the air only"): every **witnessed** vessel (the flown one, each small view's,
    and the one the main camera is on: the user, "small views vessels count and where you might
@@ -142,7 +141,7 @@ by formula, over the whole frame at once, from event to event.
 
 ## Constraints
 
-- CLAUDE.md holds: one set of controls (the rate keys' hold-to-step goes in the HUD's list and the
+- CLAUDE.md holds: one set of controls (the rate keys' ladder goes in the HUD's list and the
   README), game logic reachable through `FlightInput`, `Scene` for the tunables (the ladder, the
   hold's repeat, the averaging's rate), everything in each body's frame, double where precision
   needs it, the readout (`Readout.cs`) showing what a script might fly by (the rate asked and
@@ -201,7 +200,7 @@ by formula, over the whole frame at once, from event to event.
   only faster, is my suggestion), and how the warp's reason for dropping is shown.
 - The sea's waves and the eclipses at those rates (whether they skip rather than ease), and how
   the averaged light is drawn (the sky, the ground, the sun's disc, the shadows, the moon's face).
-- The parts and their order. My suggestion: (1) measure, and the ladder with hold-to-step;
+- The parts and their order. My suggestion: (1) measure, and the ladder;
   (2) the formula's rates for coasting (every vessel on Kepler, the flown one included,
   crossings and collisions over the frame, what drops and holds the warp); (3) the unwitnessed
   played out by the formula alone (staging, settling, crashing, rafts); (4) burns, the holds and
@@ -210,7 +209,7 @@ by formula, over the whole frame at once, from event to event.
 ## Verification
 
 - Flight tests (`dotnet run --project tools/TestRun`) for each rule: the ladder and the
-  hold-to-step; a coast at ×16,384 ending where Kepler puts it; ×16,384 waiting on the pad and on
+  one step a press; a coast at ×16,384 ending where Kepler puts it; ×16,384 waiting on the pad and on
   the moon, the vessel where it stood, and the throttle raised dropping it; a small view's vessel
   in the air holding it at ×4; a drop never climbing back; a crossing into the moon's sphere
   at the top rate handed across at its moment, the warp carrying on; the air, the ground, a

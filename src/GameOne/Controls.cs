@@ -20,44 +20,6 @@ internal enum ControlAction
 }
 
 /// <summary>
-/// A rate key held on: it steps at the press, then once every <see cref="Scene.RateKeyRepeatSeconds"/>
-/// of real time held (never a backlog from one long frame); let go, it starts again.
-/// </summary>
-internal sealed class RateKeyRepeat
-{
-    private float _heldFor;
-    private bool _down;
-
-    /// <summary>Whether the key steps this frame: <paramref name="pressed"/> a press since the last frame, <paramref name="held"/> the key down now.</summary>
-    public bool Step(bool pressed, bool held, float realSeconds)
-    {
-        if (pressed)
-        {
-            _down = true;
-            _heldFor = 0f;
-            return true;
-        }
-        if (!held)
-        {
-            _down = false;
-            return false;
-        }
-        if (!_down)
-        {
-            // Down with no press seen (it was pressed while paused or in a menu): held from now.
-            _down = true;
-            _heldFor = 0f;
-            return false;
-        }
-        _heldFor += realSeconds;
-        if (_heldFor < Scene.RateKeyRepeatSeconds)
-            return false;
-        _heldFor %= Scene.RateKeyRepeatSeconds;
-        return true;
-    }
-}
-
-/// <summary>
 /// The keyboard, turned into a <see cref="FlightInput"/> each frame. Held keys (throttle, steering)
 /// are read as they are; one-off presses (launch, legs, staging) are caught as they happen, so a
 /// quick tap between two frames isn't missed. (Steering with the mouse is <see cref="NavigationControl"/>.)
@@ -81,8 +43,6 @@ internal sealed class Controls
 {
     private readonly GlfwWindow _window;
     private readonly HashSet<ControlAction> _pressed = [];
-    private readonly RateKeyRepeat _slower = new();
-    private readonly RateKeyRepeat _faster = new();
 
     public Controls(GlfwWindow window)
     {
@@ -143,17 +103,6 @@ internal sealed class Controls
             FullThrottle: Take(ControlAction.FullThrottle),
             CutThrottle: Take(ControlAction.CutThrottle),
             SwitchVessel: Take(ControlAction.SwitchVessel));
-    }
-
-    /// <summary>
-    /// The rate keys this frame: each is a press taken (as <see cref="Take"/> does) or the key held
-    /// on, stepping again every <see cref="Scene.RateKeyRepeatSeconds"/> of <paramref name="realSeconds"/>.
-    /// </summary>
-    public (bool Slower, bool Faster) RateKeys(float realSeconds)
-    {
-        var typing = Brutal.ImGuiApi.ImGui.GetIO().WantTextInput; // typing into the HUD isn't flying
-        return (_slower.Step(Take(ControlAction.Slower), !typing && Held(GlfwKey.Comma), realSeconds),
-            _faster.Step(Take(ControlAction.Faster), !typing && Held(GlfwKey.Period), realSeconds));
     }
 
     /// <summary>Whether <paramref name="action"/> was pressed since it was last taken (for the keys <see cref="Read"/> leaves: the game menu, the controls list, zooming out, and time, which the game puts in the flight's input only while it isn't paused).</summary>

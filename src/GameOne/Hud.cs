@@ -3072,7 +3072,7 @@ internal sealed class Hud : IDisposable
         18 => "Hold buttons    Prograde, Retrograde, Manoeuvre: keep the nose that way (again: off)"u8,
         19 => "Frame buttons   Auto, Surface, Orbit, Target: what speeds and holds go by"u8,
         20 => "Tab             fly another vessel (or click its view)"u8,
-        21 => ", / .           time: slower / faster, held to step on (1/4x to 16384x)"u8,
+        21 => ", / .           time: slower / faster (1/4x to 16384x warp)"u8,
         22 => "H               this list: open or fold it (over the small views)"u8,
         23 => "F2              hide the HUD, for a screenshot (and back)"u8,
         24 => "Esc             pause: restart, missions, worlds, quit"u8,

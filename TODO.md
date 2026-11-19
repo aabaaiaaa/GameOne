@@ -133,9 +133,9 @@ frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
     paused, ¼, ½, ×1, ×2, ×4 in the physics (where the physics stops, sooner than ×32, is the
     measurements' call: ×2 to ×8), then the formula's from the next doubling on: ×8, ×16, … up
     to ×16,384, one past ×8,192 (the user's choice), where a lap of the sun takes 0.88 s (1.76 s
-    at ×8,192, the moon's lap 1.6 s at ×1,024). That is 14 presses from ×1 to the top, so
-    holding a rate key steps on (about every quarter second: a new key behaviour, for the HUD's
-    controls list and the README), and a warp to a point on the path goes at the new top rate.
+    at ×8,192, the moon's lap 1.6 s at ×1,024). One step a press (the user: "Just one at a time"),
+    with no stepping on while a rate key is held;
+    a warp to a point on the path goes at the new top rate.
     Travel between solar systems doubles on past it when it is built.
     The day at those rates (the user's choice): at ×16,384 the planet's day (1,200 s) passes some
     14 times a real second, so above the rate where a day passes faster than about one in 5 s
