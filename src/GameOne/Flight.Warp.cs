@@ -213,7 +213,7 @@ internal sealed partial class Flight
 
     /// <summary>
     /// A switch asked to <paramref name="next"/> (<see cref="SwitchTarget"/>), as the frame that takes
-    /// it begins: any warp, the physics' rates' or a formula's, drops to normal speed, ending a warp
+    /// it begins, or a carry-on of it (<see cref="CarryOn(Vessel)"/>; a rewind drops it too): any warp, the physics' rates' or a formula's, drops to normal speed, ending a warp
     /// to a point with it, and kept as <see cref="LastDrop"/> (<see cref="WarpDrop.Switched"/>), so
     /// the frame runs no formula's window past the switch, nothing is carried on by formula after
     /// it, and the vessel is flown where it was. Slow motion is left as it is. Like every drop it
@@ -857,9 +857,10 @@ internal sealed partial class Flight
     }
 
     /// <summary>
-    /// A flight begun, a world brought back or a vessel carried on at a formula's rate comes back
-    /// at normal speed, flown in the physics; at the physics' rates the rate is kept, as it is
-    /// from flight to flight.
+    /// A flight begun or a world brought back at a formula's rate comes back at normal speed,
+    /// flown in the physics; at the physics' rates the rate is kept, as it is from flight to flight.
+    /// (A carry-on and a rewind show a link-up, so drop any warp to normal speed: see
+    /// <see cref="DropForSwitch"/>.)
     /// </summary>
     private void BackToThePhysics()
     {

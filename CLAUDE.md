@@ -316,7 +316,8 @@ dotnet run --project src/GameOne
   vessel) drops any warp, the physics' rates' or a formula's, to normal speed as the frame that
   takes it begins (`DropForSwitch`, `WarpDrop.Switched`, kept as `Flight.LastDrop`), ending a warp
   to a point, so no window of it runs past the switch and nothing is carried on by formula after
-  it; a small view opened or the main camera moved is no switch. **The drops** (`WarpDrop`: `Air`, `Ground`, `SetMoving`,
+  it; so do a carry-on (`Switched` too) and a rewind, as each shows a link-up to fly a vessel. A
+  small view opened or the main camera moved is no switch; a flight begun keeps a physics' rate. **The drops** (`WarpDrop`: `Air`, `Ground`, `SetMoving`,
   `Steering`, `Collision`, `NearMiss`, `Node`, `FuelOut`; `DropToPhysics`, kept as
   `Flight.LastDrop` and said on the time line for `Scene.WarpDropShownSeconds`) go to the physics'
   top rate, `Scene.WarpDropLeadSeconds` (4 s of game time) ahead of what each is for (the way into

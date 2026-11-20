@@ -316,6 +316,9 @@ internal sealed partial class Flight : IDisposable
     /// </summary>
     private void Rewind(RewindPoint point)
     {
+        // Its link-up shown, as a switch's: any warp to normal speed, whichever way it is flown on.
+        if (_rate > NormalRate)
+            DropWarp();
         // A mission begun comes back as it was chosen: looked at from the pad, its new rocket next.
         Restore(point.World, flightStarts: !point.Resumed);
         // Something carried on is carried on again; were it not there to fly, the vessel the world
@@ -378,7 +381,7 @@ internal sealed partial class Flight : IDisposable
         if (rewindHere)
             _rewind = new RewindPoint(Capture(), Resumed: true, vessel.Id, RunOf(vessel)?.Mission ?? vessel.Mission, vessel.Site);
         _shownEnded = null; // a choice, as a switch is: a run ended shows no more
-        BackToThePhysics();
+        DropForSwitch(vessel); // its link-up shown, as a switch's: any warp to normal speed
         if (vessel == Controlled)
         {
             // Already flown: in its physics now, and its link-up shown all the same, as for any switch.

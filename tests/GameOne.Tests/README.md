@@ -898,7 +898,9 @@ GAMEONE_PERF=1 dotnet test GameOne.slnx -c Release --filter "FullyQualifiedName~
   before that frame runs, the booster still flying when it is flown; a switch at the top rate to a
   stage 100 m over the air's top (some 4.5 s from it, within the first window), flown at normal
   speed from where it was, still above the air; a switch at the top rate to a vessel round the
-  moon, whose physics isn't made, flown at normal speed with its physics made behind the link-up; and the readout's `Warp dropped` saying why for
+  moon, whose physics isn't made, flown at normal speed with its physics made behind the link-up; a
+  carry-on and a rewind, at the physics' top rate and at the top rate, each dropping it to normal
+  speed (the carry-on as `Switched`); and the readout's `Warp dropped` saying why for
   `Scene.WarpDropShownSeconds`.
 - **`WarpWarningTests`:** a collision or near miss coming at a witnessed vessel at a formula's
   rate (`Collisions.AheadOfTheWarp`), two levels: two boosters head on, 600 s of travel apart

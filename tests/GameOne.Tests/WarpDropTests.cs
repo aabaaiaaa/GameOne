@@ -376,6 +376,36 @@ public sealed class WarpDropTests(ITestOutputHelper output)
     }
 
     /// <summary>At the physics' top rate, by the rate key pressed in frames of no time.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_carry_on_or_a_rewind_drops_any_warp_to_normal_speed(bool topRate)
+    {
+        // Each shows a link-up to fly a vessel, as a switch does: at the physics' top rate as at
+        // the formula's, the warp goes to normal speed.
+        var (sim, flown) = WarpScenes.LowOrbit();
+        using var _ = sim;
+        var flight = sim.Flight;
+        void Up()
+        {
+            if (topRate)
+                FormulaRateTests.ToTheTop(flight);
+            else
+                ToThePhysicsTop(flight);
+        }
+        Up();
+        sim.Step(new FlightInput(CarryOn: flown.Id));
+        output.WriteLine($"carried on: {flight.PlayerRate}x, {flight.LastDrop}");
+        Assert.Equal(1f, flight.PlayerRate);
+        Assert.Equal(new WarpDropped(WarpDrop.Switched, WorldLog.Named(flown), 1f, flight.LastDrop!.Value.RealTime), flight.LastDrop);
+        Assert.True(flight.CanRewind);
+        Up();
+        sim.Step(new FlightInput(Rewind: true));
+        output.WriteLine($"rewound: {flight.PlayerRate}x");
+        Assert.Equal(1f, flight.PlayerRate);
+        Assert.False(flight.Controlled.OnFormula);
+    }
+
     private static void ToThePhysicsTop(Flight flight)
     {
         while (flight.PlayerRate < Scene.PhysicsTopRate)
