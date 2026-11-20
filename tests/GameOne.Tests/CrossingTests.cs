@@ -532,13 +532,21 @@ public sealed class CrossingTests(ITestOutputHelper output)
         var rebased = 0;
         sim.Flight.ViewRebased += _ => rebased++;
         // The warp up, on the pad.
-        sim.Step(new FlightInput(Faster: true));
-        sim.Step(new FlightInput(Faster: true));
+        void WarpUp()
+        {
+            sim.Step(new FlightInput(Faster: true));
+            sim.Step(new FlightInput(Faster: true));
+        }
+        WarpUp();
         var rate = sim.Flight.PlayerRate;
         Assert.Equal(4f, rate);
 
+        // A switch drops the warp to normal speed (WarpDrop.Switched); put up again on the moon.
         sim.Step(new FlightInput(SwitchTo: lander));
         sim.Step(default); // made, and flown, the frame after (see the link-up's test)
+        Assert.Equal(1f, sim.Flight.PlayerRate);
+        Assert.Equal(WarpDrop.Switched, sim.Flight.LastDrop?.Reason);
+        WarpUp();
         Assert.Same(lander, sim.Flight.Controlled);
         Assert.Same(sim.Flight.PhysicsAt(Moon), lander.Physics);
         Assert.Equal(1, rebased);
@@ -556,6 +564,8 @@ public sealed class CrossingTests(ITestOutputHelper output)
 
         sim.Step(new FlightInput(SwitchTo: pad));
         Assert.Same(pad, sim.Flight.Controlled);
+        Assert.Equal(1f, sim.Flight.PlayerRate);
+        WarpUp();
         Assert.Equal(2, rebased);
         Assert.Same(Home, sim.Flight.Body);
         Right("back on the pad");

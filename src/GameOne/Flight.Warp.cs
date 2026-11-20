@@ -176,6 +176,23 @@ internal sealed partial class Flight
     }
 
     /// <summary>
+    /// A switch asked to <paramref name="next"/> (<see cref="SwitchTarget"/>), as the frame that takes
+    /// it begins: any warp, the physics' rates' or a formula's, drops to normal speed, ending a warp
+    /// to a point with it, and kept as <see cref="LastDrop"/> (<see cref="WarpDrop.Switched"/>), so
+    /// the frame runs no formula's window past the switch, nothing is carried on by formula after
+    /// it, and the vessel is flown where it was. Slow motion is left as it is. Like every drop it
+    /// never climbs back by itself.
+    /// </summary>
+    private void DropForSwitch(Vessel next)
+    {
+        if (_rate <= NormalRate && _warpTo is null)
+            return;
+        _rate = Math.Min(_rate, NormalRate);
+        _warpTo = null;
+        LastDrop = new WarpDropped(WarpDrop.Switched, WorldLog.Named(next), Rates[_rate], _realTime);
+    }
+
+    /// <summary>
     /// The gate, as a frame begins: who holds the warp (<see cref="WarpHeldBy"/>), of the flown
     /// vessel and the rest of the witnessed (<paramref name="witnessed"/>, <see cref="WarpWitnessed"/>),
     /// each counted from the frame it is watched in (a view opened, the camera moved, a switch
@@ -252,13 +269,12 @@ internal sealed partial class Flight
     /// What drops the warp as a frame begins, after the gate (<see cref="Gate"/>) and before the rate
     /// keys and the frame's advance, so the input is then taken in the physics: a witnessed vessel
     /// holding it (<see cref="WarpHeldBy"/>: into the air, or near the ground of a body with none);
-    /// a switch asked to a vessel that would hold it (<see cref="SwitchTarget"/>), so the frame it
-    /// is asked in, and its link-up's, run in the physics and it is never flown under formula in
-    /// the air; any of the flown vessel's actions (launched, staged, its legs or bay doors moved), whatever
+    /// any of the flown vessel's actions (launched, staged, its legs or bay doors moved), whatever
     /// it is doing, as the formula stages nothing and moves no legs; its throttle raised while it is
     /// at rest with fuel to light it, so no frame at a formula's rate runs its take-off (flying, the
     /// throttle drops nothing); and a steering key, so the keys always steer as in the physics. Null
-    /// for none. The drop is for the vessel holding it or switched to if it is that, else the flown one.
+    /// for none. The drop is for the vessel holding it if it is that, else the flown one. (A switch
+    /// drops any warp to normal speed before this is asked: <see cref="DropForSwitch"/>.)
     /// Asked at every rate: at a formula's it drops the warp; at the physics' it keeps the rate key
     /// and a warp to a point in the same frame from taking it past them, so the input still runs in
     /// the physics.
@@ -267,8 +283,6 @@ internal sealed partial class Flight
     {
         if (WarpHeldBy is { } held)
             return (held.Body.HasAir ? WarpDrop.Air : WarpDrop.Ground, held);
-        if (SwitchTarget(input) is { } next && Holds(next))
-            return (next.Body.HasAir ? WarpDrop.Air : WarpDrop.Ground, next);
         var flown = Controlled;
         if (input.Launch || input.Stage || input.ToggleLegs || input.ToggleBayDoors)
             return (WarpDrop.SetMoving, flown);

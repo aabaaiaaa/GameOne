@@ -892,11 +892,13 @@ GAMEONE_PERF=1 dotnet test GameOne.slnx -c Release --filter "FullyQualifiedName~
   is pressed from the physics' top rate dropping it before any window, nothing handed to the
   formula; Faster (or a warp to a point)
   from the physics' top rate in a frame with a launch or a steering key held there, the input
-  taken in the physics; a switch and a small view at the top rate to a booster in the air dropping it by
-  its name, flown or seen in the physics, the switch asked in a whole frame dropping it before
-  that frame runs, the booster still flying when it is flown; a switch at the top rate to a
-  vessel round the moon, whose physics isn't made, waiting on its physics made ahead before it is
-  flown; and the readout's `Warp dropped` saying why for
+  taken in the physics; a small view at the top rate to a booster in the air dropping it by
+  its name, seen in the physics; a switch at the top rate to a booster in the air dropping it to
+  normal speed (`Switched`), flown in the physics, the switch asked in a whole frame dropping it
+  before that frame runs, the booster still flying when it is flown; a switch at the top rate to a
+  stage 100 m over the air's top (some 4.5 s from it, within the first window), flown at normal
+  speed from where it was, still above the air; a switch at the top rate to a vessel round the
+  moon, whose physics isn't made, flown at normal speed with its physics made behind the link-up; and the readout's `Warp dropped` saying why for
   `Scene.WarpDropShownSeconds`.
 - **`WarpWarningTests`:** a collision or near miss coming at a witnessed vessel at a formula's
   rate (`Collisions.AheadOfTheWarp`), two levels: two boosters head on, 600 s of travel apart

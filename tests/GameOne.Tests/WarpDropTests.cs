@@ -10,7 +10,8 @@ namespace GameOne.Tests;
 /// <see cref="Flight.LastDrop"/>): <see cref="Scene.WarpDropLeadSeconds"/> ahead of a witnessed
 /// vessel's way into the air (or into reach of an airless body's ground), and of the flown vessel's
 /// next node, once each; at once for a vessel at rest set moving, a steering key, or a vessel in
-/// the air switched to or given a view; never climbing back by itself; and said in the readout.
+/// the air given a view; to normal speed, from any rate of warp, for a switch; never climbing back
+/// by itself; and said in the readout.
 /// </summary>
 public sealed class WarpDropTests(ITestOutputHelper output)
 {
@@ -430,7 +431,7 @@ public sealed class WarpDropTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void A_switch_at_the_top_rate_to_a_vessel_in_the_air_drops_the_warp_and_flies_it_in_the_physics()
+    public void A_switch_at_the_top_rate_to_a_vessel_in_the_air_drops_the_warp_to_normal_speed_and_flies_it_in_the_physics()
     {
         var (sim, _, booster) = BesideABoosterInTheAir();
         using var _s = sim;
@@ -438,11 +439,11 @@ public sealed class WarpDropTests(ITestOutputHelper output)
         // The switch dropping the warp as the frame it is asked in begins, and the booster flown
         // behind its link-up in the next.
         flight.RunFrame(0f, new FlightInput(SwitchTo: booster));
-        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
+        Assert.Equal(1f, flight.PlayerRate);
         flight.RunFrame(0f, default);
         Assert.Same(booster, flight.Controlled);
-        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
-        Assert.Equal(new WarpDropped(WarpDrop.Air, WorldLog.Named(booster), Scene.PhysicsTopRate, flight.RealTime), flight.LastDrop);
+        Assert.Equal(1f, flight.PlayerRate);
+        Assert.Equal(new WarpDropped(WarpDrop.Switched, WorldLog.Named(booster), 1f, flight.RealTime), flight.LastDrop);
         Assert.False(booster.OnFormula);
 
         var height = flight.Ground;
@@ -461,12 +462,12 @@ public sealed class WarpDropTests(ITestOutputHelper output)
         var flight = sim.Flight;
         var (time, height) = (flight.WorldTime, booster.Body.SurfaceAltitude(booster.CentreOfMass));
         // A frame of a real frame's length: at the top rate some 270 s, time to bring the booster
-        // down unwatched; dropped as it begins, it is some 0.13 s at the physics' top rate.
+        // down unwatched; dropped as it begins, it is one frame at normal speed.
         flight.RunFrame(Simulation.FrameSeconds, new FlightInput(SwitchTo: booster));
         output.WriteLine($"{flight.WorldTime - time:0.000} s on at {flight.PlayerRate}x; {height:0.0} m up, then {booster.Body.SurfaceAltitude(booster.CentreOfMass):0.0} m");
-        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
-        Assert.Equal(new WarpDropped(WarpDrop.Air, WorldLog.Named(booster), Scene.PhysicsTopRate, flight.RealTime), flight.LastDrop);
-        Assert.InRange(flight.WorldTime - time, 0.0, Simulation.FrameSeconds * Scene.PhysicsTopRate + 1e-3);
+        Assert.Equal(1f, flight.PlayerRate);
+        Assert.Equal(new WarpDropped(WarpDrop.Switched, WorldLog.Named(booster), 1f, flight.RealTime), flight.LastDrop);
+        Assert.InRange(flight.WorldTime - time, 0.0, Simulation.FrameSeconds + 1e-3);
         Assert.Equal(FlightState.Flying, booster.State);
         Assert.False(booster.OnFormula);
         Assert.Same(flown, flight.Controlled);
@@ -475,11 +476,39 @@ public sealed class WarpDropTests(ITestOutputHelper output)
         Assert.Same(booster, flight.Controlled);
         Assert.Equal(FlightState.Flying, booster.State);
         Assert.False(booster.OnFormula);
-        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
+        Assert.Equal(1f, flight.PlayerRate);
     }
 
     [Fact]
-    public void A_switch_at_the_top_rate_to_a_body_with_no_physics_waits_on_its_physics_made_ahead()
+    public void A_switch_at_the_top_rate_to_a_vessel_just_above_the_air_drops_to_normal_speed_and_flies_it_where_it_was()
+    {
+        // A stage at the top of an orbit 100 m over the air's top, some 4.5 s from coming into it:
+        // within the first window of a top-rate frame, which a switch must never carry on by formula.
+        var (sim, _) = WarpScenes.Flying(InOrbit.Round(Planet, 0, WarpScenes.LowOrbitHeight), Dipping(Planet, 1, Planet.OrbitFloor + 100f, 2000f));
+        using var _s = sim;
+        var flight = sim.Flight;
+        var falling = flight.WorldVessels.Single(v => v.Id == 1);
+        FormulaRateTests.ToTheTop(flight);
+        Assert.Equal(Scene.TopRate, flight.PlayerRate);
+        Assert.True(falling.AboveTheAir);
+        var (time, at) = (flight.WorldTime, falling.CentreOfMass);
+        flight.RunFrame(Simulation.FrameSeconds, new FlightInput(SwitchTo: falling));
+        Assert.Equal(1f, flight.PlayerRate);
+        Assert.Equal(new WarpDropped(WarpDrop.Switched, WorldLog.Named(falling), 1f, flight.RealTime), flight.LastDrop);
+        flight.RunFrame(Simulation.FrameSeconds, default);
+        var (seconds, moved) = (flight.WorldTime - time, Vector3.Distance(at, falling.CentreOfMass));
+        output.WriteLine($"{seconds:0.000} s on at {flight.PlayerRate}x, moved {moved:0.00} m at {falling.Velocity.Length():0} m/s");
+        Assert.Same(falling, flight.Controlled);
+        Assert.Equal(1f, flight.PlayerRate);
+        Assert.False(falling.OnFormula);
+        Assert.Equal(FlightState.Flying, falling.State);
+        Assert.True(falling.AboveTheAir, "it should still be above the air, flown from where it was");
+        Assert.InRange(seconds, 0.0, 2 * Simulation.FrameSeconds + 1e-3);
+        Assert.InRange(moved, 0f, falling.Velocity.Length() * (float)seconds + 0.5f);
+    }
+
+    [Fact]
+    public void A_switch_at_the_top_rate_to_a_body_with_no_physics_drops_to_normal_speed_and_flies_it_there()
     {
         var (sim, _) = WarpScenes.Flying(InOrbit.Round(Planet, 0, WarpScenes.LowOrbitHeight), InOrbit.Round(GroundBody.Moon, 1, 400f));
         using var _s = sim;
@@ -497,9 +526,10 @@ public sealed class WarpDropTests(ITestOutputHelper output)
         }
         output.WriteLine($"flown {frames} frames after the switch");
         Assert.Same(round, flight.Controlled);
-        // Flown only once its body's physics was made ahead, so the drop never makes it in a frame.
+        // Its body's physics made behind the link-up, at normal speed.
         Assert.NotNull(sim.Worlds.At(GroundBody.Moon));
-        Assert.Equal(Scene.TopRate, flight.PlayerRate);
+        Assert.Equal(1f, flight.PlayerRate);
+        Assert.Equal(WarpDrop.Switched, flight.LastDrop?.Reason);
     }
 
     [Fact]

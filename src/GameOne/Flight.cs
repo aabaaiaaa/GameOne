@@ -1604,6 +1604,8 @@ internal sealed partial class Flight : IDisposable
         ForgetNodesDropped();
         ForgetWarpWarned();
         Gate(WarpWitnessed(input.Watched, watching));
+        if (SwitchTarget(given) is { } next && next != Controlled)
+            DropForSwitch(next);
         var drop = DropFor(given);
         if (drop is { } reason)
             DropToPhysics(reason.Reason, reason.Of);

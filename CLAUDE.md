@@ -303,13 +303,17 @@ dotnet run --project src/GameOne
   one a switch's link-up waits on: `WarpWitnessed`, the one set the gate, the cuts and the rules
   along each move count) flies in the air or low over the ground, or isn't yet at rest
   (`Flight.WarpHeldBy`, the readout's `Warp held`; the time line says which and why,
-  `Flight.WarpHeld`), Faster past the physics' top rate does nothing; one in the air seen, or
-  switched to, at a formula's rate drops the warp before the frame runs. So does a fast collision
+  `Flight.WarpHeld`), Faster past the physics' top rate does nothing; one in the air seen at a
+  formula's rate drops the warp before the frame runs. So does a fast collision
   coming at a witnessed vessel (`CollisionHolds`: warned of by the physics, or one the warp
   dropped for still coming and closing past `Scene.FastCollisionSpeed`), until it has hit or
   passed, so its slow-down plays out in full; its warning (or the drop's line) says why. At a
   formula's rate a link-up waits on its body's physics made ahead (`MadeFor`), so the drop never
-  makes it in a frame. **The drops** (`WarpDrop`: `Air`, `Ground`, `SetMoving`,
+  makes it in a frame. **A switch** (Tab, a click on a small view: any that flies another
+  vessel) drops any warp, the physics' rates' or a formula's, to normal speed as the frame that
+  takes it begins (`DropForSwitch`, `WarpDrop.Switched`, kept as `Flight.LastDrop`), ending a warp
+  to a point, so no window of it runs past the switch and nothing is carried on by formula after
+  it; a small view opened or the main camera moved is no switch. **The drops** (`WarpDrop`: `Air`, `Ground`, `SetMoving`,
   `Steering`, `Collision`, `NearMiss`, `Node`, `FuelOut`; `DropToPhysics`, kept as
   `Flight.LastDrop` and said on the time line for `Scene.WarpDropShownSeconds`) go to the physics'
   top rate, `Scene.WarpDropLeadSeconds` (4 s of game time) ahead of what each is for (the way into
