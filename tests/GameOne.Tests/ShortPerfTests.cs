@@ -9,15 +9,15 @@ namespace GameOne.Tests;
 /// scenes (<see cref="PerfScenes"/>), each warmed up and then run <see cref="ShortPerf.Runs"/>
 /// times. Each prints, per part of a step, its median and 95th percentile per step and the runs'
 /// spread, beside this machine's baseline (<see cref="PerfBaseline"/>) and whether it is better,
-/// worse or about the same; and the game seconds run per wall second, beside the 32x the warp asks
-/// for. Slower is reported, never failed; a scene that doesn't do what it should fails. With
+/// worse or about the same; and the game seconds run per wall second, beside the fastest the warp asks
+/// of the physics (<see cref="Scene.PhysicsTopRate"/>: past it nothing is stepped by Jolt). Slower is reported, never failed; a scene that doesn't do what it should fails. With
 /// <c>GAMEONE_PERF_REBASELINE=1</c> the results are written into the baseline file. They are run
 /// only when working on performance (<c>GAMEONE_PERF=1</c>), never in the normal suite.
 /// </summary>
 public sealed class ShortPerfTests(ITestOutputHelper output)
 {
-    /// <summary>The fastest warp the game asks for.</summary>
-    private const float MaxWarp = 32f;
+    /// <summary>The fastest warp the game asks of the physics: past it the formula's rates step nothing of Jolt's.</summary>
+    private const float MaxWarp = Scene.PhysicsTopRate;
 
     [PerfFact]
     public void A_world_of_a_hundred_satellites_coasting() => Report(ShortPerf.Measure(PerfScenes.HundredSatellites(), say: output.WriteLine));

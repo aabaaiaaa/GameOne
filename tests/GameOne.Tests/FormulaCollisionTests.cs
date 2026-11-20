@@ -166,6 +166,10 @@ public sealed class FormulaCollisionTests(ITestOutputHelper output)
         using var _s = sim;
         var flight = sim.Flight;
         FormulaRateTests.ToTheTop(flight);
+        // Each one's body as the collisions take it (its axis's ends from its middle, and its width),
+        // and its middle from its centre of mass: held among the stars, as the Kepler ways below are.
+        var bodies = crowd.Vessels.Select(s => flight.WorldVessels.Single(v => v.Id == s.Id))
+            .Select(v => (Body: Unwatched.Body(v), Middle: Collisions.Middle(v) - v.CentreOfMass)).ToArray();
         var (start, judged) = (flight.WorldTime, flight.FormulaCollisions.Judged);
         sim.Step(default);
         var end = flight.WorldTime;
@@ -185,7 +189,8 @@ public sealed class FormulaCollisionTests(ITestOutputHelper output)
         }
 
         // Brute force: every pair, along their Kepler ways from the world's start, sampled every
-        // 0.05 s across the frame, each stretch between samples looked along for its closest.
+        // 0.05 s across the frame, each stretch between samples looked along for its middles'
+        // closest, and their bodies judged there (FormulaContact.Bodies: axis to axis, within their widths).
         var ways = crowd.Vessels.Select(s =>
         {
             var at = s.CentreOfMass.ToSingle();
@@ -198,21 +203,23 @@ public sealed class FormulaCollisionTests(ITestOutputHelper output)
             for (var s = 0; s < samples; s++)
                 places[k, s] = ways[k].StateAfter(start + s * Sample).Position;
         var touching = 0;
-        var width = flight.WorldVessels[0].Width; // all alike
         for (var p = 0; p < ways.Length; p++)
             for (var q = p + 1; q < ways.Length; q++)
             {
-                var closest = float.MaxValue;
+                var (offset, closest, gap) = (bodies[q].Middle - bodies[p].Middle, float.MaxValue, Vector3.Zero);
                 for (var s = 1; s < samples; s++)
                 {
-                    var (r0, r1) = (places[q, s - 1] - places[p, s - 1], places[q, s] - places[p, s]);
+                    var (r0, r1) = (places[q, s - 1] - places[p, s - 1] + offset, places[q, s] - places[p, s] + offset);
                     var d = r1 - r0;
                     var t = d.LengthSquared() > 1e-9f ? Math.Clamp(-Vector3.Dot(r0, d) / d.LengthSquared(), 0f, 1f) : 0f;
-                    closest = MathF.Min(closest, (r0 + d * t).Length());
+                    if ((r0 + d * t).Length() < closest)
+                        (closest, gap) = ((r0 + d * t).Length(), r0 + d * t);
                 }
-                if (closest < 2f * width)
+                var (a, b) = (bodies[p].Body, bodies[q].Body);
+                var (apart, _) = FormulaContact.Bodies(a.Bottom, a.Top, gap, b.Bottom, b.Top, Vector3.Zero, a.Width, b.Width);
+                if (apart < a.Width + b.Width)
                 {
-                    output.WriteLine($"brute force: {crowd.Vessels[p].Id} and {crowd.Vessels[q].Id} within {closest:0.00} m");
+                    output.WriteLine($"brute force: {crowd.Vessels[p].Id} and {crowd.Vessels[q].Id} middles {closest:0.00} m apart, axes {apart:0.00} m");
                     touching++;
                 }
             }

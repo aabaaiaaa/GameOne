@@ -292,14 +292,24 @@ dotnet run --project src/GameOne
   (12 s, `FormulaStep`: the vessels' rules once a window, every vessel moved to its end, the
   crossings, the edge, the collisions under formula, `FormulaCollisions`, and the runs), each cut
   short at the earliest event in it (`NextCut`: the warp to a point's time, a vessel's crossing,
-  `FormulaMotion.CrossesAt`, a burn's fuel running out, a drop's moment), so nothing is stepped
-  over; it stops at a window's end once the budget is spent. The witnessed fly there by formula:
+  `FormulaMotion.CrossesAt`, and its reaching the solar system's edge, `LeavesAt`, a burn's fuel
+  running out, a drop's moment), so nothing is stepped over (one that goes on its orbit within a
+  window and crosses in it is shown at its crossing, `FormulaMotion.Behind`, and `Cross` hands it
+  across then and moves it on); it stops at a window's end once the budget is spent, and a drop
+  due as the formula's rate is taken is dropped before anything is handed out (`DropDueNow`). The witnessed fly there by formula:
   burns, the holds, the rings (a click or a drag turns the vessel at every rate) and their nodes
   (`BurnByFormula`, their rules every `Scene.FormulaBurnStepSeconds` of a burn above the air).
-  **The gate:** while a witnessed vessel (the flown one, a small view's, the main camera's) flies
-  in the air or low over the ground, or isn't yet at rest (`Flight.WarpHeldBy`, the readout's
-  `Warp held`), Faster past the physics' top rate does nothing; a witnessed vessel in the air seen
-  at a formula's rate drops the warp. **The drops** (`WarpDrop`: `Air`, `Ground`, `SetMoving`,
+  **The gate:** while a witnessed vessel (the flown one, a small view's, the main camera's, and the
+  one a switch's link-up waits on: `WarpWitnessed`, the one set the gate, the cuts and the rules
+  along each move count) flies in the air or low over the ground, or isn't yet at rest
+  (`Flight.WarpHeldBy`, the readout's `Warp held`; the time line says which and why,
+  `Flight.WarpHeld`), Faster past the physics' top rate does nothing; one in the air seen, or
+  switched to, at a formula's rate drops the warp before the frame runs. So does a fast collision
+  coming at a witnessed vessel (`CollisionHolds`: warned of by the physics, or one the warp
+  dropped for still coming and closing past `Scene.FastCollisionSpeed`), until it has hit or
+  passed, so its slow-down plays out in full; its warning (or the drop's line) says why. At a
+  formula's rate a link-up waits on its body's physics made ahead (`MadeFor`), so the drop never
+  makes it in a frame. **The drops** (`WarpDrop`: `Air`, `Ground`, `SetMoving`,
   `Steering`, `Collision`, `NearMiss`, `Node`, `FuelOut`; `DropToPhysics`, kept as
   `Flight.LastDrop` and said on the time line for `Scene.WarpDropShownSeconds`) go to the physics'
   top rate, `Scene.WarpDropLeadSeconds` (4 s of game time) ahead of what each is for (the way into
@@ -307,7 +317,8 @@ dotnet run --project src/GameOne
   a vessel action (launch, staging, the legs, the bay doors, the throttle at rest) or a steering
   key, before the input is taken, so that is taken in the physics. A collision or near miss
   coming at a witnessed vessel is asked once a window (`Collisions.AheadOfTheWarp`) and drops it
-  once for each other vessel (`ForgetWarpWarned` forgets one only once it is out of reach). The
+  once for each other vessel (`ForgetWarpWarned` forgets one only once it is out of reach); the
+  physics' warnings, not asked at a formula's rate, are let go as it is taken (`EnterFormula`). The
   warp never climbs back by itself (only the rate keys and a warp to a point raise it), and
   crossing a sphere's edge doesn't drop it; at the physics' rates the warnings still drop it to
   normal speed (`DropWarp`). From `Scene.AveragedLightRate` (256x) the light is shown averaged
@@ -330,21 +341,21 @@ dotnet run --project src/GameOne
   released after `Scene.PhysicsIdleSeconds` with none: a body with nothing in its physics has
   none, so it costs nothing, and the witnessed (the flown vessel, the small views' and the one the
   main camera is on) are at seven bodies at most, one each (one emptied is kept a while: nothing
-  nobody watches keeps one running). Nothing is written for two bodies: a vessel is asked which body it is at, never "the
-  other one". At each body, only the witnessed and what could soon hit them are in its physics;
-  every other vessel is out of it, moved by formula (`Vessel.OnFormula`: its body taken out by
-  `LeavePhysics`, its removed `Craft` kept as a stand-in so `Craft` reads stay safe, every live Jolt
-  read in `Vessel` guarded by `OnFormula`; made again where the formula has it by `ReturnToPhysics`),
-  at a fraction of the cost (the user: "the cost of simulating them is kept as
-  low as possible"). `Unwatched` chooses each step, per body (only what is at one body is near
-  anything there; the main view's camera is at what it is on): the witnessed (the flown vessel, the small
-  views', the vessel the main camera is on, `FlightInput.Watching`, and the main view's near its
-  camera), and whatever could come within
-  `Scene.HandoverDistance` of something in the physics, or of the camera, within
-  `Scene.HandoverSeconds` at their closing speed, grown out from the witnessed, and nothing else:
-  whatever one nobody watches is doing (parting, settling in the water, on the pad, landed, aboard
-  a raft), the formula plays it out, at every rate, never bringing the physics in nor changing the
-  warp (a wreck already in the physics plays its hit out there, `RocketPhysics.Wreck`). Being near a site keeps nothing in the physics (the formula
+  nobody watches keeps one running). Nothing is written for two bodies: a vessel is asked which
+  body it is at, never "the other one". At each body, only the witnessed and what could soon hit
+  them are in its physics; every other vessel is out of it, moved by formula (`Vessel.OnFormula`:
+  its body taken out by `LeavePhysics`, its removed `Craft` kept as a stand-in so `Craft` reads
+  stay safe, every live Jolt read in `Vessel` guarded by `OnFormula`; made again where the formula
+  has it by `ReturnToPhysics`), at a fraction of the cost (the user: "the cost of simulating them
+  is kept as low as possible"). `Unwatched` chooses each step, per body (only what is at one body
+  is near anything there; the main view's camera is at what it is on): the witnessed (the flown
+  vessel, the small views', the vessel the main camera is on, `FlightInput.Watching`, and the main
+  view's near its camera), and whatever could come within `Scene.HandoverDistance` of something in
+  the physics, or of the camera, within `Scene.HandoverSeconds` at their closing speed, grown out
+  from the witnessed, and nothing else: whatever one nobody watches is doing (parting, settling in
+  the water, on the pad, landed, aboard a raft), the formula plays it out, at every rate, never
+  bringing the physics in nor changing the warp (a wreck already in the physics plays its hit out
+  there, `RocketPhysics.Wreck`). Being near a site keeps nothing in the physics (the formula
   checks the towers and masts itself). One leaves only past `Scene.HandoverHysteresis`
   times its reach; at most `Scene.HandoversInPerStep` come back a step, every body's together,
   each into its own body's physics, soonest needed first (one
@@ -376,8 +387,9 @@ dotnet run --project src/GameOne
   shallower than its plunge's reach it comes onto the seabed at `Scene.FormulaSeabedSpeedShare`
   of its speed into the water, judged there by the ground's rules; come down on a raft (landed,
   afloat or standing burning) it is aboard it (`Vessel.AboardUnderFormula`), carried by the
-  raft's pose at the world's time, and comes back into the physics frozen aboard there
-  (`RocketPhysics.Board`) only when something witnessed brings it in. Two under formula collide as
+  raft's pose at the world's time (`Rafts.Time`, which the physics at the sea sets as it steps,
+  and the flight where none does: `Worlds.SeaStepped`), and comes back into the physics frozen
+  aboard there (`RocketPhysics.Board`) only when something witnessed brings it in. Two under formula collide as
   part 1 judges them: at the physics' rates by `Unwatched.FindCollisions`, every
   `Scene.FormulaCollisionSeconds` over the interval ahead (swept boxes, then their bodies, each an
   axis as wide as itself, judged only as a touch begins, face on along a nose, else side to

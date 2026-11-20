@@ -58,7 +58,7 @@ public sealed class WarpPerfTests(ITestOutputHelper output)
         output.WriteLine($"  frame (its steps, whole) median {measure.FrameMs:0.000} ms of the {Flight.WarpBudgetSeconds * 1000:0} ms budget; one step median {measure.StepMs:0.000} ms");
         output.WriteLine($"  {measure.Steps:0.#} steps a frame ({measure.PhysicsSteps:0.#} of them stepping a physics), reached {measure.Reached:0.0}x");
         output.WriteLine($"  {sim.Flight.WorldVessels.Count} vessels in the world, {sim.Flight.WorldVessels.Count(v => v.State == FlightState.Crashed)} of them wrecked, {sim.Flight.Log.Count} entries in its log");
-        output.WriteLine("  part / piece           ms a frame   share of the frame");
+        output.WriteLine("  part / piece           ms a frame   share of the frame   (each its own median over the frames: they needn't sum to the frame's)");
         foreach (var (part, ms) in measure.Parts.OrderByDescending(p => p.Value))
             output.WriteLine($"  {part,-22} {ms,9:0.000}   {ms / measure.FrameMs,6:0%}");
         foreach (var (detail, ms) in measure.Details.OrderByDescending(p => p.Value).Where(p => p.Value > 0))

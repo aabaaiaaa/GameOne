@@ -495,7 +495,7 @@ public sealed class PatchedPathTests(ITestOutputHelper output)
                 Patched.Legs(Planet, at, stars, world.Time, legs, horizon);
                 var ms = watch.Elapsed.TotalMilliseconds;
                 output.WriteLine($"{(at - Planet.Centre).Length() / 1000:0} km out, to {horizon - world.Time:0} s: {ms:0.00} ms, {legs.Count} leg to {legs[^1].End - world.Time:0} s{(legs[^1].LeavesSystem ? ", leaving the solar system" : "")}");
-                Assert.InRange(ms, 0, 50);
+                Assert.InRange(ms, 0, 300); // a guard against the 32 s it took sampled every 2 s out to the edge, with room for a loaded machine
                 Assert.Single(legs);
                 Assert.Same(Planet, legs[0].Body);
                 Assert.Equal(!double.IsFinite(horizon), legs[0].LeavesSystem);

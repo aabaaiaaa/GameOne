@@ -138,9 +138,12 @@ public sealed class CameraSubjectTests(ITestOutputHelper output)
         }
     }
 
-    [Fact]
+    [LongFact]
+    [Trait("Run", "Long")]
     public void On_the_planet_the_camera_is_held_among_the_stars_frame_by_frame_for_an_hour()
     {
+        // Long (some 216,000 frames, over the normal suite's limit): the quicker one above holds it
+        // over 200 s in frames of a second, which leaves out the roundings of the game's own frames.
         // As the game steps it, at 60 frames a second, for an hour of world time (the planet turning
         // round some three times under it): each frame's turn is a small share of a float's step
         // in the yaw, so a rounding not carried on would drift it off by a degree or so.

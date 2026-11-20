@@ -22,7 +22,21 @@ internal static class WarpScenes
     public static (Simulation Sim, Vessel Flown) Flying(WorldState world, int id)
     {
         var sim = new Simulation(Mission.FreePlay, world: world);
-        return (sim, Fly(sim, id));
+        return (sim, Disposed(sim, () => Fly(sim, id)));
+    }
+
+    /// <summary>What <paramref name="make"/> makes of <paramref name="sim"/>, which is disposed if that fails (an assert in it), so a failed scene leaks no flight.</summary>
+    private static T Disposed<T>(Simulation sim, Func<T> make)
+    {
+        try
+        {
+            return make();
+        }
+        catch
+        {
+            sim.Dispose();
+            throw;
+        }
     }
 
     /// <summary>The vessel numbered <paramref name="id"/> switched to and flown in <paramref name="sim"/>'s flight.</summary>
@@ -59,12 +73,15 @@ internal static class WarpScenes
     {
         var (world, id) = MoonTransferWorld();
         var scene = Flying(world, id);
-        Assert.Same(GroundBody.Planet, scene.Flown.Body); // still on the planet's leg, not yet in the moon's sphere
-        var flown = scene.Flown;
-        var legs = new List<PathLeg>(Scene.PatchedLegs);
-        Patched.Legs(flown.Body, flown.CentreOfMass, flown.Body.AmongStars(flown.CentreOfMass, flown.Velocity), scene.Sim.Flight.WorldTime, legs);
-        Assert.True(legs.Count > 1 && legs[1].Body == GroundBody.Moon, "the transfer's path goes on into the moon's sphere");
-        return scene;
+        return Disposed(scene.Sim, () =>
+        {
+            Assert.Same(GroundBody.Planet, scene.Flown.Body); // still on the planet's leg, not yet in the moon's sphere
+            var flown = scene.Flown;
+            var legs = new List<PathLeg>(Scene.PatchedLegs);
+            Patched.Legs(flown.Body, flown.CentreOfMass, flown.Body.AmongStars(flown.CentreOfMass, flown.Velocity), scene.Sim.Flight.WorldTime, legs);
+            Assert.True(legs.Count > 1 && legs[1].Body == GroundBody.Moon, "the transfer's path goes on into the moon's sphere");
+            return scene;
+        });
     }
 
     /// <summary>The upper stage on a round orbit <see cref="LowOrbitHeight"/> over the air's top.</summary>

@@ -155,10 +155,10 @@ say) stalls frames and spoils the timing.
 **`WarpPerfTests`** are the same warp scenes headless, with no window: where a frame in warp goes
 (the flight's steps at the rate asked, within `Flight.WarpBudgetSeconds` as the game gives them,
 60 frames warmed up then 300 timed, each part and piece of them from `Timings`, with the steps a
-frame and the rate reached), at 32x, the physics' top rate and the top rate on a moon transfer,
-in a low orbit and among a hundred satellites, and at the top rate in a full world. They report
-and never fail on their times: run them only when working on the warp, in Release, beside the
-paced tests above, to see where a frame's time goes:
+frame and the rate reached), at 32x (a formula's rate), the physics' top rate and the top rate
+on a moon transfer, in a low orbit and among a hundred satellites, and at the top rate in a full
+world. They report and never fail on their times: run them only when working on the warp, in
+Release, beside the paced tests above, to see where a frame's time goes:
 
 ```sh
 GAMEONE_PERF=1 dotnet test GameOne.slnx -c Release --filter "FullyQualifiedName~WarpPerfTests" --logger "console;verbosity=detailed"
@@ -448,7 +448,8 @@ GAMEONE_PERF=1 dotnet test GameOne.slnx -c Release --filter "FullyQualifiedName~
   10 m/s wrecking both, judged as their touch begins; five pairs among the hundred satellites
   (their polar copies raised apart, so as not to meet over the pole) set to cross at random
   moments in the frame, exactly those wrecked and as many judged as a brute-force check of every
-  pair's Kepler ways finds; and a top-rate frame among the hundred allocating nothing.
+  pair's Kepler ways finds (their bodies judged where their middles come closest,
+  `FormulaContact.Bodies`); and a top-rate frame among the hundred allocating nothing.
 - **`FormulaRateTests`:** a frame at a formula's rate as one advance by formula, in windows
   (`Scene.FormulaWindowSeconds`): a low orbit coasted 60 frames at the top rate ending within a
   metre of where Kepler puts it, the clock 60 frames' worth on; nothing in the physics then (its
@@ -465,9 +466,12 @@ GAMEONE_PERF=1 dotnet test GameOne.slnx -c Release --filter "FullyQualifiedName~
   (`Formula.FloorRadius`, `ComesDownAt`), its apoapsis lowered by the drag as at normal speed within a
   metre, and one dipping 10 m into it for under 7 s, wholly between two of the frame's window ends,
   stepped through too (its apoapsis 1.3 m lower, as at normal speed); at the moon an orbit under its lowest ground coming down where it does at normal speed,
-  for the same reason, within a metre; and a vessel past the solar system's edge in a top-rate frame
-  lost there and logged, the warp kept; three boosters nobody watches at the top rate, into the deep sea, onto level ground at 30 m/s and onto the drone ship's deck, afloat, wrecked and landed aboard (carried by the deck) with nothing in the physics in any frame and the warp unchanged; and the flown vessel afloat, or aboard the drone ship, letting the top rate in (nothing holds it), still afloat or on the deck there.
-- **`FormulaStagingTests`:** a vessel under formula staged by the numbers (`Flight.StageVessel`, called directly: nothing in the game stages a vessel nobody flies yet): a two-stage rocket at the top rate coming apart into its booster where the stack's bottom was and its upper stage a stage up the axis, each with the stack's velocity and its share of the turning but for the push apart, parting from each other, the upper stage's mass, acceleration and delta-v those of the same stack staged in the physics; its upper stage then burnt out at the top rate giving the delta-v the rocket equation says within 0.1% (against a twin coasting, far out where the pull is slight, compared just after the burn); a satellite's fairing coming off in two halves pushed out at `Scene.FairingSeparationSpeed` on opposite sides; staged at rest (on level ground, and aboard the drone ship's deck), the upper stage set on the booster with its bell out of the interstage, no parting, both staying landed (aboard, both on the deck as it moves); and staging at the top rate and at the physics' top rate never bringing anything into the physics, making a world, nor changing the warp.
+  for the same reason, within a metre; a vessel past the solar system's edge in a top-rate frame
+  lost there and logged, the warp kept, and one reaching it within a frame lost at its moment, the
+  frame cut there (within a second, against a window's 12 s); a drone ship's deck and the moon
+  located a second ahead where they are a second on (what a hold in the target's frame steers by
+  along a window's burn steps); three boosters nobody watches at the top rate, into the deep sea, onto level ground at 30 m/s and onto the drone ship's deck, afloat, wrecked and landed aboard (carried by the deck) with nothing in the physics in any frame and the warp unchanged; and the flown vessel afloat, or aboard the drone ship, letting the top rate in (nothing holds it), still afloat or on the deck there.
+- **`FormulaStagingTests`:** a vessel under formula staged by the numbers (`Flight.StageVessel`, called directly: nothing in the game stages a vessel nobody flies yet): a two-stage rocket at the top rate coming apart into its booster where the stack's bottom was and its upper stage a stage up the axis, each with the stack's velocity and its share of the turning but for the push apart, parting from each other, the upper stage's mass, acceleration and delta-v those of the same stack staged in the physics; its upper stage then burnt out at the top rate giving the delta-v the rocket equation says within 0.1% (against a twin coasting, far out where the pull is slight, compared just after the burn); a satellite's fairing coming off in two halves pushed out at `Scene.FairingSeparationSpeed` on opposite sides; staged at rest (on level ground, and aboard the drone ship's deck), the upper stage set on the booster with its bell out of the interstage, no parting, both staying landed (aboard, both on the deck as it moves); and staging at the top rate and at the physics' top rate never bringing anything into the physics, making a world, nor changing the warp. And a stack burning under formula, half a burn step past its last whole one, saved, crossed into the moon's sphere or staged there with the fuel its flow has used since its burn began (what is owed burnt first).
 - **`FormulaTests`:** a vessel out of the physics, moved by formula: one going straight up above the air rising to its top when its orbit says and falling back into the air, never standing still; a satellite on its
   orbit by Kepler (60 s; 600 s as a long test), coming back into the physics where the formula
   had it with no jump and flying on there on the same orbit (after 30 s out; 300 s as a long
@@ -489,7 +493,8 @@ GAMEONE_PERF=1 dotnet test GameOne.slnx -c Release --filter "FullyQualifiedName~
   (the hysteresis), and one the main view witnessed drawing off past its reach kept until past
   the hysteresis times it, then let go once; twenty due at once brought back four a flight step,
   and eight due one after another brought back the soonest needed first; choosing allocating
-  nothing; a parting stage, a booster settling in the sea and a rocket on its pad, far from the witnessed, leaving the physics (the formula plays each out: settled afloat, waiting on its pad, and the stage back in the physics still parting from what it came off as it is switched to), and one afloat with an end over a floe loading under formula aboard it.
+  nothing; flown at the moon, the rafts kept at the world's time with nothing at the planet's
+  physics to step them; a parting stage, a booster settling in the sea and a rocket on its pad, far from the witnessed, leaving the physics (the formula plays each out: settled afloat, waiting on its pad, and the stage back in the physics still parting from what it came off as it is switched to), and one afloat with an end over a floe loading under formula aboard it.
   Collisions between two under formula (`Unwatched.FindCollisions`), 5 km
   over the far side of the planet, nobody near: head on at 500, 2,000 and 8,000 m/s (and at
   8,000 at the physics' top rate) and crossing at 5,657 m/s, both wrecked "Hit another vessel" within 50 m
@@ -882,10 +887,16 @@ GAMEONE_PERF=1 dotnet test GameOne.slnx -c Release --filter "FullyQualifiedName~
   staging, the legs, the bay doors and the throttle at rest each dropping it (`SetMoving`) with
   the action taken in the physics; a steering key (`Steering`) turning the aim as far as at the
   physics' top rate; a node 2,000 s ahead dropping it (`Node`) its lead and half its burn before
-  its time, once, and again once deleted and made again the same; Faster (or a warp to a point)
+  its time, once, and again once deleted and made again the same, timed by the burn of the stage
+  then flown (staged after its drop moment was first worked out); a node within its lead as Faster
+  is pressed from the physics' top rate dropping it before any window, nothing handed to the
+  formula; Faster (or a warp to a point)
   from the physics' top rate in a frame with a launch or a steering key held there, the input
   taken in the physics; a switch and a small view at the top rate to a booster in the air dropping it by
-  its name, flown or seen in the physics; and the readout's `Warp dropped` saying why for
+  its name, flown or seen in the physics, the switch asked in a whole frame dropping it before
+  that frame runs, the booster still flying when it is flown; a switch at the top rate to a
+  vessel round the moon, whose physics isn't made, waiting on its physics made ahead before it is
+  flown; and the readout's `Warp dropped` saying why for
   `Scene.WarpDropShownSeconds`.
 - **`WarpWarningTests`:** a collision or near miss coming at a witnessed vessel at a formula's
   rate (`Collisions.AheadOfTheWarp`), two levels: two boosters head on, 600 s of travel apart
@@ -893,8 +904,10 @@ GAMEONE_PERF=1 dotnet test GameOne.slnx -c Release --filter "FullyQualifiedName~
   `Scene.CollisionHorizonSeconds` and that plus `Scene.WarpDropLeadSeconds` ahead of their
   meeting, then the physics' warning dropping it to normal speed and the slow-down reaching its
   least scale as both are wrecked; the same pass a little wider than their sizes dropping it
-  (`NearMiss`) only with the setting on, the warning there naming the other; the warp raised
-  again after the drop not dropped again by the same vessel, the collision then the formula's;
+  (`NearMiss`) only with the setting on, the warning there naming the other; after the collision's
+  drop, Faster pressed again and again never taking it past the physics' top rate until both are
+  wrecked, its slow-down reaching its least scale; the warp raised again after a near miss's drop
+  not dropped again by the same vessel;
   an other dropped for as it came at one witnessed vessel still found coming at another; two
   satellites drifting side by side within their sizes, their gap wavering, dropping it once in
   eight raises; and two satellites 300 m apart on one orbit never dropping it in 120 frames at
@@ -902,7 +915,8 @@ GAMEONE_PERF=1 dotnet test GameOne.slnx -c Release --filter "FullyQualifiedName~
 - **`WarpGateTests`:** the gate on the formula's rates (`Flight.WarpHeldBy`): a booster falling
   in the air, flown, in a small view or watched by the main camera, stopping the rate keys at the
   physics' top rate and named on the time line; one waiting on the pad or landed on the moon
-  holding nothing; one not yet at rest holding it; climbing out of the air at the physics' top
+  holding nothing; one not yet at rest holding it, and one settling in the water, each said on
+  the time line as not yet at rest; climbing out of the air at the physics' top
   rate staying there (nothing raises it by itself); a vessel in the air seen at a formula's rate
   dropping it to the physics' top rate; throttling up in orbit at a formula's rate dropping
   nothing, the lit engine holding nothing; set moving from rest at a formula's rate dropping it;
@@ -1283,7 +1297,9 @@ GAMEONE_PERF=1 dotnet test GameOne.slnx -c Release --filter "FullyQualifiedName~
   at once with no link-up. At the top rate (`Scene.TopRate`): the moon transfer, flown and nobody watching it, handed
   across at its crossing's moment (its frame cut there), within a metre of the moon leg's place a minute
   on, the warp kept; a crossing 0.3 s past where its orbit was first looked along to
-  (`Scene.MapCollisionHorizonSeconds` on), still handed across at its moment; and a warp to a point
+  (`Scene.MapCollisionHorizonSeconds` on), still handed across at its moment; one going on its
+  orbit within a window, just off the moon's ground and out of its sphere seconds later in that
+  window, handed across at its moment too (`FormulaMotion.Behind`); and a warp to a point
   30 s past the crossing, crossing on the way and stopping on its time, on the moon leg within a metre.
 - **`MoonTripTests`:** the moon trip flown by `MoonPilots.cs`, each leg from where it is about
   (`MoonTrip`): from a low orbit round the planet (300 m over the air, the moon a transfer's lead
@@ -1519,8 +1535,8 @@ machine's other work, too.
   simulation. Each step is sampled from `Timings`: its parts (Rules, Jolt, Tiles, Water, Contact,
   Rest), the pieces of Tiles and Contact under them (`StepDetail`, as `Tiles: Samples`,
   `Contact: Vessels` and so on: timed within their part, so they don't add to the step, and a
-  part's come to a little less than it) and the whole step, in ms; and the speed (game time over the steps' time, beside the 32x
-  they measure it against, `ShortPerfTests.MaxWarp`). A step here is a flight step, a frame's worth of game time (1/60 s), which
+  part's come to a little less than it) and the whole step, in ms; and the speed (game time over the steps' time, beside the physics' top rate
+  they measure it against, `ShortPerfTests.MaxWarp`, `Scene.PhysicsTopRate`: 8x). A step here is a flight step, a frame's worth of game time (1/60 s), which
   is two of Jolt's 1/120 s steps (a sample's `PhysicsSteps`): "ms per step" is per flight step,
   never per Jolt step, whereas the panel's "steps a frame" counts Jolt's. Each prints the median,
   95th percentile, mean, the mean's share of the step's mean, and spread (the runs' medians, the

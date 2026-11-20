@@ -259,6 +259,20 @@ frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
   Ways: hand such a pair back to the physics to settle (a body each until they rest), or set the
   one coming down on the other's top by formula as it is set on the ground. To discuss before
   building: the user's call whether it matters.
+- **The formula's seabed speed, a straight share of the speed into the water** (a design question
+  for the user, from the fast warp's final review, 2026-11-20; to discuss before building). A
+  vessel nobody watches splashing down under formula into water too shallow for its plunge comes
+  onto the seabed at `Scene.FormulaSeabedSpeedShare` (1.2) of its speed into the water, whatever
+  the depth and the speed. The physics' isn't a share: a booster in at 2 m/s reaches the seabed
+  7.5 m down at 5.6 m/s (2.8 times) and 10 m down at 2.6 (1.3 times), one in at 10.8 m/s 3 m down
+  at 12.2 (1.1 times), as its hull sinks faster until it floats and the water's drag grows with
+  the speed. The share gives the physics' outcome (landed on the seabed, or wrecked) for those
+  three, but a moderate entry into 7 to 10 m of water may come out otherwise. What it would
+  change: the seabed speed worked out from the depth and the entry speed (a fit to the physics'
+  plunges, or the plunge stepped by the physics' own buoyancy and drag along the formula's way),
+  so a splashdown nobody watches ends as the physics' would at any depth. Costs or risks: the fit
+  and its tests against the physics for each vessel's shape; a plunge stepped is a few hundred
+  formula steps for each such splashdown.
 - **The formula's bodies: capsules, or flat-ended as the physics' are?** (a design question for
   the user, from collisions part 3, 2026-11-08). Each body under formula is "an axis as wide
   as itself", so its ends are rounded (a capsule) where Jolt's cylinders are flat: a

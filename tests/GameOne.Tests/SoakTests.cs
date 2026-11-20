@@ -285,6 +285,20 @@ internal sealed class Playlist
     private const double PadSeconds = Scene.TerrainTileLingerSeconds + 1.0;
     private const double MaxFlightSeconds = 900; // the satellite mission (some 790 s): the upper stage waits most of a lap to come home, then the satellite climbs
 
+    /// <summary>
+    /// Off the landing zone, 60 m out along each way across the pad's plane: on the level ground
+    /// round it (within 2 degrees there), clear of its masts on the diagonals and of one another. Set
+    /// before <see cref="Course"/> (statics are set in the order written), so it is set before
+    /// anything there reads it.
+    /// </summary>
+    private static readonly Vector3[] ZoneNeighbours =
+    [
+        Scene.LandingZoneCentre + new Vector3(60f, 0f, 0f),
+        Scene.LandingZoneCentre + new Vector3(0f, 0f, 60f),
+        Scene.LandingZoneCentre + new Vector3(0f, 0f, -60f),
+        Scene.LandingZoneCentre + new Vector3(-60f, 0f, 0f),
+    ];
+
     // Each pilot is made on the pad of the world it flies in, so a landing aimed at a site that a
     // vessel from an earlier flight still stands on (a booster on the zone or the drone ship) is
     // flown beside it instead, as a player would: never down on top of it.
@@ -309,18 +323,6 @@ internal sealed class Playlist
 
     /// <summary>How far past the drone ship's deck a vessel still counts as in the way of a landing on it (a booster's legs reach some 5 m out).</summary>
     private const float DeckClearance = 13f;
-
-    /// <summary>
-    /// Off the landing zone, 60 m out along each way across the pad's plane: on the level ground
-    /// round it (within 2 degrees there), clear of its masts on the diagonals and of one another.
-    /// </summary>
-    private static readonly Vector3[] ZoneNeighbours =
-    [
-        Scene.LandingZoneCentre + new Vector3(60f, 0f, 0f),
-        Scene.LandingZoneCentre + new Vector3(0f, 0f, 60f),
-        Scene.LandingZoneCentre + new Vector3(0f, 0f, -60f),
-        Scene.LandingZoneCentre + new Vector3(-60f, 0f, 0f),
-    ];
 
     /// <summary>The landing zone, or beside it if a vessel from an earlier flight stands on it.</summary>
     private static Vector3 BesideTheZone(Flight f) => Clear(f, [Scene.LandingZoneCentre, .. ZoneNeighbours]);
