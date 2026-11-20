@@ -140,11 +140,10 @@ public sealed class FormulaRateTests(ITestOutputHelper output)
         Assert.True(flown.OnFormula && viewed.OnFormula);
         var (flownAt, viewedAt) = (flown.TrueCentreOfMass, viewed.TrueCentreOfMass);
 
-        // Its engine lit in a frame of no time: the next frame's gate holds the warp, and drops it.
-        flight.RunFrame(0f, new FlightInput(FullThrottle: true, Watched: watched));
-        flight.RunFrame(0f, new FlightInput(Watched: watched));
+        // A steering key in a frame of no time: the warp drops, before the key steers.
+        flight.RunFrame(0f, new FlightInput(Lean: flown.Right, Watched: watched));
         Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
-        Assert.Equal(WarpDrop.Air, flight.LastDrop!.Value.Reason);
+        Assert.Equal(WarpDrop.Steering, flight.LastDrop!.Value.Reason);
         Assert.False(flown.OnFormula);
         Assert.False(viewed.OnFormula);
         Assert.Same(flight.PhysicsAt(flown.Body), flown.Physics);

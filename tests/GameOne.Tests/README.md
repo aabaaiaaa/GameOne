@@ -834,6 +834,15 @@ say) stalls frames and spoils the timing.
   in no capture), written once, and gone from the world once Tab flies its run's booster; and
   `Flight.EdgeAsked` counting only the vessel 1,000 km inside, never the one in orbit or on the
   pad, at warp too.
+- **`WarpBurnTests`:** burns, the holds and the rings at the top rate, the formula flying the
+  witnessed vessel's burn (its rules after each of its steps, `Scene.FormulaBurnStepSeconds` above
+  the air: `Flight.BurnByFormula`): a gentle prograde burn of 120 s, and a 20 m/s node flown by
+  the manoeuvre hold, each ending on an apoapsis and a fuel used within 0.5% of the same burn at
+  normal speed in the physics; a ring's click 90° off the nose turned to within a frame, and a
+  ring's drag, neither dropping the warp; the fuel running out dropping it (`FuelOut`) with
+  `Scene.WarpDropLeadSeconds` of burning left; a retrograde burn taking it down dropping it
+  (`Air`) that lead before it reaches the air; and a burning vessel in a small view above the air
+  holding nothing.
 - **`WarpDropTests`:** the warp's drops from a formula's rate to the physics' top rate
   (`Flight.LastDrop`, a `WarpDrop`): `Scene.WarpDropLeadSeconds` ahead of an orbit coming down
   into the planet's air (`Air`) and into reach of the moon's ground (`Ground`), still above it

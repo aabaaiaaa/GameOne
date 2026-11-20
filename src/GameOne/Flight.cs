@@ -1844,9 +1844,10 @@ internal sealed partial class Flight : IDisposable
     /// <summary>
     /// A step's rules for every vessel over <paramref name="dt"/> (the flown one by
     /// <paramref name="input"/>, the rest as they were left), room made for any it added, and
-    /// their legs and bay doors swung.
+    /// their legs and bay doors swung. At a formula's rate the witnessed (the flown one and
+    /// <paramref name="witnessed"/>) have their rules run along their moves instead (<see cref="RuledApart"/>).
     /// </summary>
-    private void RunVessels(float dt, in FlightInput input)
+    private void RunVessels(float dt, in FlightInput input, IReadOnlyList<Vessel>? witnessed = null)
     {
         // Every vessel in the world flies: the controlled one as the pilot asks, the rest as they
         // were left. (Staging adds a vessel to the lists as it goes; it starts flying next frame.)
@@ -1874,9 +1875,10 @@ internal sealed partial class Flight : IDisposable
                     StageVessel(vessel);
                 if (vessel.State != FlightState.Flying)
                     continue;
-                vessel.Run(dt, input.Lean, input.Hold, WorldTime, FrameVelocity, HoldFloor);
+                if (!RuledApart(vessel, witnessed))
+                    vessel.Run(dt, input.Lean, input.Hold, WorldTime, FrameVelocity, HoldFloor, flown: true);
             }
-            else if (vessel.State == FlightState.Flying)
+            else if (vessel.State == FlightState.Flying && !RuledApart(vessel, witnessed))
                 vessel.Run(dt, Vector3.Zero, null, WorldTime, Frames.VelocityIn(vessel.Body, vessel.AutoFrame, vessel.CentreOfMass, vessel.Velocity), Scene.HoldFloorSpeed);
         }
         MakeRoom();

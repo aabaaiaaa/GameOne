@@ -1675,13 +1675,16 @@ internal sealed class Vessel
     /// none if it isn't being flown). <paramref name="now"/> is the world's time. The holds steer by
     /// <paramref name="holdVelocity"/>, its velocity in the frame in use (see <see cref="GameOne.Flight.FrameVelocity"/>),
     /// and leave the nose be below <paramref name="holdFloor"/> (see <see cref="GameOne.Flight.HoldFloor"/>).
+    /// The vessel <paramref name="flown"/> flies its nodes under formula too (at a formula's rate).
     /// </summary>
-    internal void Run(float dt, Vector3 lean, Vector3? hold, double now, Vector3 holdVelocity, float holdFloor)
+    internal void Run(float dt, Vector3 lean, Vector3? hold, double now, Vector3 holdVelocity, float holdFloor, bool flown = false)
     {
         _ignitionDelay = MathF.Max(0f, _ignitionDelay - dt);
-        // Under formula no node is flown, nor passed and let go: they wait for its pilot (the
-        // user: no nodes flown under formula), as the throttle and holds go on as they were.
-        if (!OnFormula)
+        // Under formula, a vessel nobody flies flies no node, nor passes one and lets it go: they
+        // wait for its pilot, as its throttle and holds go on as they were. The one flown flies its
+        // own, at a formula's rate as at the physics'.
+        var nodes = !OnFormula || flown;
+        if (nodes)
             FollowNodes(dt, now);
         // (Under formula the formula burns it, with its thrust: see BurnByFormula.)
         if (EngineLit && !OnFormula)
@@ -1689,8 +1692,8 @@ internal sealed class Vessel
         // The manoeuvre hold lets go once no node is left to steer by.
         if (Hold == HoldMode.Manoeuvre && Chain is null)
             Hold = HoldMode.None;
-        // (Under formula it steers by no node either: the burn left isn't worked out for it.)
-        Steer(dt, lean, hold, holdVelocity, holdFloor, Hold == HoldMode.Manoeuvre && !OnFormula ? BurnLeft(now) : null);
+        // (Nor does one nobody flies steer by a node under formula: the burn left isn't worked out for it.)
+        Steer(dt, lean, hold, holdVelocity, holdFloor, Hold == HoldMode.Manoeuvre && nodes ? BurnLeft(now) : null);
     }
 
     /// <summary>
@@ -1726,6 +1729,26 @@ internal sealed class Vessel
     /// staging), so the fuel matches where it is.
     /// </summary>
     private void BurnOwed(double now) => _fuel[Stage] -= FuelOwed(now);
+
+    /// <summary>
+    /// How long its fuel lasts at its throttle, as it is shown (what is owed, <see cref="FuelOwed"/>,
+    /// taken out): its tank over <see cref="Throttle"/> × the stage's fuel flow; infinity with its
+    /// engine out (or one that burns nothing).
+    /// </summary>
+    internal double FuelSeconds => TankSeconds(_fuel[Stage] - FuelOwed(_motion.Shown));
+
+    /// <summary>
+    /// How long its tank lasts at its throttle from its last whole formula step
+    /// (<see cref="FormulaMotion.Time"/>), none of it yet burnt since: what the formula's next step
+    /// may burn for (see <see cref="Formula"/>' step cut where the fuel runs out).
+    /// </summary>
+    internal double FuelSecondsFromStep => TankSeconds(_fuel[Stage]);
+
+    private double TankSeconds(float fuel)
+    {
+        var flow = Throttle * CurrentStage.FuelFlow;
+        return EngineLit && flow > 0f ? Math.Max(0f, fuel) / (double)flow : double.PositiveInfinity;
+    }
 
     /// <summary>Its tanks as it is shown (saved so: see <see cref="Capture"/>), what is owed (<see cref="FuelOwed"/>) taken out.</summary>
     private float[] FuelAsShown()

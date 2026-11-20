@@ -49,11 +49,11 @@ internal sealed partial class Flight
     /// The witnessed vessel (the flown one, a small view's, the main camera's) holding the warp to
     /// the physics' top rate, if one is: the first flying in the air or low over the ground, or not
     /// yet at rest (neither <see cref="Vessel.AtRest"/> nor <see cref="Vessel.AboveTheAir"/>; a
-    /// wreck flies nowhere, and holds nothing). Worked out as each frame begins, before the rate
+    /// wreck flies nowhere, and holds nothing; one burning above the air holds nothing either, as
+    /// the formula flies its burn: see <see cref="BurnByFormula"/>). Worked out as each frame begins, before the rate
     /// keys are taken: while it is set, <see cref="FlightInput.Faster"/> past the physics' top rate
     /// does nothing.
     /// </summary>
-    /// <remarks>One burning counts as in the air: the formula doesn't fly a witnessed vessel's burn.</remarks>
     public Vessel? WarpHeldBy { get; private set; }
 
     /// <summary>The warp's last drop to the physics' top rate (<see cref="DropToPhysics"/>), for the HUD to say why, a while.</summary>
@@ -195,7 +195,7 @@ internal sealed partial class Flight
 
     /// <summary>Whether <paramref name="v"/>, witnessed, holds the warp (see <see cref="WarpHeldBy"/>).</summary>
     private static bool Holds(Vessel v) =>
-        v.State != FlightState.Crashed && !v.AtRest && !(v.AboveTheAir && !v.EngineLit);
+        v.State != FlightState.Crashed && !v.AtRest && !v.AboveTheAir;
 
     /// <summary>
     /// Whether every vessel has been taken out of the physics for the formula's rates
@@ -267,7 +267,8 @@ internal sealed partial class Flight
     /// rate must be cut at, so what comes then is taken at its moment: the warp to a point's time,
     /// and the earliest crossing of a sphere's edge by a vessel on its orbit
     /// (<see cref="FormulaMotion.CrossesAt"/>), so it is handed across then (<see cref="Cross"/>, at
-    /// the window's end), never a window late; else <paramref name="to"/>. (A stepped vessel's
+    /// the window's end), never a window late, and the moment any burn under formula runs out of
+    /// fuel; else <paramref name="to"/>. (A stepped vessel's
     /// crossing is asked at each window's end.) And a drop's moment (<see cref="DropCut"/>,
     /// <see cref="NodeCut"/>), for each witnessed vessel (the flown one, the small views'
     /// <paramref name="watched"/> and the main camera's <paramref name="watching"/>, as the gate
@@ -283,8 +284,14 @@ internal sealed partial class Flight
         for (var i = 0; i < _world.Count; i++)
         {
             var v = _world[i];
-            if (v.OnFormula && v.State == FlightState.Flying && v.Motion.CrossesAt is var crosses && crosses > from && crosses < to)
+            if (!v.OnFormula || v.State != FlightState.Flying)
+                continue;
+            if (v.Motion.CrossesAt is var crosses && crosses > from && crosses < to)
                 to = crosses;
+            // And where a burn runs out of fuel, so no way across a window bends there (its
+            // collisions' Hermite way is one curve: see FormulaCollisions).
+            if (v.EngineLit && !v.Motion.Standing && from + v.FuelSeconds is var dry && dry > from && dry < to)
+                to = dry;
         }
         var flown = Controlled;
         // Looked for over the window and, past it, as far as the drop's moment could be from its end.
@@ -377,12 +384,27 @@ internal sealed partial class Flight
     /// <summary>
     /// Cuts the frame <see cref="Scene.WarpDropLeadSeconds"/> ahead of witnessed <paramref name="v"/>'s
     /// way, on its orbit, coming down to its floor (<see cref="Formula.FloorRadius"/>: into the air,
-    /// or within reach of an airless body's ground), if that is by <paramref name="to"/>.
+    /// or within reach of an airless body's ground), if that is by <paramref name="to"/>. Burning, of
+    /// its burn's way down to it (<see cref="Formula.BurnComesDownAt"/>, looked along as far as the
+    /// drop's moment could be from the window's end) and of its fuel running out
+    /// (<see cref="WarpDrop.FuelOut"/>), whichever is sooner.
     /// </summary>
     private void DropCut(Vessel v, double from, ref double to)
     {
-        if (!v.OnFormula || v.State != FlightState.Flying || v.Motion.Stepping || v.EngineLit)
-            return; // stepped (in the air, or burning) it holds the warp at the frame's start: no way on its orbit to cut at
+        if (!v.OnFormula || v.State != FlightState.Flying)
+            return;
+        if (v.EngineLit && !v.Motion.Standing)
+        {
+            var dry = from + v.FuelSeconds - Scene.WarpDropLeadSeconds;
+            var low = Formula.BurnComesDownAt(v, from, to - from + Scene.WarpDropLeadSeconds) is { } d ? d - Scene.WarpDropLeadSeconds : double.PositiveInfinity;
+            var (when, why) = low <= dry ? (low, v.Body.HasAir ? WarpDrop.Air : WarpDrop.Ground) : (dry, WarpDrop.FuelOut);
+            var cut = Math.Max(from, when);
+            if (cut <= to)
+                (to, _cutFor) = (cut, (why, v, null, null));
+            return;
+        }
+        if (v.Motion.Stepping)
+            return; // stepped unlit (in the air) it holds the warp at the frame's start: no way on its orbit to cut at
         if (Formula.ComesDownAt(v.Motion.OnOrbit, Formula.FloorRadius(v)) is not { } down)
             return;
         var at = Math.Max(from, down - Scene.WarpDropLeadSeconds);
@@ -448,7 +470,7 @@ internal sealed partial class Flight
     /// <summary>
     /// One window of a frame at a formula's rate (<see cref="AdvanceByFormula"/>): what a step does
     /// after the input (<see cref="Step"/>), but that every vessel is moved by formula and nothing of
-    /// Jolt's is stepped: the vessels' rules once, their moves and the collisions between them along
+    /// Jolt's is stepped: the vessels' rules once (the witnessed's along their moves instead: <see cref="BurnByFormula"/>), their moves (each stepped one's last step ending at the window's end) and the collisions between them along
     /// their ways across the window (<see cref="FormulaCollisions"/>: each one's start kept, then
     /// the window judged once all are at its end), their legs and doors, then their crossings, the
     /// edge, the bodies asked ahead, the target, the losses and the runs. Not the look ahead nor the
@@ -461,28 +483,80 @@ internal sealed partial class Flight
         WorldTime += dt;
         _bodiesAt = WorldTime; // nothing in the physics is behind: it isn't stepped
         TakeChoices(input);
-        RunVessels(dt, input);
+        var watching = input.Watching is { } on && _world.Contains(on) ? on : null;
+        var witnessed = Witnessed(input.Watched, watching);
+        RunVessels(dt, input, witnessed);
         // The rafts' poses at the window's end, which the physics sets as it steps: the floes as each
         // is asked of (Rafts.Now), the ships here, so a touch on a deck is judged as the deck is then.
         Rafts.Time = WorldTime;
         for (var i = 0; i < Rafts.Ships.Count; i++) // by index: a foreach over the interface would box its enumerator
             Rafts.Now(Rafts.Ships[i]);
         FormulaCollisions.Begin(from);
-        Unwatched.Move();
+        // The witnessed first, each moved with its rules (see BurnByFormula), then everything else.
+        BurnByFormula(Controlled, WorldTime, input);
+        for (var i = 0; witnessed is not null && i < witnessed.Count; i++) // by index: a foreach over the interface would box its enumerator
+            if (witnessed[i] != Controlled)
+                BurnByFormula(witnessed[i], WorldTime, input);
+        Unwatched.Move(toTheEnd: true);
         FormulaCollisions.Judge(from, WorldTime);
         Timings.Lap(StepPart.Rules);
         foreach (var vessel in _world)
             vessel.AfterPhysics(dt, WorldTime);
         Cross(WorldTime);
         LeaveTheSystem(WorldTime);
-        var watching = input.Watching is { } on && _world.Contains(on) ? on : null;
-        AskAhead(WorldTime, Witnessed(input.Watched, watching));
+        AskAhead(WorldTime, witnessed);
         ResolveTarget();
         KeepFrame();
         LogLosses();
         UpdateRuns();
         KeepWarpTo();
         Timings.EndStep(_worlds.TileCount);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="v"/>'s rules run along its moves in a window at a formula's rate
+    /// (<see cref="BurnByFormula"/>) rather than with the rest's as the window begins: the flown
+    /// vessel's and the <paramref name="witnessed"/>'s, under formula.
+    /// </summary>
+    private bool RuledApart(Vessel v, IReadOnlyList<Vessel>? witnessed) =>
+        ByFormula && v.OnFormula && (v == Controlled || IsWatched(v, witnessed));
+
+    /// <summary>
+    /// Moves witnessed <paramref name="v"/> (see <see cref="RuledApart"/>) by formula to world time
+    /// <paramref name="to"/>, the window's end, with its rules (<see cref="Vessel.Run"/>: its holds,
+    /// the rings, the flown one's nodes and <paramref name="held"/>'s ring drag) run after each move,
+    /// for the time it moved, so its aim is turned as from where it now is: burning, every formula
+    /// step (<see cref="Formula.StepFor"/>), the step after each pointed as the rules last left it,
+    /// so neither the thrust nor the aim is carried past what they were; coasting (on its orbit, its
+    /// aim nothing to its way), once for the whole window. A step ends where its fuel runs out
+    /// (see <see cref="Formula"/>), and the last at <paramref name="to"/>, so nothing is owed past
+    /// the window. Its attitude is then shown as the rules left its aim. In a window of no time its
+    /// rules still run, once, of no time (an engine cut there is judged against its node, as in the
+    /// physics). A vessel that can't be steered, or isn't flying under formula, is left to
+    /// <see cref="Unwatched.Move"/>.
+    /// </summary>
+    private void BurnByFormula(Vessel v, double to, in FlightInput held)
+    {
+        if (!v.Guided || !ByFormula)
+            return;
+        var flown = v == Controlled;
+        do
+        {
+            if (!v.OnFormula || v.State != FlightState.Flying)
+                return; // it touched something on the way: landed, afloat or wrecked there (or never flew)
+            var at = v.Motion.Shown;
+            var end = v.EngineLit && !v.Motion.Standing ? Math.Min(to, at + Formula.StepFor(v)) : to;
+            Formula.Advance(v, 0f, end, toTheEnd: true);
+            if (!v.OnFormula || v.State != FlightState.Flying)
+                return;
+            var dt = (float)Math.Max(0.0, end - at);
+            if (flown)
+                v.Run(dt, held.Lean, held.Hold, end, FrameVelocity, HoldFloor, flown: true);
+            else
+                v.Run(dt, Vector3.Zero, null, end, Frames.VelocityIn(v.Body, v.AutoFrame, v.CentreOfMass, v.Velocity), Scene.HoldFloorSpeed);
+            Formula.Advance(v, 0f, end); // shown turned to the aim its rules left (no time on)
+        }
+        while (to - v.Motion.Shown > LeftOverSeconds);
     }
 
     /// <summary>

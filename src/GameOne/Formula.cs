@@ -90,13 +90,14 @@ internal struct FormulaMotion
 /// air and pull, in its frame. Above the air with its engine off it is on a Kepler orbit (<see cref="Orbit.StateAfter"/>)
 /// from the state it last changed at, worked out afresh for the time asked, never integrated, so its
 /// orbit costs the same however long it is on it and never drifts. In the air, or burning, it is
-/// stepped every <see cref="Scene.FormulaStepSeconds"/>, in double, as the physics falls it (gravity, the
+/// stepped every <see cref="Scene.FormulaStepSeconds"/> (above the air and clear of the ground,
+/// every <see cref="Scene.FormulaBurnStepSeconds"/>: <see cref="StepFor"/>), in double, as the physics falls it (gravity, the
 /// turn's pulls and the air's drag: <see cref="GroundBody.FallStep"/>), its thrust
 /// (<see cref="Vessel.Throttle"/> × <see cref="Vessel.MaxAcceleration"/>) along its
 /// <see cref="Vessel.Aim"/>, which its holds turn as they do in the physics. The fuel burns in each
-/// step with its thrust (<see cref="Vessel.BurnByFormula"/>), at the step's mean mass and cut where
-/// the fuel runs out, so a burn gives the delta-v its numbers say however seldom its rules run (once
-/// a window at a formula's rate). Its attitude follows its aim at once (no turning
+/// step with its thrust (<see cref="Vessel.BurnByFormula"/>), at the step's mean mass, the step cut
+/// where the fuel runs out, so a burn gives the delta-v its numbers say however seldom its rules run (once
+/// a window at a formula's rate, but a witnessed burner's every step: see Flight's BurnByFormula). Its attitude follows its aim at once (no turning
 /// time: a simplification allowed under formula); one that can't be steered keeps turning as it was.
 /// Low over the ground its speed over it is held to <see cref="Scene.GroundTopSpeed"/> each step that
 /// starts or would end there, as the physics holds it; so while faster there it is stepped, not on
@@ -112,18 +113,39 @@ internal struct FormulaMotion
 /// </remarks>
 internal static class Formula
 {
-    private const float StepSeconds = Scene.FormulaStepSeconds;
+    /// <summary>
+    /// How long <paramref name="v"/>'s next formula step is, where it is now and as it moves: <see cref="Scene.FormulaBurnStepSeconds"/>
+    /// where, its engine off, it could be on its orbit (<see cref="OnItsOrbitAt"/>: above its body's air,
+    /// clear of its highest ground and not held to the ground's top speed low over it, where nothing
+    /// changes fast: no air, nothing to touch or hold it); <see cref="Scene.FormulaStepSeconds"/> otherwise.
+    /// </summary>
+    internal static float StepFor(Vessel v) => StepAt(v, v.CentreOfMass, v.Velocity);
+
+    private static float StepAt(Vessel v, Vector3 at, Vector3 velocity) =>
+        OnItsOrbitAt(v, at, velocity) ? Scene.FormulaBurnStepSeconds : Scene.FormulaStepSeconds;
 
     /// <summary>
-    /// How far on, in seconds of its velocity, a step reads its pull and air from where it is
-    /// (see <see cref="Step"/>): half of how much longer its step is than the physics'. That is
-    /// the mean of where the physics' own steps across one of the formula's (twelve of
-    /// <see cref="RocketPhysics.StepSeconds"/> in <see cref="Scene.FormulaStepSeconds"/>) read
-    /// theirs, the first where it is and each after one of its steps on, so under a pull that
+    /// The next step's length from the stepped state <paramref name="m"/> (<see cref="StepAt"/>, at
+    /// its place), cut where its fuel runs out burning (no shorter than one of the physics' steps,
+    /// for a tank all but dry), so no step's thrust is carried past it.
+    /// </summary>
+    private static float NextStep(Vessel v, in FormulaMotion m)
+    {
+        var step = StepAt(v, m.At.ToSingle(), m.Velocity.ToSingle());
+        var fuel = v.FuelSecondsFromStep;
+        return fuel < step ? MathF.Max((float)fuel, RocketPhysics.StepSeconds) : step;
+    }
+
+    /// <summary>
+    /// How far on, in seconds of its velocity, a step of <paramref name="seconds"/> reads its pull
+    /// and air from where it is (see <see cref="Step"/>): half of how much longer its step is than
+    /// the physics'. That is the mean of where the physics' own steps across one of the formula's
+    /// (twelve of <see cref="RocketPhysics.StepSeconds"/> in <see cref="Scene.FormulaStepSeconds"/>)
+    /// read theirs, the first where it is and each after one of its steps on, so under a pull that
     /// changes along the way (an orbit's, bending) the formula falls as the physics does; under
     /// a steady one, where it is read changes nothing.
     /// </summary>
-    private const double Lead = ((double)StepSeconds - RocketPhysics.StepSeconds) / 2;
+    private static double Lead(float seconds) => ((double)seconds - RocketPhysics.StepSeconds) / 2;
 
     /// <summary>
     /// How far apart along a step what is under it is read (metres): the smallest floe's width
@@ -200,6 +222,65 @@ internal static class Formula
         orbit.Orbit.FallingTo(floorRadius) is { } seconds ? orbit.Since + seconds : null;
 
     /// <summary>
+    /// The world time burning <paramref name="v"/> comes down to its floor (<see cref="FloorRadius"/>:
+    /// into the air, or within reach of an airless body's ground), if it does within
+    /// <paramref name="horizon"/> seconds of <paramref name="now"/> (its state's time); null if not.
+    /// A look ahead, not its flight: from where it is, among the stars as its body's ground is now,
+    /// its thrust kept on at its throttle while its fuel lasts (<see cref="Vessel.FuelSeconds"/>), along
+    /// its velocity held prograde, against it retrograde, else along its aim as it is (the rings', a
+    /// node's: neither turns far in a few seconds), stepped every <see cref="Scene.FormulaBurnStepSeconds"/>
+    /// by its body's pull alone (above its air there is nothing else), which is near enough over the
+    /// seconds a drop's lead looks ahead.
+    /// </summary>
+    internal static double? BurnComesDownAt(Vessel v, double now, double horizon)
+    {
+        var body = v.Body;
+        var floor = FloorRadius(v);
+        var centre = (Vector3Double)body.Centre;
+        var p = v.TrueCentreOfMass - centre;
+        var u = v.TrueVelocity + Vector3Double.Cross(body.Spin, p);
+        var mass = (double)v.Mass;
+        var thrust = (double)(v.Throttle * v.CurrentStage.Thrust);
+        var flow = (double)(v.Throttle * v.CurrentStage.FuelFlow);
+        var lasts = v.FuelSeconds;
+        Vector3Double aim = v.Aim;
+        // Out of reach within the horizon even falling straight down at its fall's and thrust's whole pull: none.
+        var most = body.Mu / (floor * floor) + thrust / Math.Max(1.0, mass - flow * Math.Min(horizon, lasts));
+        var r = p.Length();
+        if (r - floor > u.Length() * horizon + most * horizon * horizon / 2)
+            return null;
+
+        Vector3Double Pushed(Vector3Double at, Vector3Double moving, double t)
+        {
+            var d = at.Length();
+            var pull = at * (-body.Mu / (d * d * d));
+            if (t >= lasts)
+                return pull;
+            var way = v.Hold switch
+            {
+                HoldMode.Prograde => Vector3Double.Normalize(moving),
+                HoldMode.Retrograde => -Vector3Double.Normalize(moving),
+                _ => aim,
+            };
+            return pull + way * (thrust / (mass - flow * t));
+        }
+
+        var step = (double)Scene.FormulaBurnStepSeconds;
+        for (var t = 0.0; t < horizon; t += step)
+        {
+            var h = Math.Min(step, horizon - t);
+            var half = u + Pushed(p, u, t) * (h / 2);
+            var next = p + half * h;
+            var moved = half + Pushed(next, half, t + h) * (h / 2);
+            var reached = next.Length();
+            if (reached <= floor)
+                return now + t + h * Math.Clamp((r - floor) / Math.Max(r - reached, 1e-9), 0.0, 1.0);
+            (p, u, r) = (next, moved, reached);
+        }
+        return null;
+    }
+
+    /// <summary>
     /// How the formula starts on a vessel at <paramref name="body"/> leaving the physics at world time
     /// <paramref name="now"/> in this state (in the body's frame): on its orbit if it can (flying above
     /// the air, its engine off), else stepped from here.
@@ -217,8 +298,11 @@ internal static class Formula
     /// <paramref name="worldTime"/>, <paramref name="dt"/> on from the last time it was asked (0
     /// only brings it to that time), judging its touch on the way. Nothing is done for a vessel in
     /// the physics, or for one wrecked; one landed or afloat is only carried by a raft it is aboard.
+    /// <paramref name="toTheEnd"/> (a window's end at a formula's rate), a stepped one's last step
+    /// is cut short to end at <paramref name="worldTime"/>, so nothing of its burn is owed past it
+    /// and the window's rules (a throttle or an aim changed) take effect from there exactly.
     /// </summary>
-    public static void Advance(Vessel v, float dt, double worldTime)
+    public static void Advance(Vessel v, float dt, double worldTime, bool toTheEnd = false)
     {
         if (!v.OnFormula || v.State == FlightState.Crashed)
             return; // a wreck is gone
@@ -271,13 +355,24 @@ internal static class Formula
         }
 
         var stepped = false;
-        while (m.Time + StepSeconds <= worldTime + 1e-9)
+        while (true)
         {
-            if (Step(v, ref m))
+            var seconds = NextStep(v, m);
+            var last = false;
+            if (m.Time + seconds > worldTime + 1e-9)
+            {
+                if (!toTheEnd || worldTime - m.Time <= 1e-6)
+                    break;
+                (seconds, last) = ((float)(worldTime - m.Time), true); // the last, short, to end at the window's end
+            }
+            if (Step(v, ref m, seconds))
                 return; // it touched: landed, afloat or wrecked, there
             stepped = true;
+            if (last)
+                m.Time = worldTime; // there, not a float's rounding short of it
+
             // Above the air with its engine off (and not about to come down into it), it goes on its orbit from here.
-            if (!v.EngineLit && OnItsOrbitAt(v, m.At.ToSingle(), m.Velocity.ToSingle()) && OnItsOrbitAt(v, (m.At + m.Velocity * StepSeconds).ToSingle(), m.Velocity.ToSingle()))
+            if (!v.EngineLit && OnItsOrbitAt(v, m.At.ToSingle(), m.Velocity.ToSingle()) && OnItsOrbitAt(v, (m.At + m.Velocity * StepAt(v, m.At.ToSingle(), m.Velocity.ToSingle())).ToSingle(), m.Velocity.ToSingle()))
             {
                 (m.Stepping, m.OnOrbit) = (false, Start(v.Body, m.At, m.Velocity, v.FormulaRotation, v.FormulaSpin, m.Time));
                 var (at, velocity) = Along(m.OnOrbit, worldTime);
@@ -334,7 +429,11 @@ internal static class Formula
     /// (<see cref="Held"/>: low over a body with no air, the moon's), which its orbit knows nothing of.
     /// </remarks>
     internal static bool OnItsOrbitAt(Vessel v, Vector3 at, Vector3 velocity) =>
-        v.Body.AboveAir(at) && v.Body.Altitude(at) - v.Reach > v.Body.MaxHeight + Scene.FineDetailMargin && !Held(v.Body, at, velocity);
+        Clear(v, at) && !Held(v.Body, at, velocity);
+
+    /// <summary>Whether <paramref name="v"/>'s centre of mass at <paramref name="at"/> is above its body's air and nothing of it within reach of its highest ground, its fine detail included (see <see cref="OnItsOrbitAt"/>).</summary>
+    private static bool Clear(Vessel v, Vector3 at) =>
+        v.Body.AboveAir(at) && v.Body.Altitude(at) - v.Reach > v.Body.MaxHeight + Scene.FineDetailMargin;
 
     /// <summary>
     /// Whether something at <paramref name="at"/> moving at <paramref name="velocity"/> (over the
@@ -417,7 +516,7 @@ internal static class Formula
     }
 
     /// <summary>
-    /// One step of <see cref="Scene.FormulaStepSeconds"/>, from the stepped state: its thrust along
+    /// One step of <paramref name="seconds"/> (see <see cref="NextStep"/>), from the stepped state: its thrust along
     /// its aim, then its fall as the physics falls it (<see cref="GroundBody.FallStep"/>, a kick), then
     /// the drift. The physics kicks and drifts every <see cref="RocketPhysics.StepSeconds"/>, which
     /// puts it ahead of the true path by its acceleration times that step times the time flown, a
@@ -426,7 +525,7 @@ internal static class Formula
     /// a fall) the two step to the same place, whatever their steps. True if it touched.
     /// </summary>
     /// <remarks>
-    /// That drift is a plain kick and drift of the place <see cref="Lead"/> on by the velocity (the
+    /// That drift is a plain kick and drift of the place its <see cref="Lead"/> on by the velocity (the
     /// place plus the lead, moved by the velocity the kick leaves), so the pull and the air are
     /// read there, which is also where the physics' own steps read it on the whole (see
     /// <see cref="Lead"/>): read at the place itself, the kick would hang on the velocity as well
@@ -434,7 +533,7 @@ internal static class Formula
     /// moon (a plain kick and drift holds it, as the physics' does). Under a steady pull where it
     /// is read changes nothing. In double, as the physics' copy is stepped.
     /// </remarks>
-    private static bool Step(Vessel v, ref FormulaMotion m)
+    private static bool Step(Vessel v, ref FormulaMotion m, float seconds)
     {
         var (p, u) = (m.At, m.Velocity);
         var next = u;
@@ -442,23 +541,23 @@ internal static class Formula
         {
             // Pushed at the step's mean mass, for as much of it as the fuel lasts.
             var (thrust, before) = (v.Throttle * v.CurrentStage.Thrust, v.Mass);
-            var lasted = v.BurnByFormula(StepSeconds);
-            next += (Vector3Double)v.Aim * (thrust / ((before + v.Mass) / 2f) * StepSeconds * lasted);
+            var lasted = v.BurnByFormula(seconds);
+            next += (Vector3Double)v.Aim * (thrust / ((before + v.Mass) / 2f) * seconds * lasted);
         }
-        var read = p + u * Lead;
+        var read = p + u * Lead(seconds);
         var drag = Scene.DragRate * v.Body.AirDensity(v.Body.Altitude(read.ToSingle()));
-        next += v.Body.FallStep(next, v.Body.Pull(read), drag, StepSeconds);
+        next += v.Body.FallStep(next, v.Body.Pull(read), drag, seconds);
         // Low over the ground, held as the physics holds it (see RocketPhysics' Fall): if either
         // end of the step is, so it is held no later than the physics would (at most a step sooner).
-        if (Held(v.Body, p.ToSingle(), next) || Held(v.Body, (p + u * StepSeconds).ToSingle(), next))
+        if (Held(v.Body, p.ToSingle(), next) || Held(v.Body, (p + u * seconds).ToSingle(), next))
             next *= Scene.GroundTopSpeed / next.Length();
         var change = next - u;
-        var end = p + (u + next) * (StepSeconds / 2.0) + change * (RocketPhysics.StepSeconds / 2.0);
-        if (Touch(v, ref m, p.ToSingle(), u.ToSingle(), end.ToSingle(), next.ToSingle()))
+        var end = p + (u + next) * (seconds / 2.0) + change * (RocketPhysics.StepSeconds / 2.0);
+        if (Touch(v, ref m, seconds, p.ToSingle(), u.ToSingle(), end.ToSingle(), next.ToSingle()))
             return true;
-        (m.At, m.Velocity, m.Change, m.Time) = (end, next, (change / StepSeconds).ToSingle(), m.Time + StepSeconds);
+        (m.At, m.Velocity, m.Change, m.Time) = (end, next, (change / seconds).ToSingle(), m.Time + seconds);
         if (!v.Guided)
-            Tumble(v, ref m, end.ToSingle());
+            Tumble(v, ref m, end.ToSingle(), seconds);
         return false;
     }
 
@@ -468,11 +567,11 @@ internal static class Formula
     /// (<see cref="RocketPhysics.AngularDamping"/>), towards still over the ground in the air, or
     /// among the stars above it (see RocketPhysics' Fall).
     /// </summary>
-    private static void Tumble(Vessel v, ref FormulaMotion m, Vector3 at)
+    private static void Tumble(Vessel v, ref FormulaMotion m, Vector3 at, float seconds)
     {
         var settled = GuidedSpin(v.Body, at);
-        var spin = settled + (v.FormulaSpin - settled) * MathF.Exp(-RocketPhysics.AngularDamping * StepSeconds);
-        m.Attitude = Turned(m.Attitude, spin, StepSeconds);
+        var spin = settled + (v.FormulaSpin - settled) * MathF.Exp(-RocketPhysics.AngularDamping * seconds);
+        m.Attitude = Turned(m.Attitude, spin, seconds);
         v.TurnByFormula(m.Attitude, spin);
     }
 
@@ -491,7 +590,7 @@ internal static class Formula
     /// thick air too fast for a bare payload, a tower or mast, or what is under it; if so, judged
     /// where it first does (<see cref="Judge"/>), and true.
     /// </summary>
-    private static bool Touch(Vessel v, ref FormulaMotion m, Vector3 p0, Vector3 u0, Vector3 p1, Vector3 u1)
+    private static bool Touch(Vessel v, ref FormulaMotion m, float seconds, Vector3 p0, Vector3 u0, Vector3 p1, Vector3 u1)
     {
         if (v.BreaksUpIn(p1, u1))
         {
@@ -555,8 +654,8 @@ internal static class Formula
         var f = MathF.Min(tower, ground);
         var at = Vector3.Lerp(p0, p1, f);
         var velocity = Vector3.Lerp(u0, u1, f);
-        var burntTo = m.Time + StepSeconds; // the step's fuel was burnt to its end (see Step)
-        m.Time += f * StepSeconds;
+        var burntTo = m.Time + seconds; // the step's fuel was burnt to its end (see Step)
+        m.Time += f * seconds;
         if (tower <= ground)
         {
             v.MoveByFormula(at, velocity, rotation, v.FormulaSpin, orbitChanged: false);

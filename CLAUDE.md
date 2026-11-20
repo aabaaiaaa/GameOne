@@ -331,7 +331,8 @@ dotnet run --project src/GameOne
   clipping ignored, nothing brought into the physics): on its orbit by Kepler with
   its engine off, above the air and clear of the body's highest ground (`Formula.OnItsOrbitAt`:
   at a body with no air only its height keeps it clear); in the air, burning, or below that
-  height, stepped every `Scene.FormulaStepSeconds` (in double, as the physics' copy is: its pull
+  height, stepped every `Scene.FormulaStepSeconds` (burning where it could be on its orbit, every
+  `Scene.FormulaBurnStepSeconds`, `Formula.StepFor`; in double, as the physics' copy is: its pull
   and air read where its drift takes it, `Formula.Lead` on, so a stepped orbit holds its size as a
   plain kick and drift does); landed and afloat still. It goes on from the physics' double copy
   as it leaves, and is handed back as that copy (`RocketPhysics.Keep`); on its orbit, it is moved

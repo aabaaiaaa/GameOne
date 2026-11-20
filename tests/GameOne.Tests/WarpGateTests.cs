@@ -159,7 +159,7 @@ public sealed class WarpGateTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Throttling_up_in_orbit_at_a_formula_rate_drops_nothing_by_itself_and_the_lit_engine_holds_it()
+    public void Throttling_up_in_orbit_at_a_formula_rate_drops_nothing_and_the_lit_engine_holds_nothing()
     {
         var (sim, flown) = WarpScenes.LowOrbit();
         using var _ = sim;
@@ -173,13 +173,13 @@ public sealed class WarpGateTests(ITestOutputHelper output)
         Assert.Null(flight.LastDrop);
         Assert.True(flown.EngineLit);
 
-        // Lit, it counts as in the air (the formula doesn't fly a witnessed burn): held at the
-        // next frame's gate, and dropped for that, never as set moving.
+        // Lit above the air, it holds nothing: the formula flies its burn.
         flight.RunFrame(0f, default);
         output.WriteLine($"{flight.PlayerRate}x, dropped for {flight.LastDrop?.Reason}");
-        Assert.Same(flown, flight.WarpHeldBy);
-        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
-        Assert.Equal(WarpDrop.Air, flight.LastDrop?.Reason);
+        Assert.Null(flight.WarpHeldBy);
+        Assert.Equal(Scene.TopRate, flight.PlayerRate);
+        Assert.Null(flight.LastDrop);
+        Assert.True(flown.OnFormula);
     }
 
     [Fact]

@@ -340,9 +340,12 @@ public sealed class WarpToTests(ITestOutputHelper output)
         sim.Run((_, _) => default, _ => false, maxSeconds: 5); // turned round
         var to = flight.WorldTime + 1e6;
         Assert.True(double.IsPositiveInfinity(Patched.Ends(PathOf(flown, flight.WorldTime))), "round for ever before the burn");
-        sim.Step(new FlightInput(FullThrottle: true)); // lit first: a frame at a formula's rate never runs a witnessed burn, so it warps at the physics' top rate
+        sim.Step(new FlightInput(FullThrottle: true));
+        // Burning above the air, it warps at the top rate (the formula flies the burn), in frames
+        // of the physics' top rate's game time, so its path's end moves a little each.
+        sim.RealFrame = Simulation.TopRateFrame;
         sim.Step(new FlightInput(WarpTo: to));
-        Assert.Equal(InTheAir, flight.PlayerRate);
+        Assert.Equal(Scene.TopRate, flight.PlayerRate);
         Assert.Equal(to, flight.WarpingTo); // round for ever: nothing to hold it to yet
         // Held once a frame, as the frame begins: to where the path, as the last frame left it, ends.
         var (held, ending) = (false, double.PositiveInfinity);

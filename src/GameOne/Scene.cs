@@ -472,6 +472,11 @@ internal static class Scene
     // (on its feet, or its bell), judged by their limits; leaning further, by its hull's, and it lies down.
     public const float FormulaStepSeconds = 0.1f;
     public const float FormulaUprightDegrees = 15f;
+    // Under formula, a vessel stepped above the air and clear of its body's highest ground (burning
+    // there: see Formula.StepFor) is stepped this often instead (game seconds): nothing there
+    // changes fast (no air, nothing to touch), so a burn of minutes at a formula's rate is a few
+    // hundred steps a frame, not thousands; a witnessed one's rules (its holds, its node) run every step.
+    public const float FormulaBurnStepSeconds = 1f;
     // Under formula, a vessel splashing down into water too shallow for its plunge to stop it short
     // of the seabed comes onto the seabed at this share of its speed into the water, and is judged
     // there by the ground's rules (see Formula's Judge). Its hull is still sinking faster until it

@@ -181,16 +181,17 @@ internal sealed class Unwatched(Flight flight)
     /// <summary>
     /// Moves every vessel under formula on to the flight's world time (each from the last time it
     /// was moved to), with no look for their collisions: <see cref="Advance"/>'s first half, and
-    /// the whole of a window at a formula's rate. Timed as <see cref="StepDetail.Formula"/>.
+    /// the whole of a window at a formula's rate, where it is <paramref name="toTheEnd"/>: each
+    /// stepped one's last step cut short to end there (see <see cref="Formula.Advance"/>). Timed as <see cref="StepDetail.Formula"/>.
     /// </summary>
-    public void Move()
+    public void Move(bool toTheEnd = false)
     {
         var started = Timings.Start();
         var world = _flight.WorldVessels;
         var now = _flight.WorldTime;
         for (var i = 0; i < world.Count; i++)
             if (world[i].OnFormula)
-                Formula.Advance(world[i], 0f, now); // at its own body, by that body's ground, air and pull
+                Formula.Advance(world[i], 0f, now, toTheEnd); // at its own body, by that body's ground, air and pull
         Timings.Stop(StepDetail.Formula, started);
     }
 
