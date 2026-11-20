@@ -1613,7 +1613,7 @@ internal sealed partial class Flight : IDisposable
         // point, either key ends it, at normal speed. Held, with a fast collision coming, or with
         // a drop's input in the frame (so it is taken in the physics, at whatever rate it was asked
         // from), faster goes no further than the physics' top rate, nor does a warp to a point begin past it.
-        var held = drop is not null || _collisionHolds; // WarpHeldBy holding it is a drop too (see DropFor)
+        var held = drop is not null || HeldForCollision; // WarpHeldBy holding it is a drop too (see DropFor)
         if ((input.Slower || input.Faster) && _warpTo is not null)
             DropWarp();
         else

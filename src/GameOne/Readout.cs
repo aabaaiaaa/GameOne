@@ -225,6 +225,8 @@ internal sealed class Readout
             Show("Slowed", $"{slowed.Scale:0.###}x, {slowed.Reason}"); // the forced slow-down: how slow, and what for
         if (flight.WarpHeldBy is { } heldBy)
             Show("Warp held", WorldLog.Named(heldBy)); // the witnessed vessel holding the warp to the physics' top rate
+        if (flight.CollisionHeld is { } collisionHeld)
+            Show("Collision hold", collisionHeld); // a fast collision coming at a witnessed vessel holding the warp there: the vessel and what it would hit
         if (flight.LastDrop is { } dropped && dropped.ShownAt(flight.RealTime, flight.PlayerRate)) // why the warp dropped to the physics' top rate, while the time line says it
             Show("Warp dropped", $"{dropped.Reason} {dropped.Vessel} to {dropped.Rate:0}x");
         if (flight.WarpingTo is { } warpTo) // a right click on the path: the world time it stops at (as "World seconds" counts), and how long to go

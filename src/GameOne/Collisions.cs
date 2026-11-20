@@ -652,6 +652,32 @@ internal sealed class Collisions
         return soonest;
     }
 
+    /// <summary>
+    /// Whether <paramref name="other"/> still collides with <paramref name="watched"/> by their
+    /// sizes within <paramref name="horizon"/> game seconds, as <see cref="AheadOfTheWarp"/> would
+    /// find it (their paths flown ahead by <see cref="Closest"/>, each with its present thrust):
+    /// for a collision the warp dropped for, held for only while it is (see
+    /// <see cref="Flight.CollisionHeld"/>), so a dodge lets the hold go. Never for two at different
+    /// bodies, a wreck, or two both held where they stand. Allocates nothing.
+    /// </summary>
+    internal static bool StillComing(Vessel watched, Vessel other, float horizon)
+    {
+        if (watched.State == FlightState.Crashed || other.State == FlightState.Crashed || other.Body != watched.Body)
+            return false;
+        var (heldW, heldO) = (Held(watched), Held(other));
+        if (heldW && heldO)
+            return false;
+        var body = watched.Body;
+        var (middleW, middleO) = (Middle(watched), Middle(other));
+        var starsW = body.AmongStars(watched.CentreOfMass, watched.Velocity);
+        var starsO = body.AmongStars(other.CentreOfMass, other.Velocity);
+        var (r, u) = (middleO - middleW, starsO - starsW);
+        var uu = u.LengthSquared();
+        var line = uu > 1e-6f ? Math.Clamp(-Vector3.Dot(r, u) / uu, 0f, horizon) : 0f;
+        var t = Closest(body, middleW, starsW, heldW, Thrust(watched), middleO, starsO, heldO, Thrust(other), line, horizon, out var apart, out _, out _);
+        return t >= 0f && t <= horizon && apart.Length() < Size(watched) + Size(other);
+    }
+
     /// <summary>Whether <paramref name="other"/> coming at <paramref name="watched"/> is one of <paramref name="passed"/>, by reference.</summary>
     private static bool Passed(ReadOnlySpan<(Vessel? Of, Vessel? Other)> passed, Vessel watched, Vessel other)
     {

@@ -908,7 +908,11 @@ GAMEONE_PERF=1 dotnet test GameOne.slnx -c Release --filter "FullyQualifiedName~
   least scale as both are wrecked; the same pass a little wider than their sizes dropping it
   (`NearMiss`) only with the setting on, the warning there naming the other; after the collision's
   drop, Faster pressed again and again never taking it past the physics' top rate until both are
-  wrecked, its slow-down reaching its least scale; the warp raised again after a near miss's drop
+  wrecked, its slow-down reaching its least scale; the hold's reason said in every frame from the
+  drop to the hit (`Flight.CollisionHeld`, the readout's `Collision hold`, and the time line's
+  "held: a collision coming at Booster 0 with Booster 1" once the drop's own line has gone); the
+  same pair dodged after the drop (leaning and burning hard) letting the hold go, Faster then
+  climbing past the physics' top rate; the warp raised again after a near miss's drop
   not dropped again by the same vessel;
   an other dropped for as it came at one witnessed vessel still found coming at another; two
   satellites drifting side by side within their sizes, their gap wavering, dropping it once in

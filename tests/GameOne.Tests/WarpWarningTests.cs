@@ -1,3 +1,4 @@
+using System.Numerics;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -18,6 +19,8 @@ public sealed class WarpWarningTests(ITestOutputHelper output)
 
     /// <summary>How fast the pairs here close, head on.</summary>
     private const float Closing = 2000f;
+
+    private static readonly Pilot Nobody = (_, _) => default;
 
     /// <summary>Two boosters head on, <see cref="MeetIn"/> s of travel apart, closing at <see cref="Closing"/>, the first flown, at the top rate.</summary>
     private static (Simulation Sim, Vessel Flown, Vessel Other) HeadOn(float sideways = 0f)
@@ -121,6 +124,54 @@ public sealed class WarpWarningTests(ITestOutputHelper output)
         output.WriteLine($"at most {highest}x; slowed to {least:0.0000} (least {Slowdown.Least(Closing):0.0000}); {flown.CrashReason}");
         Assert.True(highest <= Scene.PhysicsTopRate, $"warped at {highest}x with the collision coming");
         Assert.True(least <= Slowdown.Least(Closing), "slowed down to its least scale as it hit");
+    }
+
+    [Fact]
+    public void A_collision_dropped_for_says_why_the_warp_is_held_while_it_holds()
+    {
+        var (sim, flown, other) = HeadOn();
+        using var _ = sim;
+        var flight = sim.Flight;
+        Assert.Null(flight.CollisionHeld);
+        Assert.True(UntilDropped(sim));
+        var said = $"{WorldLog.Named(flown)} with {WorldLog.Named(other)}";
+        // From the drop (some 24 s ahead) through the physics' own warning to the hit, the hold's
+        // reason is the collision's, in the readout and on the time line once the drop's own line
+        // has gone (as it goes at once with a rate key), however soon the warning shows.
+        var (frames, warned) = (0, false);
+        Assert.True(sim.Run(Nobody, f =>
+        {
+            frames++;
+            warned |= f.Warning is not null;
+            Assert.Equal(said, f.CollisionHeld);
+            Assert.Equal(said, Readout.FlightReadings(f).GetValueOrDefault("Collision hold"));
+            Assert.Equal($"a collision coming at {said}", f.WarpHeld);
+            if (f.PlayerRate >= Scene.PhysicsTopRate && f.Slowed is null)
+                Assert.Equal($"WARP {Scene.PhysicsTopRate:0}x  (held: a collision coming at {said})   ( , and . )",
+                    Hud.TimeLine(f.Slowed, f.PlayerRate, f.TimeScale, f.TimeScale, f.WarpHeld, dropped: null, f.RealTime)?.Text);
+            return f.Warning is not null && f.Slowed is not null;
+        }, maxSeconds: 60));
+        output.WriteLine($"held for the collision {frames} frames, warned {warned}: {said}");
+        Assert.True(warned);
+    }
+
+    [Fact]
+    public void A_collision_dropped_for_and_dodged_lets_the_warp_go()
+    {
+        var (sim, flown, other) = HeadOn();
+        using var _ = sim;
+        var flight = sim.Flight;
+        Assert.True(UntilDropped(sim));
+        Assert.NotNull(flight.CollisionHeld);
+        // Dodged by leaning and burning hard: once the collision is no longer predicted the hold
+        // lets go (nothing said for it), and Faster climbs past the physics' top rate again.
+        var frames = 0;
+        Assert.True(sim.Run((_, _) => new FlightInput(Lean: flown.Right, FullThrottle: true), f => ++frames > 0 && f.CollisionHeld is null, maxSeconds: 20));
+        output.WriteLine($"let go {frames} frames after the drop, {flight.WorldTime:0.0} s, {Vector3.Distance(flown.CentreOfMass, other.CentreOfMass):0} m apart");
+        Assert.False(Collisions.StillComing(flown, other, Scene.CollisionHorizonSeconds + 2f * Scene.WarpDropLeadSeconds));
+        Assert.Null(Readout.FlightReadings(flight).GetValueOrDefault("Collision hold"));
+        sim.Step(new FlightInput(Faster: true));
+        Assert.True(flight.PlayerRate > Scene.PhysicsTopRate, $"still held at {flight.PlayerRate}x after the dodge");
     }
 
     [Fact]

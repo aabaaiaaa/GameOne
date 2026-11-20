@@ -1,4 +1,5 @@
 using System.Numerics;
+using GameOne.Physics;
 
 namespace GameOne;
 
@@ -57,24 +58,56 @@ internal sealed partial class Flight
     public Vessel? WarpHeldBy { get; private set; }
 
     /// <summary>
-    /// Who holds the warp and why, for the HUD's time line (<see cref="WarpHeldBy"/>, named as the
-    /// log names it, and what it is doing: <see cref="HeldDoing"/>), or none: made only as either
+    /// Who holds the warp and why, for the HUD's time line: <see cref="WarpHeldBy"/>, named as the
+    /// log names it, and what it is doing (<see cref="HeldDoing"/>); else a fast collision coming
+    /// at a witnessed vessel (<see cref="CollisionHeld"/>), by the vessel and what it would hit
+    /// ("a collision coming at Satellite 1 with Satellite 2"); or none. Made only as any of it
     /// changes, so a frame held allocates nothing for it.
     /// </summary>
     public string? WarpHeld
     {
         get
         {
-            if (WarpHeldBy is not { } held)
+            if (WarpHeldBy is { } held)
+            {
+                var doing = HeldDoing(held);
+                if (_warpHeld.Of != held || !ReferenceEquals(_warpHeld.Doing, doing))
+                    _warpHeld = (held, doing, $"{WorldLog.Named(held)} {doing}");
+                return _warpHeld.Line;
+            }
+            if (CollisionHeld is not { } collision)
                 return null;
-            var doing = HeldDoing(held);
-            if (_warpHeld.Of != held || !ReferenceEquals(_warpHeld.Doing, doing))
-                _warpHeld = (held, doing, $"{WorldLog.Named(held)} {doing}");
+            if (!ReferenceEquals(_warpHeld.Doing, collision))
+                _warpHeld = (null, collision, $"a collision coming at {collision}");
             return _warpHeld.Line;
         }
     }
 
     private (Vessel? Of, string? Doing, string? Line) _warpHeld;
+
+    /// <summary>
+    /// While a fast collision coming at a witnessed vessel holds the warp to the physics' top rate
+    /// (see <see cref="CollisionHolds"/>), that vessel and what it would hit, as the log and the
+    /// warnings name them ("Satellite 1 with Satellite 2", "Booster 0 with the ground"): the
+    /// readout's <c>Collision hold</c>, and the time line's held reason (<see cref="WarpHeld"/>).
+    /// Made only as the collision changes, so a frame held allocates nothing for it.
+    /// </summary>
+    public string? CollisionHeld
+    {
+        get
+        {
+            if (_collisionHeld is not { } hold)
+                return null;
+            if (_collisionHeldLine.Of != hold.Of || _collisionHeldLine.Other != hold.Other || _collisionHeldLine.With != hold.With || _collisionHeldLine.Line is null)
+            {
+                var what = hold.Other is { } other ? WorldLog.Named(other) : Collisions.Name(hold.Body, hold.With, hold.At);
+                _collisionHeldLine = (hold.Of, hold.Other, hold.With, $"{WorldLog.Named(hold.Of)} with {what}");
+            }
+            return _collisionHeldLine.Line;
+        }
+    }
+
+    private (Vessel? Of, Vessel? Other, SolidKind With, string? Line) _collisionHeldLine;
 
     /// <summary>
     /// What <paramref name="held"/>, holding the warp, is doing: not yet at rest (landed or afloat
@@ -207,36 +240,51 @@ internal sealed partial class Flight
         for (var i = 0; WarpHeldBy is null && witnessed is not null && i < witnessed.Count; i++) // by index: a foreach over the interface would box its enumerator
             if (Holds(witnessed[i]))
                 WarpHeldBy = witnessed[i];
-        _collisionHolds = CollisionHolds(witnessed);
+        _collisionHeld = CollisionHolds(witnessed);
     }
 
     /// <summary>Whether a fast collision coming at a witnessed vessel holds the warp to the physics' top rate this frame (see <see cref="CollisionHolds"/>).</summary>
-    private bool _collisionHolds;
+    private bool HeldForCollision => _collisionHeld is not null;
+
+    /// <summary>The fast collision holding the warp this frame, if one is (see <see cref="CollisionHolds"/>): the vessel it comes at, the other (none for the ground, the sea, a raft, the tower or a mast), and what names that.</summary>
+    private (Vessel Of, Vessel? Other, GroundBody Body, SolidKind With, Vector3 At)? _collisionHeld;
+
+    /// <summary>How far ahead a collision the warp dropped for is still looked for while it holds the warp (see <see cref="CollisionHolds"/>): the physics' horizon and the drop's lead, as far as the drop put it, and the lead again to spare.</summary>
+    private const float HeldCollisionSeconds = Scene.CollisionHorizonSeconds + 2f * Scene.WarpDropLeadSeconds;
 
     /// <summary>
-    /// Whether a fast collision is coming at the flown vessel or another of the
-    /// <paramref name="witnessed"/>: warned of by the physics (<see cref="Warning"/>, or a small
+    /// The fast collision coming at the flown vessel or another of the <paramref name="witnessed"/>
+    /// that holds the warp, if one does: warned of by the physics (<see cref="Warning"/>, or a small
     /// view's coming, <see cref="ComingAt"/>), or one the warp dropped for (<see cref="_warpWarned"/>)
-    /// still coming and closing faster than <see cref="Scene.FastCollisionSpeed"/>. While one is, the
-    /// warp goes no faster than the physics' top rate, so it is never passed by formula and its
-    /// slow-down plays out in full; the warning on the screen (or the drop's line) says why. A near
-    /// miss holds nothing: it drops the warp once, and may be warped past by hand.
+    /// still predicted (<see cref="Collisions.StillComing"/>, within <see cref="HeldCollisionSeconds"/>)
+    /// and closing faster than <see cref="Scene.FastCollisionSpeed"/>. While one is, the warp goes
+    /// no faster than the physics' top rate, so it is never passed by formula and its slow-down
+    /// plays out in full; the time line says why (<see cref="WarpHeld"/>). A pair dropped for that
+    /// is no longer predicted (dodged) holds nothing and is forgotten as dropped for, so coming
+    /// again it drops the warp again. A near miss holds nothing: it drops the warp once, and may be
+    /// warped past by hand.
     /// </summary>
-    private bool CollisionHolds(IReadOnlyList<Vessel>? witnessed)
+    private (Vessel Of, Vessel? Other, GroundBody Body, SolidKind With, Vector3 At)? CollisionHolds(IReadOnlyList<Vessel>? witnessed)
     {
-        if (Warning is not null)
-            return true;
+        if (Warning is { } warning)
+            return (warning.Watched, warning.Other, warning.Body, warning.With, warning.At);
         foreach (var coming in _coming.All)
             if (!coming.NearMiss)
-                return true;
-        for (var i = 0; i < _warpWarnedCount; i++)
+                return (coming.Watched, coming.Other, coming.Body, coming.With, coming.At);
+        for (var i = _warpWarnedCount - 1; i >= 0; i--)
         {
             var ((of, other), collision) = (_warpWarned[i], _warpWarnedCollision[i]);
-            if (collision && (of == Controlled || IsWatched(of!, witnessed))
-                && (other!.Velocity - of!.Velocity).Length() > Scene.FastCollisionSpeed)
-                return true;
+            if (!collision || (of != Controlled && !IsWatched(of!, witnessed))
+                || (other!.Velocity - of!.Velocity).Length() <= Scene.FastCollisionSpeed)
+                continue; // (a slow one is kept as dropped for, holding nothing: two drifting side by side drop it once)
+            if (!Collisions.StillComing(of, other, HeldCollisionSeconds))
+            {
+                ForgetWarpWarned(i); // dodged: coming again, it drops the warp again
+                continue;
+            }
+            return (of, other, of.Body, SolidKind.Craft, other.CentreOfMass);
         }
-        return false;
+        return null;
     }
 
     /// <summary>
@@ -369,7 +417,11 @@ internal sealed partial class Flight
         if (cut.Node is { } node)
             _nodesDropped.Add((cut.Of, node));
         if (cut.Other is { } other)
+        {
             WarpWarned(cut.Of, other, cut.Reason == WarpDrop.Collision);
+            if (cut.Reason == WarpDrop.Collision && (other.Velocity - cut.Of.Velocity).Length() > Scene.FastCollisionSpeed)
+                _collisionHeld ??= (cut.Of, other, cut.Of.Body, SolidKind.Craft, other.CentreOfMass); // held from the drop on, as the next frame's gate finds it
+        }
         DropToPhysics(cut.Reason, cut.Of);
     }
 
@@ -509,12 +561,17 @@ internal sealed partial class Flight
                 || other.Body != of.Body
                 || (Vector3.Distance(Collisions.Middle(other), Collisions.Middle(of)) > Collisions.WarpReach(of, other)
                     && Vector3.Dot(other.CentreOfMass - of.CentreOfMass, other.Velocity - of.Velocity) > 0f);
-            if (!over)
-                continue;
-            Array.Copy(_warpWarned, i + 1, _warpWarned, i, _warpWarnedCount - i - 1);
-            Array.Copy(_warpWarnedCollision, i + 1, _warpWarnedCollision, i, _warpWarnedCount - i - 1);
-            _warpWarned[--_warpWarnedCount] = default; // holding no vessel no longer warned of
+            if (over)
+                ForgetWarpWarned(i);
         }
+    }
+
+    /// <summary>Forgets the <paramref name="i"/>th pair that dropped the warp (see <see cref="_warpWarned"/>).</summary>
+    private void ForgetWarpWarned(int i)
+    {
+        Array.Copy(_warpWarned, i + 1, _warpWarned, i, _warpWarnedCount - i - 1);
+        Array.Copy(_warpWarnedCollision, i + 1, _warpWarnedCollision, i, _warpWarnedCount - i - 1);
+        _warpWarned[--_warpWarnedCount] = default; // holding no vessel no longer warned of
     }
 
     /// <summary>

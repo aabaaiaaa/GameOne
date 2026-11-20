@@ -307,7 +307,10 @@ dotnet run --project src/GameOne
   formula's rate drops the warp before the frame runs. So does a fast collision
   coming at a witnessed vessel (`CollisionHolds`: warned of by the physics, or one the warp
   dropped for still coming and closing past `Scene.FastCollisionSpeed`), until it has hit or
-  passed, so its slow-down plays out in full; its warning (or the drop's line) says why. At a
+  passed, or a pair dropped for is no longer predicted (dodged: `Collisions.StillComing`, and
+  then forgotten as dropped for), so its slow-down plays out in full; the time line says why
+  (`Flight.WarpHeld`, from `CollisionHeld`: "held: a collision coming at Booster 0 with Booster 1",
+  the readout's `Collision hold`), from the drop on. At a
   formula's rate a link-up waits on its body's physics made ahead (`MadeFor`), so the drop never
   makes it in a frame. **A switch** (Tab, a click on a small view: any that flies another
   vessel) drops any warp, the physics' rates' or a formula's, to normal speed as the frame that
