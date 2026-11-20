@@ -409,7 +409,7 @@ internal sealed class SatellitePilot
         StageAtFuel = Vehicle.ThreeStage.Stages[0].LandingReserve,
         TargetApoapsis = Scene.AtmosphereHeight + 1500f, // the coast up to it leaves time to land the booster
     };
-    private readonly Autopilot _booster = Autopilot.ReturningBooster();
+    private readonly Autopilot _booster;
     private readonly Autopilot _upper;
     private readonly Vector3 _home;
     private Phase _phase;
@@ -419,10 +419,12 @@ internal sealed class SatellitePilot
     public float DeorbitAngle { get; init; } = 0.5f;
 
     /// <param name="home">Where to land the upper stage: by default, the landing zone by the launch pad.</param>
-    public SatellitePilot(Vector3? home = null)
+    /// <param name="booster">Where to land the booster: by default, on the drone ship.</param>
+    public SatellitePilot(Vector3? home = null, Vector3? booster = null)
     {
         _home = home ?? Scene.LandingZoneCentre;
         _upper = Autopilot.ReturningBooster(_home);
+        _booster = Autopilot.ReturningBooster(booster);
     }
 
     /// <summary>Where it has got to, for reports.</summary>

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Numerics;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -282,24 +283,78 @@ internal sealed class Playlist
 {
     private const double SettleSeconds = 3;    // over (landed, afloat, crashed, in orbit), it stays a moment so the effects play out
     private const double PadSeconds = Scene.TerrainTileLingerSeconds + 1.0;
-    private const double MaxFlightSeconds = 720; // the satellite mission: the upper stage waits most of a lap to come home, then the satellite climbs
+    private const double MaxFlightSeconds = 900; // the satellite mission (some 790 s): the upper stage waits most of a lap to come home, then the satellite climbs
 
-    private static readonly (string Name, Mission Mission, Func<Pilot> Pilot, Func<Flight, bool> Over)[] Course =
+    // Each pilot is made on the pad of the world it flies in, so a landing aimed at a site that a
+    // vessel from an earlier flight still stands on (a booster on the zone or the drone ship) is
+    // flown beside it instead, as a player would: never down on top of it.
+    private static readonly (string Name, Mission Mission, Func<Flight, Pilot> Pilot, Func<Flight, bool> Over)[] Course =
     [
-        ("land on target", Mission.LaunchAndLand, () => new Autopilot().Fly, Ended),
+        ("land on target (beside it, if taken)", Mission.LaunchAndLand, f => new Autopilot { Target = BesideTheZone(f) }.Fly, Ended),
         // Offshore, near enough to the pad that it floats there, awake, through the flights after it in the same world.
-        ("splash down offshore", Mission.LaunchAndLand, () => new Autopilot { Target = SplashdownTests.Offshore.Value }.Fly, Ended),
-        ("reach orbit", Mission.ReachOrbit, () => new OrbitAutopilot().Fly, f => f.AchievedOrbit || Ended(f)),
-        ("land on the bell too fast (crash)", Mission.LaunchAndLand, () => new Autopilot { DeployLegs = false, TouchdownSpeed = 4f }.Fly, Ended),
-        ("orbit without staging (falls back)", Mission.ReachOrbit, () => new OrbitAutopilot { Stage = false }.Fly, Ended),
-        ("orbit, and land the booster downrange", Mission.ReachOrbit, () => new OrbitAndReturnPilot().Fly,
+        ("splash down offshore", Mission.LaunchAndLand, _ => new Autopilot { Target = SplashdownTests.Offshore.Value }.Fly, Ended),
+        ("reach orbit", Mission.ReachOrbit, _ => new OrbitAutopilot().Fly, f => f.AchievedOrbit || Ended(f)),
+        ("land on the bell too fast (crash)", Mission.LaunchAndLand,
+            f => new Autopilot { DeployLegs = false, TouchdownSpeed = 4f, Target = BesideTheZone(f) }.Fly, Ended),
+        ("orbit without staging (falls back)", Mission.ReachOrbit, _ => new OrbitAutopilot { Stage = false }.Fly, Ended),
+        ("orbit, and land the booster downrange", Mission.ReachOrbit, f => new OrbitAndReturnPilot(BesideTheShip(f)).Fly,
             f => f.Vessels.Count > 1 && f.Vessels.All(v => v.State != FlightState.Flying || v.AchievedOrbit) || Ended(f)),
-        ("deploy a satellite, land the rest", Mission.DeploySatellite, () => new SatellitePilot().Fly,
+        ("deploy a satellite, land the rest", Mission.DeploySatellite, f => new SatellitePilot(BesideTheZone(f), BesideTheShip(f)).Fly,
             f => f.Run!.Succeeded && f.Vessels.All(v => v.State != FlightState.Flying || v.Stage == 2) || Ended(f)),
-        ("land off target", Mission.LaunchAndLand, () => new Autopilot { Target = Scene.LandingZoneCentre + new System.Numerics.Vector3(60f, 0f, 0f) }.Fly, Ended),
+        ("land off target", Mission.LaunchAndLand, f => new Autopilot { Target = Clear(f, ZoneNeighbours) }.Fly, Ended),
     ];
 
+    /// <summary>How far a landing keeps from anything already standing where it comes down (on the ground: a toppled booster's length and more).</summary>
+    private const float GroundClearance = 30f;
+
+    /// <summary>How far past the drone ship's deck a vessel still counts as in the way of a landing on it (a booster's legs reach some 5 m out).</summary>
+    private const float DeckClearance = 13f;
+
+    /// <summary>
+    /// Off the landing zone, 60 m out along each way across the pad's plane: on the level ground
+    /// round it (within 2 degrees there), clear of its masts on the diagonals and of one another.
+    /// </summary>
+    private static readonly Vector3[] ZoneNeighbours =
+    [
+        Scene.LandingZoneCentre + new Vector3(60f, 0f, 0f),
+        Scene.LandingZoneCentre + new Vector3(0f, 0f, 60f),
+        Scene.LandingZoneCentre + new Vector3(0f, 0f, -60f),
+        Scene.LandingZoneCentre + new Vector3(-60f, 0f, 0f),
+    ];
+
+    /// <summary>The landing zone, or beside it if a vessel from an earlier flight stands on it.</summary>
+    private static Vector3 BesideTheZone(Flight f) => Clear(f, [Scene.LandingZoneCentre, .. ZoneNeighbours]);
+
+    /// <summary>
+    /// The drone ship's middle, or, with a vessel from an earlier flight on its deck, the end of
+    /// the deck furthest from it (the deck's length runs east, 26 m either side of the middle).
+    /// </summary>
+    private static Vector3? BesideTheShip(Flight f)
+    {
+        var centre = Scene.DroneShipCentre;
+        var east = Planet.East(centre);
+        var ends = new[] { centre + east * 15f, centre - east * 15f };
+        var others = Others(f, centre, Scene.DroneShipHalfLength + DeckClearance).ToArray();
+        if (others.Length == 0)
+            return null; // the mission's own landing site: the ship's middle
+        return ends.MaxBy(end => others.Min(v => Vector3.Distance(v.Position, end)));
+    }
+
+    /// <summary>The first of <paramref name="spots"/> with no vessel from an earlier flight within <see cref="GroundClearance"/> of it.</summary>
+    private static Vector3 Clear(Flight f, Vector3[] spots)
+    {
+        foreach (var spot in spots)
+            if (!Others(f, spot, GroundClearance).Any())
+                return spot;
+        throw new InvalidOperationException($"every spot by the landing zone is taken: {string.Join(", ", spots)}");
+    }
+
+    /// <summary>The planet's vessels within <paramref name="reach"/> of <paramref name="place"/>, but this flight's own.</summary>
+    private static IEnumerable<Vessel> Others(Flight f, Vector3 place, float reach) =>
+        f.WorldVessels.Where(v => v.Body == GroundBody.Planet && !f.Vessels.Contains(v) && Vector3.Distance(v.Position, place) < reach);
+
     private int _next;
+    private Func<Flight, Pilot>? _make;
     private Pilot? _pilot;
     private Func<Flight, bool> _over = Ended;
     private double _flying, _overFor;
@@ -314,12 +369,14 @@ internal sealed class Playlist
         _flying += dt;
         if (_pilot is not null && _over(flight))
             _overFor += dt;
-        if (_pilot is null || _overFor >= SettleSeconds || _flying >= MaxFlightSeconds)
+        if (_make is null || _overFor >= SettleSeconds || _flying >= MaxFlightSeconds)
             return Next(flight);
         // A moment on the pad first (the engine lights the moment Space is pressed), for the pad's
         // ground to be counted with the rocket still on it (see Soak).
         if (flight.State == FlightState.Ready && _flying < PadSeconds)
             return default;
+        // Made in the world it flies in, with this flight's rocket on the pad, so it sees what is left there.
+        _pilot ??= _make(flight);
         return _pilot(flight, dt);
     }
 
@@ -351,7 +408,8 @@ internal sealed class Playlist
     {
         var (_, mission, pilot, over) = Course[_next];
         _next = (_next + 1) % Course.Length;
-        _pilot = pilot();
+        _make = pilot;
+        _pilot = null;
         _over = over;
         _flying = _overFor = 0;
         Flights++;
