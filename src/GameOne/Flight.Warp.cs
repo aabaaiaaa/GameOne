@@ -92,22 +92,25 @@ internal sealed partial class Flight
     /// readout's <c>Collision hold</c>, and the time line's held reason (<see cref="WarpHeld"/>).
     /// Made only as the collision changes, so a frame held allocates nothing for it.
     /// </summary>
-    public string? CollisionHeld
-    {
-        get
-        {
-            if (_collisionHeld is not { } hold)
-                return null;
-            if (_collisionHeldLine.Of != hold.Of || _collisionHeldLine.Other != hold.Other || _collisionHeldLine.With != hold.With || _collisionHeldLine.Line is null)
-            {
-                var what = hold.Other is { } other ? WorldLog.Named(other) : Collisions.Name(hold.Body, hold.With, hold.At);
-                _collisionHeldLine = (hold.Of, hold.Other, hold.With, $"{WorldLog.Named(hold.Of)} with {what}");
-            }
-            return _collisionHeldLine.Line;
-        }
-    }
+    public string? CollisionHeld => _collisionHeld is { } hold ? HeldLine(ref _collisionHeldLine, hold) : null;
 
-    private (Vessel? Of, Vessel? Other, SolidKind With, string? Line) _collisionHeldLine;
+    private (Vessel? Of, Vessel? Other, string? What, string? Line) _collisionHeldLine;
+
+    /// <summary>
+    /// <see cref="CollisionHeld"/>'s line for <paramref name="hold"/>, kept in <paramref name="kept"/>
+    /// and made again only as the vessel, the other or what names the place hit changes
+    /// (<see cref="Collisions.Name(GroundBody, SolidKind, Vector3)"/>, one of a few fixed names,
+    /// asked each time: the ground's way down moving out over the sea is "the water", onto the
+    /// moon "the moon"), so a frame held allocates nothing for it.
+    /// </summary>
+    internal static string HeldLine(ref (Vessel? Of, Vessel? Other, string? What, string? Line) kept,
+        (Vessel Of, Vessel? Other, GroundBody Body, SolidKind With, Vector3 At) hold)
+    {
+        var what = hold.Other is null ? Collisions.Name(hold.Body, hold.With, hold.At) : null;
+        if (kept.Line is null || kept.Of != hold.Of || kept.Other != hold.Other || !ReferenceEquals(kept.What, what))
+            kept = (hold.Of, hold.Other, what, $"{WorldLog.Named(hold.Of)} with {what ?? WorldLog.Named(hold.Other!)}");
+        return kept.Line!;
+    }
 
     /// <summary>
     /// What <paramref name="held"/>, holding the warp, is doing: not yet at rest (landed or afloat

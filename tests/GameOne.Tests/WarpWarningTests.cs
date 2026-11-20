@@ -1,4 +1,5 @@
 using System.Numerics;
+using GameOne.Physics;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -153,6 +154,24 @@ public sealed class WarpWarningTests(ITestOutputHelper output)
         }, maxSeconds: 60));
         output.WriteLine($"held for the collision {frames} frames, warned {warned}: {said}");
         Assert.True(warned);
+    }
+
+    [Fact]
+    public void A_held_collision_with_the_ground_is_named_by_where_it_comes_down_as_that_moves()
+    {
+        var (sim, flown, other) = HeadOn();
+        using var _ = sim;
+        var named = WorldLog.Named(flown);
+        (Vessel? Of, Vessel? Other, string? What, string? Line) kept = default;
+        string Line(GroundBody body, Vector3 at) => Flight.HeldLine(ref kept, (flown, null, body, SolidKind.Ground, at));
+        // Its way down over the land, then moving out over the sea, then onto the moon: named anew
+        // each time, and the same line (not made again) while the name holds.
+        var land = Line(GroundBody.Planet, Vector3.Zero);
+        Assert.Equal($"{named} with the ground", land);
+        Assert.Same(land, Line(GroundBody.Planet, new Vector3(1f, 0f, 1f)));
+        Assert.Equal($"{named} with the water", Line(GroundBody.Planet, Scene.TripDroneShipCentre));
+        Assert.Equal($"{named} with the moon", Line(GroundBody.Moon, Vector3.Zero));
+        Assert.Equal($"{named} with {WorldLog.Named(other)}", Flight.HeldLine(ref kept, (flown, other, GroundBody.Moon, SolidKind.Craft, Vector3.Zero)));
     }
 
     [Fact]
