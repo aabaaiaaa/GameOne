@@ -1506,7 +1506,9 @@ internal sealed class Vessel
     {
         get
         {
-            // Measured far from the ground under formula, the terrain under it is read only once asked for (see MeasureFar).
+            // Measured far from the ground under formula, the terrain under it is read only once
+            // asked for (see MeasureFar), and kept: so it is read on the game's thread alone, as
+            // every other reader of a vessel's own state is (never by the map's search thread).
             if (_groundUnder is { } under)
                 (_aboveGround, _groundUnder) = (MathF.Max(0f, MathF.Min(Body.TerrainAltitude(under), Altitude)), null);
             return _aboveGround;

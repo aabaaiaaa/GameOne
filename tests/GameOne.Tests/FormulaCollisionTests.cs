@@ -253,4 +253,39 @@ public sealed class FormulaCollisionTests(ITestOutputHelper output)
         Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
         Assert.Equal(Scene.TopRate, flight.TimeScale);
     }
+
+    [Fact]
+    public void A_pairs_bound_is_never_further_than_its_way_comes()
+    {
+        // FormulaCollisions.Apart rules a pair out before the closest-approach search: it must
+        // never be further than the least gap along the pair's Hermite way, sampled finely across
+        // the window, or a pair within reach would be passed over. Random ways a window long, from
+        // a pass at orbital speeds kilometres off to grazing ones whose least gap is metres or
+        // none, their ends' rates bent off the chord by as much as a pull bends them and more.
+        var random = new Random(13);
+        Vector3Double Any(double size) => new((random.NextDouble() * 2 - 1) * size, (random.NextDouble() * 2 - 1) * size, (random.NextDouble() * 2 - 1) * size);
+        const int Samples = 1000;
+        var (grazing, worst) = (0, double.PositiveInfinity);
+        for (var n = 0; n < 5000; n++)
+        {
+            var span = Scene.FormulaWindowSeconds;
+            var closing = Any(1500) * span; // the relative motion over the window, as Solve hands it (rates times the window)
+            var bend = Any(n % 2 == 0 ? 20 : 400);
+            // Through a point near the middle, so many pass within metres of each other.
+            var near = n % 3 == 0 ? Any(5) : Any(3000);
+            var at = random.NextDouble();
+            var (d0, d1) = (near - closing * at + bend, near + closing * (1 - at) - bend);
+            var (v0, v1) = (closing + Any(n % 2 == 0 ? 50 : 1000), closing + Any(n % 2 == 0 ? 50 : 1000));
+            var least = double.PositiveInfinity;
+            for (var k = 0; k <= Samples; k++)
+                least = Math.Min(least, FormulaCollisions.Gap(d0, v0, d1, v1, k / (double)Samples).Length());
+            var apart = FormulaCollisions.Apart(d0, v0, d1, v1);
+            Assert.True(apart <= least + 1e-6, $"ruled out at {apart:0.000} m, but its way comes within {least:0.000} m");
+            if (least < 20)
+                grazing++;
+            worst = Math.Min(worst, least - apart);
+        }
+        output.WriteLine($"{grazing} grazing (within 20 m); the bound's least margin under the way {worst:0.000000} m");
+        Assert.True(grazing > 300, $"only {grazing} grazing pairs tried");
+    }
 }

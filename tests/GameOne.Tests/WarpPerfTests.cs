@@ -77,7 +77,7 @@ public sealed class WarpPerfTests(ITestOutputHelper output)
     /// </summary>
     internal static WarpMeasure Measure(Simulation sim, float rate, int frames, Func<Vessel>? again = null)
     {
-        using var fast = FastCores.Hold(); // as the game's window in front is
+        using var fast = FastCores.Hold(); // the best case (High priority on the fastest cores, which the game doesn't take), so a run is like the next
         var flight = sim.Flight;
         void Climb()
         {

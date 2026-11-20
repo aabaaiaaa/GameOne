@@ -428,7 +428,7 @@ public sealed class PerformanceTests(ITestOutputHelper output)
     private const int LowPassLaps = 3;
 
     [PerfFact]
-    public void A_moon_transfer_at_16384x_holds_60_fps()
+    public void A_moon_transfer_at_the_top_rate_holds_60_fps()
     {
         // The upper stage on its way to the moon (WarpScenes.MoonTransfer), the main view alone, at
         // the top rate, paced as the game is: its path across the moon's sphere and out again asked
@@ -439,28 +439,29 @@ public sealed class PerformanceTests(ITestOutputHelper output)
         var (sim, _) = WarpScenes.Flying(world, id);
         using var _s = sim;
         var top = FlyViews(sim, [], [Scene.TopRate], paced: true, again: () => WarpScenes.Again(sim, world, id)).Single();
-        AssertTopRateHeld("on a moon transfer", top.Median, top.Reached);
+        AssertTopRateHeld("on a moon transfer", top);
     }
 
     [PerfFact]
-    public void A_hundred_satellites_at_16384x_hold_60_fps()
+    public void A_hundred_satellites_at_the_top_rate_hold_60_fps()
     {
         // The hundred satellites (WarpScenes.HundredSatellites, one of them flown), every one of
         // them moved by formula and their collisions looked for each window, all drawn.
         var (sim, _) = WarpScenes.HundredSatellites();
         using var _s = sim;
         var top = FlyViews(sim, [], [Scene.TopRate], paced: true).Single();
-        AssertTopRateHeld("among a hundred satellites", top.Median, top.Reached);
+        AssertTopRateHeld("among a hundred satellites", top);
     }
 
     /// <summary>
-    /// The full world's frame at the top rate (<see cref="A_full_world_at_16384x_reports_its_frame_rate"/>):
-    /// its median as measured (Release, paced: see the plan's ledger), rounded up to the next 2 ms.
+    /// The full world's frame at the top rate (<see cref="A_full_world_at_the_top_rate_reports_its_frame_rate"/>):
+    /// its median work as measured (Release, paced, the fast cores held: see the plan's ledger),
+    /// rounded up to the next 2 ms.
     /// </summary>
     private const double FullWorldTargetMs = 18.0;
 
     [PerfFact]
-    public void A_full_world_at_16384x_reports_its_frame_rate()
+    public void A_full_world_at_the_top_rate_reports_its_frame_rate()
     {
         // A full world (WarpScenes.FullWorld: Flight.Capacity satellites but room for free play's
         // rocket, one of them flown): its frame's steps held to the warp's budget, so it reaches
@@ -469,15 +470,24 @@ public sealed class PerformanceTests(ITestOutputHelper output)
         var (sim, _) = WarpScenes.FullWorld();
         using var _s = sim;
         var top = FlyViews(sim, [], [Scene.TopRate], paced: true).Single();
-        output.WriteLine($"a full world at {Scene.TopRate:0}x: a median frame of {top.Median:0.00} ms, reaching {top.Reached:0}x (median), "
+        output.WriteLine($"a full world at {Scene.TopRate:0}x: a median frame of {top.Median:0.00} ms, {top.Between:0.00} ms between frames (mean), reaching {top.Reached:0}x (median), "
             + $"{(top.Median <= FullWorldTargetMs ? "within" : "over")} its target of {FullWorldTargetMs:0} ms (its measured median, rounded up to the next 2 ms)");
     }
 
-    /// <summary>That the top rate held 60 fps <paramref name="where"/>: its median frame within a 60 fps frame, and the rate reached (median) within 10% of the top rate.</summary>
-    private static void AssertTopRateHeld(string where, double median, double reached)
+    /// <summary>
+    /// That the top rate held 60 fps <paramref name="where"/> (a paced run of <see cref="FlyViews"/>):
+    /// its median frame's work within a 60 fps frame, the mean real time between frames (what the
+    /// screen shows: the frames a real second) within it and a tenth, and the rate reached (median)
+    /// within 10% of the top rate. The mean, not the median: paced, the frames can come a short and
+    /// a long gap by turns (the display's compositor), so the median lands on either side of a
+    /// 60 fps frame however light the work (a moon transfer's 1.5 ms of work: a median gap of
+    /// 23 ms, a mean of 16.7), while the mean is the frame rate seen.
+    /// </summary>
+    private static void AssertTopRateHeld(string where, (float Rate, double Median, double P95, double Worst, double Reached, double Between) top)
     {
-        Assert.True(median <= FrameBudgetMs, $"at {Scene.TopRate:0}x {where} the main view took a median {median:0.00} ms a frame: more than {FrameBudgetMs:0.0} ms (60 fps)");
-        Assert.True(reached >= 0.9 * Scene.TopRate, $"at {Scene.TopRate:0}x {where} it reached {reached:0}x (median): short of 90% of it");
+        Assert.True(top.Median <= FrameBudgetMs, $"at {Scene.TopRate:0}x {where} the main view took a median {top.Median:0.00} ms a frame: more than {FrameBudgetMs:0.0} ms (60 fps)");
+        Assert.True(top.Between <= 1.1 * FrameBudgetMs, $"at {Scene.TopRate:0}x {where} the frames came {top.Between:0.00} ms apart (mean): more than {1.1 * FrameBudgetMs:0.0} ms (60 fps and a tenth)");
+        Assert.True(top.Reached >= 0.9 * Scene.TopRate, $"at {Scene.TopRate:0}x {where} it reached {top.Reached:0}x (median): short of 90% of it");
     }
 
     /// <summary>How far ahead along the low pass's track the three landers in the small views start, in seconds.</summary>
@@ -511,7 +521,7 @@ public sealed class PerformanceTests(ITestOutputHelper output)
         foreach (var vessel in landers)
             output.WriteLine($"lander {vessel.Id}: {vessel.State} {vessel.CrashReason}, {vessel.Ground:0.0} m over the ground");
         Assert.All(landers, v => Assert.Equal(FlightState.Flying, v.State));
-        foreach (var (rate, median, _, _, _) in results)
+        foreach (var (rate, median, _, _, _, _) in results)
             Assert.True(median <= FrameBudgetMs,
                 $"the very low pass over the moon with {rate:0.##}x asked, the main view and 3 small ones took a median {median:0.00} ms a frame: more than {FrameBudgetMs:0.0} ms (60 fps)");
     }
@@ -529,17 +539,23 @@ public sealed class PerformanceTests(ITestOutputHelper output)
     /// rate reached is the game time each real second; the real time between frames is printed
     /// beside it. With <paramref name="again"/>, a scene that runs out at a rate (its warp dropped
     /// under it) is begun again by it, the rate asked again, and only the frames begun at the rate
-    /// asked are timed. Paced, it holds the fast cores (<see cref="FastCores"/>), as the game's
-    /// window in front is.
+    /// asked are timed (and a scene that can't get back to the rate fails, rather than run on).
+    /// Paced, it holds the fast cores (<see cref="FastCores"/>: the process at High priority on the
+    /// fastest cores, unthrottled), which the game itself doesn't: the best case, so a run is like
+    /// the next; with <c>GAMEONE_PERF_GAME_CORES=1</c> it runs as the game does, where Windows puts
+    /// it, for the gap between the two. Each rate's result carries the real time between frames too
+    /// (<c>Between</c>: its mean, the frame rate seen; the median is printed beside it).
     /// </summary>
-    private List<(float Rate, double Median, double P95, double Worst, double Reached)> FlyViews(Simulation sim, Vessel[] others, float[] rates,
+    private List<(float Rate, double Median, double P95, double Worst, double Reached, double Between)> FlyViews(Simulation sim, Vessel[] others, float[] rates,
         bool paced = false, Func<Vessel>? again = null)
     {
         var flight = sim.Flight;
-        using var fast = paced ? FastCores.Hold() : null;
+        using var fast = paced && Environment.GetEnvironmentVariable("GAMEONE_PERF_GAME_CORES") is null or "" or "0" ? FastCores.Hold() : null;
+        if (paced)
+            output.WriteLine(fast is null ? "Paced as the game runs (GAMEONE_PERF_GAME_CORES): no fast cores held" : "Paced on the fast cores (FastCores: High priority, the fastest cores, unthrottled): the best case");
         Assert.True(Glfw.Init(), "GLFW couldn't start (no desktop?)");
         var window = GameView.CreateWindow("GameOne: performance test");
-        var results = new List<(float Rate, double Median, double P95, double Worst, double Reached)>();
+        var results = new List<(float Rate, double Median, double P95, double Worst, double Reached, double Between)>();
         try
         {
             using var view = new GameView(window, vsync: paced);
@@ -593,7 +609,8 @@ public sealed class PerformanceTests(ITestOutputHelper output)
                         return false;
                     again();
                     Ask();
-                    begun++;
+                    Assert.True(flight.TimeScale >= rate, $"begun again, the scene didn't get back to {rate:0.##}x (it is at {flight.TimeScale:0.##}x)");
+                    Assert.True(++begun <= TimedFrames, $"begun again {begun} times: it runs out as soon as it is begun");
                     return true;
                 }
                 Ask();
@@ -618,14 +635,15 @@ public sealed class PerformanceTests(ITestOutputHelper output)
                     (least, most) = (MathF.Min(least, flight.TimeScale), MathF.Max(most, flight.TimeScale));
                 }
                 Array.Sort(times);
+                var mean = intervals.Average();
                 Array.Sort(intervals);
                 var reached = frames.Select(f => (double)f.WarpReached).Order().ToArray();
-                results.Add((rate, times[times.Length / 2], times[(int)(times.Length * 0.95)], times[^1], reached[reached.Length / 2]));
+                results.Add((rate, times[times.Length / 2], times[(int)(times.Length * 0.95)], times[^1], reached[reached.Length / 2], mean));
                 output.WriteLine($"  {rate:0.##}x asked: 99% {times[(int)(times.Length * 0.99)]:0.00} ms, {times.Count(t => t > FrameBudgetMs)} of {times.Length} frames over {FrameBudgetMs:0.0} ms; " +
                     $"the game left it at {least:0.##}x to {most:0.##}x ({flight.PlayerRate:0.##}x at the end), reached {reached[reached.Length / 2]:0.#}x (median), {reached[(int)(reached.Length * 0.05)]:0.#}x (5th percentile); " +
                     $"{frames.Average(f => f.Tiles):0} ground tiles laid (mean)" + (begun > 0 ? $"; begun again {begun} times" : ""));
                 if (paced)
-                    output.WriteLine($"    paced: between frames {intervals[intervals.Length / 2]:0.00} ms (median), {intervals[(int)(intervals.Length * 0.95)]:0.00} ms (95%), {intervals[^1]:0.00} ms at worst; " +
+                    output.WriteLine($"    paced: between frames {intervals[intervals.Length / 2]:0.00} ms (median), {mean:0.00} ms (mean: {1000 / mean:0} fps seen), {intervals[(int)(intervals.Length * 0.95)]:0.00} ms (95%), {intervals[^1]:0.00} ms at worst; " +
                         $"{intervals.Count(t => t > 1.5 * FrameBudgetMs)} of {intervals.Length} over 1.5 times {FrameBudgetMs:0.0} ms");
                 PrintParts(frames);
                 output.WriteLine("    the tiles (median ms of the frames' steps): " + string.Join(", ",
@@ -648,7 +666,7 @@ public sealed class PerformanceTests(ITestOutputHelper output)
         }
 
         output.WriteLine("  rate   median ms   95% ms   worst ms   fps (median)");
-        foreach (var (rate, median, p95, worst, _) in results)
+        foreach (var (rate, median, p95, worst, _, _) in results)
             output.WriteLine($"{rate,5:0.##}x {median,10:0.00} {p95,8:0.00} {worst,10:0.00} {1000 / median,14:0}");
         return results;
     }

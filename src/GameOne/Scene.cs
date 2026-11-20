@@ -122,9 +122,14 @@ internal static class Scene
     /// (<see cref="Flight.FormulaWindows"/>): every vessel's rules once a window, and every vessel
     /// moved by formula to its end. Short enough that a window's rules (the holds' turn, the fuel)
     /// are near enough smooth, and that the collisions under formula follow each way across it
-    /// closely (<see cref="FormulaCollisions"/>: some 14 cm at worst, in the lowest orbit over the
-    /// planet's air, the error growing as the window's fourth power); long enough that a frame at
-    /// the top rate (273 s) is a couple of dozen, as each costs every vessel in the world its move.
+    /// closely (<see cref="FormulaCollisions"/>' Hermite ways, whose error grows as the window's
+    /// fourth power, and as the pull's change along the way: at 12 s, some 14 cm at worst on a
+    /// round orbit just over the planet's air, and some 4 times that, 56 cm, on a near-parabolic
+    /// one, a return from the moon, whose periapsis grazes the air (a hyperbolic pass more still);
+    /// a pair's gap can be off by its two ways' errors together, against
+    /// <see cref="FormulaContact.Slack"/>'s 1 m; at 8 s, a fifth of each); long enough that a
+    /// frame at the top rate (273 s) is a couple of dozen, as each costs every vessel in the world
+    /// its move (at 8 s the hundred satellites fall short of the top rate, paced).
     /// </summary>
     public const float FormulaWindowSeconds = 12f;
 

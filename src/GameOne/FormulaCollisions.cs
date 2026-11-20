@@ -13,7 +13,8 @@ namespace GameOne;
 /// <para>Each vessel's way across the window is the cubic Hermite through its place and velocity
 /// at the window's two ends (<see cref="Begin"/>, then <see cref="Judge"/>), among the stars as its
 /// body's ground was at the window's start: good to a few centimetres over a window of orbit
-/// (some 14 cm at worst, in the lowest orbit over the planet's air: see Scene.FormulaWindowSeconds),
+/// (some 14 cm at worst on a round orbit just over the planet's air, 4 times that on a
+/// near-parabolic one grazing it: see Scene.FormulaWindowSeconds),
 /// whatever moved it there (Kepler, or the formula's steps), and for a burn kept up across the
 /// window (a cubic follows its way to millimetres over a window, though a hold turns its push each
 /// second and the push grows as the mass falls): its throttle is set as a
@@ -323,7 +324,7 @@ internal sealed class FormulaCollisions(Flight flight)
     /// nearer than the chord's closest less those two differences' 4/27. Most pairs whose boxes
     /// overlap pass kilometres apart, and are ruled out by it without the search.
     /// </summary>
-    private static double Apart(Vector3Double d0, Vector3Double v0, Vector3Double d1, Vector3Double v1)
+    internal static double Apart(Vector3Double d0, Vector3Double v0, Vector3Double d1, Vector3Double v1)
     {
         var chord = d1 - d0;
         var cc = chord.LengthSquared();
@@ -349,7 +350,7 @@ internal sealed class FormulaCollisions(Flight flight)
     }
 
     /// <summary>The cubic Hermite through <paramref name="p0"/>, <paramref name="m0"/> to <paramref name="p1"/>, <paramref name="m1"/> (its rates per the whole span), at <paramref name="s"/> of the way.</summary>
-    private static Vector3Double Gap(Vector3Double p0, Vector3Double m0, Vector3Double p1, Vector3Double m1, double s)
+    internal static Vector3Double Gap(Vector3Double p0, Vector3Double m0, Vector3Double p1, Vector3Double m1, double s)
     {
         var (s2, s3) = (s * s, s * s * s);
         return p0 * (2 * s3 - 3 * s2 + 1) + m0 * (s3 - 2 * s2 + s) + p1 * (3 * s2 - 2 * s3) + m1 * (s3 - s2);
