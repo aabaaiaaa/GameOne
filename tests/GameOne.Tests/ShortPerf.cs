@@ -31,9 +31,13 @@ internal sealed record PartPerf(double Median, double P95, double Spread, double
 /// A scene's measurement: its <see cref="Speed"/> (game seconds per second of its steps' time,
 /// headless: the fastest warp the physics and rules alone allow there), and each part's time per step, keyed by
 /// each <see cref="StepPart"/>'s name and <c>"Step"</c> (the step's whole). Its <paramref name="Note"/>
-/// (the last run's) is for the report only, and is never written to the baseline.
+/// (the last run's) is for the report only, and is never written to the baseline. In the baseline
+/// each is stamped with when (UTC) and on what commit it was measured (<paramref name="Measured"/>,
+/// <paramref name="Commit"/>: see <see cref="PerfBaseline.Replace"/>), as a rebaseline of some
+/// scenes keeps the others as they were measured.
 /// </summary>
-internal sealed record ScenePerf(string Name, PartPerf Speed, IReadOnlyDictionary<string, PartPerf> Parts, [property: System.Text.Json.Serialization.JsonIgnore] string? Note = null);
+internal sealed record ScenePerf(string Name, PartPerf Speed, IReadOnlyDictionary<string, PartPerf> Parts, [property: System.Text.Json.Serialization.JsonIgnore] string? Note = null,
+    DateTimeOffset? Measured = null, string? Commit = null);
 
 /// <summary>
 /// Runs a scene to measure it: warmed up (the JIT's tiers, caches; discarded) for at least

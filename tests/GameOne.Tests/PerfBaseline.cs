@@ -14,7 +14,7 @@ internal sealed class BaselineFile
     public Dictionary<string, Dictionary<string, MachineEntry>> Machines { get; set; } = [];
 }
 
-/// <summary>One machine's measurements in one build configuration: when (UTC), on what commit, and each scene's.</summary>
+/// <summary>One machine's measurements in one build configuration: when (UTC) and on what commit it was last rebaselined, and each scene's, each with its own stamp (<see cref="ScenePerf.Commit"/>).</summary>
 internal sealed record MachineEntry(DateTimeOffset Measured, string Commit, Dictionary<string, ScenePerf> Scenes);
 
 /// <summary>
@@ -120,17 +120,19 @@ internal static class PerfBaseline
 
     /// <summary>
     /// Puts <paramref name="scenes"/> into this machine's entry for <paramref name="configuration"/>
-    /// (made if missing), replacing those scenes and keeping its others, stamped now (UTC) and
-    /// <paramref name="commit"/>. No other entry is touched.
+    /// (made if missing), replacing those scenes and keeping its others, each scene put in stamped
+    /// now (UTC) and <paramref name="commit"/>, as the entry is; the scenes kept keep their own
+    /// stamps, so each names the commit it was measured on. No other entry is touched.
     /// </summary>
     public static void Replace(BaselineFile file, string machine, string configuration, IEnumerable<ScenePerf> scenes, string commit)
     {
         if (!file.Machines.TryGetValue(machine, out var configurations))
             file.Machines[machine] = configurations = [];
         var kept = configurations.TryGetValue(configuration, out var old) ? new Dictionary<string, ScenePerf>(old.Scenes) : [];
+        var now = DateTimeOffset.UtcNow;
         foreach (var scene in scenes)
-            kept[scene.Name] = scene;
-        configurations[configuration] = new MachineEntry(DateTimeOffset.UtcNow, commit, kept);
+            kept[scene.Name] = scene with { Measured = now, Commit = commit };
+        configurations[configuration] = new MachineEntry(now, commit, kept);
     }
 
     /// <summary>

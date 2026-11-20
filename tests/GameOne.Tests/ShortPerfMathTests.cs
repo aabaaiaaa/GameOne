@@ -148,6 +148,11 @@ public sealed class ShortPerfMathTests : IDisposable
         Assert.Equal(1.0, mine.Scenes["A"].Parts["Step"].Median, 9);
         Assert.Equal(2.0, mine.Scenes["B"].Parts["Step"].Median, 9);
         Assert.Equal("def5678", mine.Commit);
+        // Each scene keeps the stamp it was measured with: A abc1234's, B def5678's.
+        Assert.Equal("abc1234", mine.Scenes["A"].Commit);
+        Assert.Equal("def5678", mine.Scenes["B"].Commit);
+        Assert.True(mine.Scenes["B"].Measured >= mine.Scenes["A"].Measured);
+        Assert.Equal(TimeSpan.Zero, mine.Scenes["B"].Measured!.Value.Offset); // in UTC
         var other = PerfBaseline.Entry(again, "other", "Debug")!;
         Assert.Equal("0ther00", other.Commit);
         Assert.Equal(5.0, other.Scenes["A"].Parts["Step"].Median, 9);

@@ -182,6 +182,7 @@ internal static class PerfScenes
         // Between the timed steps nothing is allocated (no LINQ, no messages built unless they
         // fail): garbage made there would be collected inside a step, and charged to it.
         var burning = new List<int>((int)(FiveRocketsMaxSeconds / Simulation.FrameSeconds) + rockets.Length);
+        var timed = new List<StepSample>(burning.Capacity); // each flown step's own, the switches' frames of no time left out
         var steps = 0;
         bool AllBurning()
         {
@@ -199,7 +200,20 @@ internal static class PerfScenes
         }
         void Fly(Vessel vessel, OrbitAutopilot pilot)
         {
-            sim.Step(pilot.Fly(vessel, sim.Flight.WorldTime) with { SwitchTo = vessel });
+            // Switched to in frames of no time (the switch's, then the one its link-up ends in, as
+            // Simulation.Step makes a switch), then flown for the step with its pilot's input: a
+            // switch asked with the input would run the step's time before the vessel is flown,
+            // its input taken only in a frame of no time after it, where a hold turns it nowhere.
+            // Those frames step nothing: only the flown step's sample is kept.
+            if (sim.Flight.Controlled != vessel)
+            {
+                sim.Flight.RunFrame(0f, new FlightInput(SwitchTo: vessel));
+                sim.Flight.RunFrame(0f, default);
+            }
+            var before = Timings.Steps.Count;
+            sim.Step(pilot.Fly(vessel, sim.Flight.WorldTime));
+            Assert.True(Timings.Steps.Count == before + 1, "a flown step is one step of the timings");
+            timed.Add(Timings.Steps[^1]);
             CoreKinds.Note();
             if (AllBurning())
                 burning.Add(steps);
@@ -210,7 +224,6 @@ internal static class PerfScenes
                     Assert.Fail($"{name} crashed {steps * Simulation.FrameSeconds:0.0} s after the first launch, on stage {each.Stage}, {each.Altitude:0} m up: {each.CrashReason}");
         }
 
-        StepSample[] timed;
         Timings.Enabled = true;
         try
         {
@@ -224,14 +237,12 @@ internal static class PerfScenes
                 var (_, vessel, pilot) = rockets[turn % rockets.Length];
                 Fly(vessel, pilot);
             }
-            timed = [.. Timings.Steps];
         }
         finally
         {
             Timings.Enabled = false;
         }
-        // 120 s is 7200 steps, well within what the timings keep.
-        Assert.Equal(steps, timed.Length);
+        Assert.Equal(steps, timed.Count);
 
         Assert.All(rockets, r =>
         {
@@ -246,7 +257,7 @@ internal static class PerfScenes
                      select (Pair: $"{rockets[i].Name}-{rockets[j].Name}", Metres: Vector3.Distance(rockets[i].Vessel.CentreOfMass, rockets[j].Vessel.CentreOfMass))).ToArray();
         say?.Invoke($"all five in orbit {steps * Simulation.FrameSeconds:0.0} s after the first launch ({steps} steps, {burning.Count} with all five boosters burning); " +
             $"apart {apart.Min(a => a.Metres):0} to {apart.Max(a => a.Metres):0} m: {string.Join(", ", apart.Select(a => $"{a.Pair} {a.Metres:0}"))}");
-        return new SceneRun(timed, new Dictionary<string, StepSample[]> { ["all five boosters burning"] = [.. burning.Select(i => timed[i])] });
+        return new SceneRun([.. timed], new Dictionary<string, StepSample[]> { ["all five boosters burning"] = [.. burning.Select(i => timed[i])] });
     });
 
     /// <summary>

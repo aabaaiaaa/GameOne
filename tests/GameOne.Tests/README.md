@@ -1460,7 +1460,8 @@ machine's other work, too.
     from the worker, were made in the step, or came from kept shapes.
   - *Five rockets to orbit*: five two-stage rockets launched together (one on Home's pad, four
     landed round it, `PerfScenes.FiveRocketsOffset`, 23 m out: at 20 m the west one hits the service tower),
-    each flown by its own `OrbitAutopilot` a step in turn, until all five are in orbit; and, as a
+    each flown by its own `OrbitAutopilot` a step in turn (switched to in frames of no time first,
+    so the step's time is flown with its pilot's input), until all five are in orbit; and, as a
     stretch of its own, the steps with all five boosters burning. It fails as soon as any rocket
     crashes, with the cause.
   Each checks its flight did what it should (in orbit, at the cap, the tiles laid), so a broken
@@ -1566,9 +1567,10 @@ machine's other work, too.
   anything into a verdict.
 - **The baseline** (`PerfBaseline.json`, beside these tests, committed): an entry per machine (its
   key a SHA-256 of its name, CPU and processor count, so the file names no machine) and per build
-  configuration (Debug and Release are apart), with the commit and the time it was measured (the
-  commit with `+changes` when the tree had changes beyond the baseline itself, and `+changes?`
-  when git couldn't say). A run
+  configuration (Debug and Release are apart), with the commit and the time it was last
+  rebaselined, and each scene with its own (`ScenePerf.Commit`, `Measured`), as a rebaseline of
+  some scenes keeps the rest as they were measured (the commit with `+changes` when the tree had
+  changes beyond the baseline itself, and `+changes?` when git couldn't say). A run
   compares only with its own machine's and build's entry, and says when there is none. On main it
   holds main's numbers.
 - **Rebaselining** (`GAMEONE_PERF_REBASELINE=1`): writes this run's numbers into this machine's

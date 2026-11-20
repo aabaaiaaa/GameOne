@@ -225,7 +225,7 @@ public sealed class ShortPerfTests(ITestOutputHelper output)
         unreadable ? $"{Path.GetFileName(PerfBaseline.FilePath)} is there but couldn't be read: nothing was compared (mend it before rebaselining)"
         : entry is null ? $"no baseline for this machine ({configuration})"
         : before is null ? $"this scene isn't in this machine's baseline ({configuration})"
-        : $"baseline measured on {entry.Commit}, {entry.Measured:yyyy-MM-dd HH:mm} UTC";
+        : $"baseline measured on {before.Commit ?? entry.Commit}, {before.Measured ?? entry.Measured:yyyy-MM-dd HH:mm} UTC";
 
     private static string Say(Verdict verdict) => verdict switch
     {
