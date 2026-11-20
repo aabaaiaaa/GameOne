@@ -902,6 +902,15 @@ dotnet run --project src/GameOne
   - After a BRUTAL upgrade, check the native exports every entry point the bindings name
     (`NativeLibrary.TryGetExport` over the bindings' `EntryPoint`s), and that a call does what it
     should before relying on it: an export alone once ignored its arguments.
+- **The HUD calls ImGui's internals for the link-up's order:** `Hud.OrderLinkUp` puts the
+  link-up's full-screen window in front of the rest of the HUD, then the menu and the credits in
+  front of it, with `Brutal.ImGuiApi.Internal`'s `GetCurrentWindow` and
+  `BringWindowToDisplayFront` (ImGui's own `imgui_internal.h`, exported by BRUTAL's `imgui.dll`):
+  the public API has no way to put one window in front of another every frame. The licence's
+  logo and notice stay in front during a link-up by them. After a BRUTAL upgrade, check that the
+  native still exports both (`NativeLibrary.TryGetExport` on `GetCurrentWindow_internal` and
+  `BringWindowToDisplayFront_internal`: without them the game throws at the first link-up), and
+  look at a link-up in the running game: the HUD behind its static, the credits and a menu in front.
 - **ImGui strings fill an arena that must be emptied every frame:** `ImString` (every interpolated
   string passed to ImGui) is copied into `ImString.SharedStorage`, a fixed 8 MB arena that BRUTAL
   never clears itself. `Hud.Build` clears it at the start of each frame; without that the game throws
