@@ -203,7 +203,7 @@ public sealed class PerformanceTests(ITestOutputHelper output)
             $"with {drop.Physics.FloeBodyCount} floe bodies; physics median {landing.Median:0.00} ms, 95% {landing.P95:0.00} ms, worst {landing.Worst:0.00} ms a frame");
 
         Assert.Equal(Scene.MaxFloeBodies, bodies);
-        Assert.Equal(1 + states.Length + 24, crafts); // none of them came down while it was timed
+        Assert.Equal(states.Length + 24, crafts); // none of them came down while it was timed (the new rocket on Home's pad, nobody near it, waits there under formula)
         Assert.True(busy.Median <= FrameBudgetMs / 2,
             $"with the floe bodies at their cap, a frame's physics took a median {busy.Median:0.00} ms: more than half a 60 fps frame ({FrameBudgetMs / 2:0.0} ms)");
         Assert.Equal(FlightState.Landed, booster.State);

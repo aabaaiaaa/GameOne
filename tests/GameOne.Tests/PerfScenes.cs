@@ -74,7 +74,9 @@ internal static class PerfScenes
         var run = Time(sim, 120);
 
         Assert.Equal(Scene.MaxFloeBodies, sim.Physics.FloeBodyCount);
-        Assert.Equal(1 + states.Length + 24, sim.Physics.Crafts.Count); // none of them came down while it was timed
+        // None of them came down while it was timed; the new rocket on Home's pad, nobody near it, waits there under formula.
+        Assert.True(sim.Flight.WorldVessels.Single(v => v.State == FlightState.Ready).OnFormula);
+        Assert.Equal(states.Length + 24, sim.Physics.Crafts.Count);
         return run;
     }
 
