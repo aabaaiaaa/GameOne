@@ -131,6 +131,15 @@ asked (32x; timed at whatever the game leaves it at): the moon's ground streamed
 cameras, the tiles laid and the patches chosen as it goes. Each to the same 16.7 ms for the whole
 frame, printing the warp the game left and the warp reached, the ground tiles laid, the frame's parts, and the
 tiles' and the terrain patches' (`Timings`). It is the moon feature's before-merge performance run.
+Three more fly at the top rate (`Scene.TopRate`, ×16,384) paced as the game is: vsync on, each
+frame given the real time since the last, and timed less its wait for the display, so what is
+timed is the frame's work, with the fast cores held (`FastCores`, as the game's window in front
+is). A moon transfer (`WarpScenes.MoonTransfer`, begun again each time its pass by the moon comes
+down near the ground and drops the warp, some hundred frames on) and the hundred satellites
+(`WarpScenes.HundredSatellites`) must each hold 60 fps: the median frame within 16.7 ms and the
+rate reached (median) within 10% of the top rate. A full world (`WarpScenes.FullWorld`, 998
+vessels) is measured and printed against its target (its measured median rounded up to the next
+2 ms), and never fails on its times. Each prints the real time between frames beside its work.
 It needs a GPU and a desktop, so it is skipped unless `GAMEONE_PERF=1`:
 
 ```sh
@@ -428,7 +437,7 @@ say) stalls frames and spoils the timing.
 - **`FormulaRateTests`:** a frame at a formula's rate as one advance by formula, in windows
   (`Scene.FormulaWindowSeconds`): a low orbit coasted 60 frames at the top rate ending within a
   metre of where Kepler puts it, the clock 60 frames' worth on; nothing in the physics then (its
-  world kept), 34 windows or more a frame; the new rocket on its pad and a lander on the moon each
+  world kept), a frame's worth of whole windows or more a frame; the new rocket on its pad and a lander on the moon each
   standing where they stood, and the launch (or throttle) dropping the warp to the physics' top
   rate as set moving, flown in the physics from that frame; the drop bringing the flown vessel
   and a small view's back into the physics where the formula had them; a slow frame (0.1 s, a

@@ -148,13 +148,11 @@ public sealed class FormulaCollisionTests(ITestOutputHelper output)
         // Five pairs among the hundred satellites set to meet at random moments within one frame:
         // the second of each put where the first will be then, crossing its way at right angles
         // on a round orbit of its own, sent back along it to the world's start. The polar orbit's
-        // copies (every fourth) all pass over the pole, and meet there: each raised 30 m over the
-        // last, so the five are the crowd's only collisions.
+        // copies are raised apart (WorldTests.ManySatellites), so the five are the crowd's only
+        // collisions.
         var planet = GroundBody.Planet;
         var world = WorldTests.HundredSatellites() with { Time = 0.0 };
         var vessels = world.Vessels.ToArray();
-        for (var k = 3; k < vessels.Length; k += 4)
-            vessels[k] = Raised(planet, vessels[k], 30f * (k / 4));
         var random = new Random(6);
         (int A, int B)[] pairs = [(5, 6), (13, 22), (30, 47), (58, 71), (85, 99)];
         var frame = Scene.TopRate * (double)Simulation.FrameSeconds;
@@ -238,16 +236,6 @@ public sealed class FormulaCollisionTests(ITestOutputHelper output)
         var rotation = Quaternion.Concatenate(other.Rotation, Formula.Turn(Vector3.Transform(Vector3.UnitY, other.Rotation), Vector3.Normalize(back - body.Centre)));
         var origin = (Vector3Double)back - QuaternionDouble.From(rotation).Rotate(other.CentreOfMassOffset);
         return other with { Position = origin, Rotation = rotation, Aim = Vector3.Normalize(back - body.Centre), Velocity = body.OverGround(back, -backMoving) };
-    }
-
-    /// <summary><paramref name="s"/>, on a round orbit, put on the round orbit <paramref name="metres"/> higher, along the same way.</summary>
-    private static VesselState Raised(GroundBody body, VesselState s, float metres)
-    {
-        var at = s.CentreOfMass.ToSingle();
-        var radius = Vector3.Distance(at, body.Centre);
-        var higher = body.Centre + (at - body.Centre) * ((radius + metres) / radius);
-        var stars = body.AmongStars(at, s.Velocity.ToSingle()) * MathF.Sqrt(radius / (radius + metres));
-        return s with { Position = s.Position + (Vector3Double)(higher - at), Velocity = body.OverGround(higher, stars) };
     }
 
     [Fact]

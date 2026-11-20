@@ -397,6 +397,35 @@ frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
   first frames, and the one tier-up frame. Costs or risks: a longer load; start-up time and the
   build's size for ReadyToRun; aggressive optimisation gives up the tiering's profile-guided code
   for those methods. To measure first. To discuss before building.
+- **To try: the top rate's frame in a full world** (performance ideas, from the fast warp's
+  60 fps work, 2026-11-20; Release, `WarpPerfTests`' full world, 998 satellites, 12 s windows:
+  ×7,920 reached headless at the warp's 12 ms budget, ×3,477 paced; the hundred satellites and a
+  moon transfer reach ×16,384). Each helps the capacity world and any crowd at a formula's rate:
+  - **The pairs' broad phase** (the collisions under formula 44% of the frame): the sweep is along
+    X over each vessel's box across the window, some 11 km long at 12 s, so the boxes that overlap
+    grow as the window's square (2,500 searched pairs a window at 8 s, nearly all ruled out by
+    their Hermite ways' bound, `FormulaCollisions.Apart`, but each still costs its sums). Would
+    gain: most of that share, and let a longer window pay. Costs or risks: a grid or each way cut
+    in pieces needs its pairs met once only; a bound too tight misses a collision.
+  - **The rest of a far vessel's measuring read when asked** (the formula's move 41%; the terrain
+    under it already is, `Vessel.Ground`): its tilt and its bell's eight rim points each window
+    (about 0.3 ms a frame among a hundred). Would gain: some 15% of the move. Costs or risks: its
+    best altitude (`MaxAltitude`) reads its height each window, so that must be bounded as
+    `MaxGround`'s is.
+  - **The witnessed's look over the world kept between windows** (`Collisions.AheadOfTheWarp`,
+    its `Snapshot` of every vessel, those at other bodies and held ones too: 7% of the full world's
+    window, Debug). Would gain: that share less a cheaper refresh. Costs or risks: the snapshot is
+    each vessel as the window begins; kept, it must be refreshed for every moved one.
+  - **A window per vessel's need** (the windows' count sets every per-window cost): the window's
+    length (`Scene.FormulaWindowSeconds`) is the collisions' accuracy too, some 14 cm at worst at
+    12 s in the lowest orbit, as its fourth power. A coaster far from every other could take longer
+    windows than one in a crowd. Would gain: the full world's frame halved or more. Costs or risks:
+    the collisions' windows then differ by pair; the unwitnessed's rules run once a window.
+  - **The landing and pad lights' dark share while the light is averaged** (`Sun.DarkShare`,
+    1.4 µs a call: the 14 lit places 19 µs a frame, a thousand landed vessels near the ground
+    1.4 ms a frame): kept a while per place, as it barely changes over a frame. Would gain: a
+    landed crowd's frame. Costs or risks: little; nothing measured asks for it yet.
+  To discuss before building.
 - **The map's merged crosses and their labels** (a design question for the user, from collisions
   part 3's look at the running game, 2026-11-08). Where collisions stack on the screen (a thousand
   satellites' polar copies all coming over the pole together), one cross is drawn, the soonest's,

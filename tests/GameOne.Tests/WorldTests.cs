@@ -338,27 +338,59 @@ public sealed class WorldTests(ITestOutputHelper output)
         Assert.InRange(at, 60, 150);
     }
 
-    /// <summary>A busy world: the satellites preset's four, copied round their orbits 25 times over.</summary>
-    internal static WorldState HundredSatellites() => ManySatellites(25);
+    /// <summary>
+    /// A busy world: the satellites preset's four, copied round their orbits 25 times over, the
+    /// polar orbit's copies raised apart (see <see cref="ManySatellites"/>), so it never wrecks
+    /// itself however long it is flown.
+    /// </summary>
+    internal static WorldState HundredSatellites() => ManySatellites(25, polarApart: true);
 
-    /// <summary>The satellites preset's four, copied <paramref name="copies"/> times, spread evenly round the planet.</summary>
-    internal static WorldState ManySatellites(int copies)
+    /// <summary>Which of the satellites preset's four is on the polar orbit (tilted 90°).</summary>
+    internal const int PolarSatellite = 3;
+
+    /// <summary>How far each copy of the preset's polar orbit is raised over the last, with <c>polarApart</c> (see <see cref="ManySatellites"/>).</summary>
+    internal const float PolarApart = 30f;
+
+    /// <summary>
+    /// The satellites preset's four, copied <paramref name="copies"/> times, spread evenly round the
+    /// planet. Turned about the planet's axis, every copy of the polar orbit passes over the pole at
+    /// the same moment, and they meet there; with <paramref name="polarApart"/> each is put on the
+    /// round orbit <see cref="PolarApart"/> higher than the last, so they pass over it clear of each
+    /// other (the other orbits' copies never meet: each orbit's own never reach the axis, and no two
+    /// orbits share a height but the equatorial one's, which the lowest polar copy, unraised, only
+    /// crosses as it always has).
+    /// </summary>
+    internal static WorldState ManySatellites(int copies, bool polarApart = false)
     {
         var preset = WorldPresets.Satellites();
         var many = new List<VesselState>();
         for (var copy = 0; copy < copies; copy++)
         {
             var turn = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, copy * MathF.Tau / copies); // about the planet's centre (it is below the pad, on -Y)
-            foreach (var s in preset.Vessels)
-                many.Add(s with
+            for (var k = 0; k < preset.Vessels.Count; k++)
+            {
+                var s = preset.Vessels[k];
+                var copied = s with
                 {
                     Id = many.Count,
                     Position = Planet.Centre + Vector3.Transform(s.Position.ToSingle() - Planet.Centre, turn),
                     Rotation = Quaternion.Concatenate(s.Rotation, turn), // still standing up from the planet, so the centre of mass is where it says
                     Velocity = Vector3.Transform(s.Velocity.ToSingle(), turn),
-                });
+                };
+                many.Add(polarApart && k == PolarSatellite ? Raised(GroundBody.Planet, copied, PolarApart * copy) : copied);
+            }
         }
         return preset with { Vessels = many, NextVesselId = many.Count };
+    }
+
+    /// <summary><paramref name="s"/>, on a round orbit, put on the round orbit <paramref name="metres"/> higher, along the same way.</summary>
+    internal static VesselState Raised(GroundBody body, VesselState s, float metres)
+    {
+        var at = s.CentreOfMass.ToSingle();
+        var radius = Vector3.Distance(at, body.Centre);
+        var higher = body.Centre + (at - body.Centre) * ((radius + metres) / radius);
+        var stars = body.AmongStars(at, s.Velocity.ToSingle()) * MathF.Sqrt(radius / (radius + metres));
+        return s with { Position = s.Position + (Vector3Double)(higher - at), Velocity = body.OverGround(higher, stars) };
     }
 
     /// <summary>

@@ -21,7 +21,7 @@ internal sealed class Vessel
     internal const float AirborneClearance = 1.5f; // and this far above it as having left it
     private const float StillSpeed = 0.4f;         // m/s against the ground: slower is standing still (to land), faster has moved it (once landed)
     internal const float ImpactSpeed = 15f;         // m/s into the ground or a raft where it already touches it: a hit, not a touch (see JudgeContact)
-    private const int BellRimPoints = 8;           // points round the bell's rim its lowest is found from, without legs
+    private const int BellRimPoints = RocketGeometry.RimPoints; // points round the bell's rim its lowest is found from, without legs
 
     private readonly Worlds _worlds;               // every body's physics, its own body's among them
     private RocketPhysics? _physics;               // its body's, while it is in the physics (and a wreck's, while its hit plays out)
@@ -609,7 +609,7 @@ internal sealed class Vessel
         // near it but the ground far below, so a few lookups do (see MeasureFar); nearer, the
         // heights its touchdown would be measured by (see Measure).
         if (Body.Altitude(_centreOfMass) - Reach > Body.MaxHeight + 4f * Reach + AirborneClearance)
-            MeasureFar();
+            MeasureFar(readGroundLater: true);
         else
             Measure();
     }
@@ -1502,7 +1502,27 @@ internal sealed class Vessel
         justCut || changed || touching != wasTouching || !settled && (touching || wasTouching || inAir);
 
     /// <summary>The height of its lowest point above whatever is under it (never below 0).</summary>
-    public float Ground { get; private set; }
+    public float Ground
+    {
+        get
+        {
+            // Measured far from the ground under formula, the terrain under it is read only once asked for (see MeasureFar).
+            if (_groundUnder is { } under)
+                (_aboveGround, _groundUnder) = (MathF.Max(0f, MathF.Min(Body.TerrainAltitude(under), Altitude)), null);
+            return _aboveGround;
+        }
+        private set => (_aboveGround, _groundUnder) = (value, null);
+    }
+
+    private float _aboveGround;
+
+    /// <summary>
+    /// Where under its bell's rim its height above the ground is still to be read, once asked for
+    /// (<see cref="Ground"/>), if it is: measured far from the ground under formula
+    /// (<see cref="MeasureFar"/>), as each window of a frame at a formula's rate moves every vessel
+    /// in the world, and few of them are asked.
+    /// </summary>
+    private Vector3? _groundUnder;
     /// <summary>
     /// The height of its lowest point above its body's heights' zero, the sea on the planet (<see cref="GroundBody.Altitude"/>): the altitude the
     /// player is shown, and what the atmosphere's top and orbits are measured by. Below the sea it is negative.
@@ -2321,7 +2341,10 @@ internal sealed class Vessel
             if (State == FlightState.Flying)
             {
                 MaxAltitude = MathF.Max(MaxAltitude, Altitude);
-                MaxGround = MathF.Max(MaxGround, Ground);
+                // Measured far from the ground its height above it is never more than above the
+                // sea (or 0), so it is read only once that could be its best.
+                if (_groundUnder is null || MathF.Max(0f, Altitude) > MaxGround)
+                    MaxGround = MathF.Max(MaxGround, Ground);
                 if (OrbitStable && !EngineLit)
                     AchievedOrbit = true;
             }
@@ -3104,9 +3127,12 @@ internal sealed class Vessel
     /// under its bell's rim's lowest point above the calm sea only (the ground under points a
     /// bell's width apart is all but the same, and the sea's height is a distance from the
     /// planet's centre, so it costs no terrain read). Its tilt and <see cref="Altitude"/> are as
-    /// Measure has them; <see cref="Ground"/> is the lowest of those heights above the ground.
+    /// Measure has them; <see cref="Ground"/> is the lowest of those heights above the ground. With
+    /// <paramref name="readGroundLater"/> (and its legs in), the terrain under its rim isn't read
+    /// until <see cref="Ground"/> is asked for (see <see cref="_groundUnder"/>), and its lowest
+    /// height above the ground is returned as NaN.
     /// </summary>
-    private (float Lowest, Vector3 LowestAt, bool LegsOut) MeasureFar()
+    private (float Lowest, Vector3 LowestAt, bool LegsOut) MeasureFar(bool readGroundLater = false)
     {
         var up = Vector3.TransformNormal(Vector3.UnitY, _model);
         TiltDegrees = float.RadiansToDegrees(MathF.Acos(Math.Clamp(Vector3.Dot(up, LocalUp), -1f, 1f)));
@@ -3129,6 +3155,12 @@ internal sealed class Vessel
             else if (aboveSea < sea)
                 lowestAt = point;
             sea = MathF.Min(sea, aboveSea);
+        }
+        if (!legsOut && readGroundLater)
+        {
+            Altitude = sea;
+            _groundUnder = lowestAt; // read by Ground as MathF.Max(0f, MathF.Min(Body.TerrainAltitude(lowestAt), sea)), once asked
+            return (float.NaN, lowestAt, false);
         }
         if (!legsOut)
             lowest = Body.TerrainAltitude(lowestAt);

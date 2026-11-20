@@ -68,7 +68,7 @@ public sealed class FormulaRateTests(ITestOutputHelper output)
         Assert.NotEmpty(sim.Worlds.All); // kept, not stepped: the drop finds it made
         Assert.All(sim.Worlds.All, w => Assert.Empty(w.Crafts));
         output.WriteLine($"{flight.FormulaWindows} windows a frame");
-        Assert.True(flight.FormulaWindows >= 34, $"{flight.FormulaWindows} windows");
+        Assert.True(flight.FormulaWindows >= (int)(Scene.TopRate * Simulation.FrameSeconds / Scene.FormulaWindowSeconds), $"{flight.FormulaWindows} windows");
     }
 
     [Fact]
@@ -377,10 +377,10 @@ public sealed class FormulaRateTests(ITestOutputHelper output)
     public void An_orbit_dipping_into_the_air_between_two_window_ends_is_stepped_through_its_dip()
     {
         // Its periapsis 10 m under the air's top: a few seconds in the air, wholly between two of
-        // a top-rate frame's window ends (its periapsis 12 s on, the frame's second window from 8
-        // to 16 s), so neither end finds it in the air. Passed over, its orbit would be unchanged.
+        // a top-rate frame's window ends (its periapsis half way through the frame's second
+        // window), so neither end finds it in the air. Passed over, its orbit would be unchanged.
         var planet = GroundBody.Planet;
-        const double Periapsis = Scene.AtmosphereHeight - 10.0, E = 0.3, ToPeriapsis = 12.0;
+        const double Periapsis = Scene.AtmosphereHeight - 10.0, E = 0.3, ToPeriapsis = 1.5 * Scene.FormulaWindowSeconds;
         var rp = planet.SeaRadius + Periapsis;
         var (secondsDown, radiusBefore) = Ellipse(planet, rp, E);
         var dipping = Descending(planet, 1, -Vector3.UnitX, radiusBefore(ToPeriapsis) - planet.SeaRadius, Periapsis, E);

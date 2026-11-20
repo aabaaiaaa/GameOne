@@ -54,8 +54,25 @@ internal static class RocketGeometry
     /// <summary>Points on the bottom rim of <paramref name="stage"/>'s engine bell, in its own space.</summary>
     public static Vector3 BellRim(Stage stage, int i, int count)
     {
+        var (cos, sin) = count == RimPoints ? Rim[i] : RimWay(i, count);
+        return new Vector3(cos * stage.BellRadius, -stage.BellHeight, sin * stage.BellRadius);
+    }
+
+    /// <summary>
+    /// How many points round a bell's rim its lowest is found from (the vessels' measuring and
+    /// <see cref="OverFeet"/>): their ways round it worked out once (<see cref="Rim"/>), as a vessel
+    /// under formula is measured each window of a frame at a formula's rate, a thousand of them at
+    /// once in a full world.
+    /// </summary>
+    internal const int RimPoints = 8;
+
+    private static readonly (float Cos, float Sin)[] Rim = [.. Enumerable.Range(0, RimPoints).Select(i => RimWay(i, RimPoints))];
+
+    /// <summary>The way round a bell's rim point <paramref name="i"/> of <paramref name="count"/> is.</summary>
+    private static (float Cos, float Sin) RimWay(int i, int count)
+    {
         var angle = i * MathF.Tau / count;
-        return new Vector3(MathF.Cos(angle) * stage.BellRadius, -stage.BellHeight, MathF.Sin(angle) * stage.BellRadius);
+        return (MathF.Cos(angle), MathF.Sin(angle));
     }
 
     /// <summary>
@@ -113,7 +130,7 @@ internal static class RocketGeometry
     /// </summary>
     public static bool OverFeet(Vehicle vehicle, int first, int last, bool legsOut, Quaternion lean)
     {
-        var count = legsOut ? LegCount : 8;
+        var count = legsOut ? LegCount : RimPoints;
         Span<Vector2> polygon = stackalloc Vector2[count];
         for (var i = 0; i < count; i++)
         {

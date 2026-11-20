@@ -12,7 +12,8 @@ namespace GameOne;
 /// <remarks>
 /// <para>Each vessel's way across the window is the cubic Hermite through its place and velocity
 /// at the window's two ends (<see cref="Begin"/>, then <see cref="Judge"/>), among the stars as its
-/// body's ground was at the window's start: good to a few centimetres over a window of orbit,
+/// body's ground was at the window's start: good to a few centimetres over a window of orbit
+/// (some 14 cm at worst, in the lowest orbit over the planet's air: see Scene.FormulaWindowSeconds),
 /// whatever moved it there (Kepler, or the formula's steps), and for a burn kept up across the
 /// window (a cubic follows its way to millimetres over a window, though a hold turns its push each
 /// second and the push grows as the mass falls): its throttle is set as a
@@ -80,6 +81,11 @@ internal sealed class FormulaCollisions(Flight flight)
     }
 
     private Found[] _found = new Found[Flight.Capacity / 2 + 1];
+
+    // Each body's turn over the window (by its index among the bodies), in double and in floats
+    // (as its TurnedDirection would make it for each vessel).
+    private QuaternionDouble[] _turn = new QuaternionDouble[4];
+    private Quaternion[] _turnFloat = new Quaternion[4];
     private int _foundCount;
 
     /// <summary>Golden-section's steps on a pair's closest approach, and Newton's after them (see <see cref="Closest"/>).</summary>
@@ -132,6 +138,12 @@ internal sealed class FormulaCollisions(Flight flight)
     private void Find(double span)
     {
         var t = (float)span;
+        // The window's turn of each body's ground, worked out once for every vessel at it.
+        var bodies = Bodies.All;
+        FitTurns(bodies.Count);
+        for (var b = 0; b < bodies.Count; b++)
+            (_turn[b], _turnFloat[b]) = (QuaternionDouble.FromAxisAngle(bodies[b].NorthPole, bodies[b].TurnRadians(span)),
+                Quaternion.CreateFromAxisAngle(bodies[b].NorthPole, bodies[b].TurnAngle(span)));
         var n = 0;
         for (var k = 0; k < _count; k++)
         {
@@ -142,22 +154,22 @@ internal sealed class FormulaCollisions(Flight flight)
             if (!v.OnFormula || v.State == FlightState.Crashed || v.State != _state[k] || v.Body != body || held != _held[k] || v.Motion.Standing != _standing[k])
                 continue; // its motion remade inside the window: its way across it isn't one curve
             // As it ends, among the stars as the ground was as it began: turned on by the window's turn.
-            var turn = QuaternionDouble.FromAxisAngle(body.NorthPole, body.TurnRadians(span));
+            var (turn, turned) = (_turn[body.Index], _turnFloat[body.Index]);
             var centre = (Vector3Double)body.Centre;
             var at = v.TrueCentreOfMass;
             var at1 = centre + turn.Rotate(at - centre);
             var moving1 = turn.Rotate(v.TrueVelocity + (Vector3Double)body.GroundSpin(v.CentreOfMass));
             var rotation = v.Rotation;
             var (bottom, top, width) = Unwatched.Body(v);
-            var middle = body.TurnedDirection(v.MiddleOffset(rotation), span);
+            var middle = Vector3.Transform(v.MiddleOffset(rotation), turned);
             var size = MathF.Max(Collisions.Size(v), MathF.Max(bottom.Length(), top.Length()) + width);
-            var pull1 = body.TurnedDirection(Pull(v, held), span);
+            var pull1 = Vector3.Transform(Pull(v, held), turned);
 
             // Moved down to slot n (n <= k), its start kept beside it.
             (_vessel[n], _body[n], _held[n]) = (v, body, held);
             (_at0[n], _moving0[n], _pull0[n]) = (_at0[k], _moving0[k], _pull0[k]);
             (_at1[n], _moving1[n], _pull1[n], _middle[n]) = (at1, moving1, pull1, middle);
-            (_bottom[n], _top[n], _width[n], _size[n], _met[n]) = (body.TurnedDirection(bottom, span), body.TurnedDirection(top, span), width, size, false);
+            (_bottom[n], _top[n], _width[n], _size[n], _met[n]) = (Vector3.Transform(bottom, turned), Vector3.Transform(top, turned), width, size, false);
             // Its box: its two ends, and the most its pull bows its way off the line between them.
             var (start, end) = (_at0[n].ToSingle(), at1.ToSingle());
             var bow = MathF.Max(_pull0[n].Length(), pull1.Length()) * t * t / 8f;
@@ -223,6 +235,8 @@ internal sealed class FormulaCollisions(Flight flight)
         var (d0, d1) = (_at0[j] - _at0[i] + offset, _at1[j] - _at1[i] + offset);
         var (v0, v1) = ((_moving0[j] - _moving0[i]) * span, (_moving1[j] - _moving1[i]) * span); // per the window's length
         var reach = _size[i] + _size[j];
+        if (Apart(d0, v0, d1, v1) >= reach + FormulaContact.Slack)
+            return; // never within reach anywhere along the window: no closest to search for
         var s = Closest(d0, v0, d1, v1);
         if (Gap(d0, v0, d1, v1, s).Length() >= reach + FormulaContact.Slack)
             return;
@@ -300,6 +314,24 @@ internal sealed class FormulaCollisions(Flight flight)
         return F(newton) < fBest ? newton : best;
     }
 
+    /// <summary>
+    /// The least the gap along the Hermite way through <paramref name="d0"/>, <paramref name="v0"/>
+    /// to <paramref name="d1"/>, <paramref name="v1"/> (see <see cref="Closest"/>) can be anywhere
+    /// in the window, at little cost: the way is the chord from <paramref name="d0"/> to
+    /// <paramref name="d1"/> plus each end's rate's difference from the chord's times its Hermite
+    /// weight (s³ − 2s² + s, and s³ − s²), neither more than 4/27 across the window, so it is never
+    /// nearer than the chord's closest less those two differences' 4/27. Most pairs whose boxes
+    /// overlap pass kilometres apart, and are ruled out by it without the search.
+    /// </summary>
+    private static double Apart(Vector3Double d0, Vector3Double v0, Vector3Double d1, Vector3Double v1)
+    {
+        var chord = d1 - d0;
+        var cc = chord.LengthSquared();
+        var s = cc > 1e-12 ? Math.Clamp(-Vector3Double.Dot(d0, chord) / cc, 0, 1) : 0;
+        var nearest = (d0 + chord * s).Length();
+        return nearest - 4.0 / 27.0 * ((v0 - chord).Length() + (v1 - chord).Length());
+    }
+
     /// <summary>Where between <paramref name="outside"/> and <paramref name="inside"/> (within reach) the gap's square crosses <paramref name="reach2"/>, halved for; <paramref name="outside"/> itself if it is within reach too.</summary>
     private static double Edge(Vector3Double d0, Vector3Double v0, Vector3Double d1, Vector3Double v1, double reach2, double outside, double inside)
     {
@@ -348,6 +380,15 @@ internal sealed class FormulaCollisions(Flight flight)
     {
         var at = v.CentreOfMass;
         return Collisions.Fall(v.Body, held, at) - v.Velocity * Collisions.Drag(v.Body, held, at) + Collisions.Thrust(v);
+    }
+
+    /// <summary>Grows the bodies' turns for <paramref name="count"/> bodies, should there be more than room was made for.</summary>
+    private void FitTurns(int count)
+    {
+        if (count <= _turn.Length)
+            return;
+        Array.Resize(ref _turn, count);
+        Array.Resize(ref _turnFloat, count);
     }
 
     /// <summary>Grows the slots for <paramref name="count"/> vessels, should the world have grown past a full one.</summary>

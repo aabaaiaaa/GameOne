@@ -427,6 +427,59 @@ public sealed class PerformanceTests(ITestOutputHelper output)
     /// <summary>The laps the low pass is found over: more than the frames below fly (some 450 s at most, the last lander 90 s on).</summary>
     private const int LowPassLaps = 3;
 
+    [PerfFact]
+    public void A_moon_transfer_at_16384x_holds_60_fps()
+    {
+        // The upper stage on its way to the moon (WarpScenes.MoonTransfer), the main view alone, at
+        // the top rate, paced as the game is: its path across the moon's sphere and out again asked
+        // each window, its crossings handed across. It lasts some hundred frames at the top rate
+        // before a pass by the moon comes down near its ground and drops the warp, so it is begun
+        // again each time it has.
+        var (world, id) = WarpScenes.MoonTransferWorld();
+        var (sim, _) = WarpScenes.Flying(world, id);
+        using var _s = sim;
+        var top = FlyViews(sim, [], [Scene.TopRate], paced: true, again: () => WarpScenes.Again(sim, world, id)).Single();
+        AssertTopRateHeld("on a moon transfer", top.Median, top.Reached);
+    }
+
+    [PerfFact]
+    public void A_hundred_satellites_at_16384x_hold_60_fps()
+    {
+        // The hundred satellites (WarpScenes.HundredSatellites, one of them flown), every one of
+        // them moved by formula and their collisions looked for each window, all drawn.
+        var (sim, _) = WarpScenes.HundredSatellites();
+        using var _s = sim;
+        var top = FlyViews(sim, [], [Scene.TopRate], paced: true).Single();
+        AssertTopRateHeld("among a hundred satellites", top.Median, top.Reached);
+    }
+
+    /// <summary>
+    /// The full world's frame at the top rate (<see cref="A_full_world_at_16384x_reports_its_frame_rate"/>):
+    /// its median as measured (Release, paced: see the plan's ledger), rounded up to the next 2 ms.
+    /// </summary>
+    private const double FullWorldTargetMs = 18.0;
+
+    [PerfFact]
+    public void A_full_world_at_16384x_reports_its_frame_rate()
+    {
+        // A full world (WarpScenes.FullWorld: Flight.Capacity satellites but room for free play's
+        // rocket, one of them flown): its frame's steps held to the warp's budget, so it reaches
+        // what the budget lets it. It says whether it holds its target, and never fails on its
+        // times: the target is set from what it measured.
+        var (sim, _) = WarpScenes.FullWorld();
+        using var _s = sim;
+        var top = FlyViews(sim, [], [Scene.TopRate], paced: true).Single();
+        output.WriteLine($"a full world at {Scene.TopRate:0}x: a median frame of {top.Median:0.00} ms, reaching {top.Reached:0}x (median), "
+            + $"{(top.Median <= FullWorldTargetMs ? "within" : "over")} its target of {FullWorldTargetMs:0} ms (its measured median, rounded up to the next 2 ms)");
+    }
+
+    /// <summary>That the top rate held 60 fps <paramref name="where"/>: its median frame within a 60 fps frame, and the rate reached (median) within 10% of the top rate.</summary>
+    private static void AssertTopRateHeld(string where, double median, double reached)
+    {
+        Assert.True(median <= FrameBudgetMs, $"at {Scene.TopRate:0}x {where} the main view took a median {median:0.00} ms a frame: more than {FrameBudgetMs:0.0} ms (60 fps)");
+        Assert.True(reached >= 0.9 * Scene.TopRate, $"at {Scene.TopRate:0}x {where} it reached {reached:0}x (median): short of 90% of it");
+    }
+
     /// <summary>How far ahead along the low pass's track the three landers in the small views start, in seconds.</summary>
     private static readonly double[] LowPassAhead = [30.0, 60.0, 90.0];
 
@@ -458,7 +511,7 @@ public sealed class PerformanceTests(ITestOutputHelper output)
         foreach (var vessel in landers)
             output.WriteLine($"lander {vessel.Id}: {vessel.State} {vessel.CrashReason}, {vessel.Ground:0.0} m over the ground");
         Assert.All(landers, v => Assert.Equal(FlightState.Flying, v.State));
-        foreach (var (rate, median, _, _) in results)
+        foreach (var (rate, median, _, _, _) in results)
             Assert.True(median <= FrameBudgetMs,
                 $"the very low pass over the moon with {rate:0.##}x asked, the main view and 3 small ones took a median {median:0.00} ms a frame: more than {FrameBudgetMs:0.0} ms (60 fps)");
     }
@@ -470,23 +523,34 @@ public sealed class PerformanceTests(ITestOutputHelper output)
     /// its steps), and times each frame whole: the flight's steps and the drawing. Prints, for each
     /// rate, the median, 95th percentile and worst frame, the warp the game left and reached, and the frames' parts
     /// (the tiles' and their pieces among the steps', and the frame's, where the terrain patches
-    /// are chosen and drawn).
+    /// are chosen and drawn). <paramref name="paced"/> runs it as the game does: vsync on, each
+    /// frame given the real time since the last (held to the game's 0.1 s), and timed less its wait
+    /// for the display (<see cref="FramePart.Wait"/>), so what is timed is the frame's work, and the
+    /// rate reached is the game time each real second; the real time between frames is printed
+    /// beside it. With <paramref name="again"/>, a scene that runs out at a rate (its warp dropped
+    /// under it) is begun again by it, the rate asked again, and only the frames begun at the rate
+    /// asked are timed. Paced, it holds the fast cores (<see cref="FastCores"/>), as the game's
+    /// window in front is.
     /// </summary>
-    private List<(float Rate, double Median, double P95, double Worst)> FlyViews(Simulation sim, Vessel[] others, float[] rates)
+    private List<(float Rate, double Median, double P95, double Worst, double Reached)> FlyViews(Simulation sim, Vessel[] others, float[] rates,
+        bool paced = false, Func<Vessel>? again = null)
     {
         var flight = sim.Flight;
+        using var fast = paced ? FastCores.Hold() : null;
         Assert.True(Glfw.Init(), "GLFW couldn't start (no desktop?)");
         var window = GameView.CreateWindow("GameOne: performance test");
-        var results = new List<(float Rate, double Median, double P95, double Worst)>();
+        var results = new List<(float Rate, double Median, double P95, double Worst, double Reached)>();
         try
         {
-            using var view = new GameView(window, vsync: false);
+            using var view = new GameView(window, vsync: paced);
             view.Hud.CloseMenu();
             view.Follow(flight);
             foreach (var vessel in others)
                 view.Views.Open(vessel, flight);
             var watched = new List<Vessel>();
             var time = 0.0;
+            var last = Stopwatch.GetTimestamp();
+            var between = 0.0; // the real time since the frame before, ms
             double Frame(FlightInput input)
             {
                 Glfw.PollEvents();
@@ -494,9 +558,13 @@ public sealed class PerformanceTests(ITestOutputHelper output)
                 foreach (var small in view.Views.Small)
                     watched.Add(small.Vessel);
                 var start = Stopwatch.GetTimestamp();
-                var dt = flight.RunFrame(Simulation.FrameSeconds, input with { Watched = watched }, Flight.WarpBudgetSeconds);
-                view.Present(dt, time += dt, flight, paused: false, Simulation.FrameSeconds);
-                return Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+                between = Stopwatch.GetElapsedTime(last, start).TotalMilliseconds;
+                last = start;
+                var real = paced ? (float)Math.Min(between / 1000.0, 0.1) : Simulation.FrameSeconds; // as the game holds it
+                var dt = flight.RunFrame(real, input with { Watched = watched }, Flight.WarpBudgetSeconds);
+                view.Present(dt, time += dt, flight, paused: false, real);
+                var whole = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+                return paced && Timings.Enabled ? whole - Timings.Frames[^1][FramePart.Wait] : whole;
             }
             // A longer warm-up first, so the GPU has clocked up before anything is timed.
             for (var i = 0; i < 4 * WarmUpFrames; i++)
@@ -513,34 +581,64 @@ public sealed class PerformanceTests(ITestOutputHelper output)
             {
                 // Asked for, as the keys would; the game may leave it lower (a warning drops the
                 // warp), and the rate it leaves is the one timed, printed with it.
-                for (var i = 0; i < Flight.Rates.Length && flight.PlayerRate != rate; i++)
-                    Frame(new FlightInput(Faster: flight.PlayerRate < rate, Slower: flight.PlayerRate > rate));
+                void Ask()
+                {
+                    for (var i = 0; i < Flight.Rates.Length && flight.PlayerRate != rate; i++)
+                        Frame(new FlightInput(Faster: flight.PlayerRate < rate, Slower: flight.PlayerRate > rate));
+                }
+                var begun = 0;
+                bool RunOut()
+                {
+                    if (again is null || flight.TimeScale >= rate)
+                        return false;
+                    again();
+                    Ask();
+                    begun++;
+                    return true;
+                }
+                Ask();
                 Timings.Enabled = false;
                 Timings.Enabled = true;
                 for (var i = 0; i < WarmUpFrames; i++)
-                    Frame(default);
+                    if (!RunOut())
+                        Frame(default);
                 var times = new double[TimedFrames];
+                var intervals = new double[TimedFrames];
+                var frames = new FrameSample[TimedFrames];
                 var (least, most) = (float.PositiveInfinity, 0f);
                 for (var i = 0; i < times.Length; i++)
                 {
+                    if (RunOut())
+                    {
+                        i--;
+                        continue;
+                    }
                     times[i] = Frame(default);
+                    (intervals[i], frames[i]) = (between, Timings.Frames[^1]);
                     (least, most) = (MathF.Min(least, flight.TimeScale), MathF.Max(most, flight.TimeScale));
                 }
-                var frames = Timings.Frames.Skip(Timings.Frames.Count - TimedFrames).ToArray();
                 Array.Sort(times);
-                results.Add((rate, times[times.Length / 2], times[(int)(times.Length * 0.95)], times[^1]));
+                Array.Sort(intervals);
                 var reached = frames.Select(f => (double)f.WarpReached).Order().ToArray();
+                results.Add((rate, times[times.Length / 2], times[(int)(times.Length * 0.95)], times[^1], reached[reached.Length / 2]));
                 output.WriteLine($"  {rate:0.##}x asked: 99% {times[(int)(times.Length * 0.99)]:0.00} ms, {times.Count(t => t > FrameBudgetMs)} of {times.Length} frames over {FrameBudgetMs:0.0} ms; " +
-                    $"the game left it at {least:0.##}x to {most:0.##}x ({flight.PlayerRate:0.##}x at the end), reached {reached[reached.Length / 2]:0.#}x (median); " +
-                    $"{frames.Average(f => f.Tiles):0} ground tiles laid (mean)");
+                    $"the game left it at {least:0.##}x to {most:0.##}x ({flight.PlayerRate:0.##}x at the end), reached {reached[reached.Length / 2]:0.#}x (median), {reached[(int)(reached.Length * 0.05)]:0.#}x (5th percentile); " +
+                    $"{frames.Average(f => f.Tiles):0} ground tiles laid (mean)" + (begun > 0 ? $"; begun again {begun} times" : ""));
+                if (paced)
+                    output.WriteLine($"    paced: between frames {intervals[intervals.Length / 2]:0.00} ms (median), {intervals[(int)(intervals.Length * 0.95)]:0.00} ms (95%), {intervals[^1]:0.00} ms at worst; " +
+                        $"{intervals.Count(t => t > 1.5 * FrameBudgetMs)} of {intervals.Length} over 1.5 times {FrameBudgetMs:0.0} ms");
                 PrintParts(frames);
                 output.WriteLine("    the tiles (median ms of the frames' steps): " + string.Join(", ",
                     new[] { $"{StepPart.Tiles} {Median(frames.Select(f => f[StepPart.Tiles])):0.000}" }.Concat(
                         Enum.GetValues<StepDetail>().Where(d => Timings.PartOf(d) == StepPart.Tiles).Select(d => $"{d} {Median(frames.Select(f => f[d])):0.000}"))));
+                output.WriteLine("    the rules and their pieces (median ms of the frames' steps): " + string.Join(", ",
+                    new[] { $"{StepPart.Rules} {Median(frames.Select(f => f[StepPart.Rules])):0.000}" }.Concat(
+                        Enum.GetValues<StepDetail>().Where(d => Timings.PartOf(d) == StepPart.Rules).Select(d => $"{d} {Median(frames.Select(f => f[d])):0.000}"))));
                 output.WriteLine($"    the terrain patches: chosen in {FramePart.Record} {Median(frames.Select(f => f[FramePart.Record])):0.000} ms, drawn in the GPU's {GpuPass.Scene} " +
                     $"{Median(frames.Select(f => f[GpuPass.Scene])):0.000} and {GpuPass.SmallViews} {Median(frames.Select(f => f[GpuPass.SmallViews])):0.000} ms (median)");
             }
-            output.WriteLine($"Frame times at {window.FramebufferSize.X}x{window.FramebufferSize.Y} ({view.PresentMode}), {flight.WorldVessels.Count} vessels, {TimedFrames} frames each:");
+            output.WriteLine($"Frame times at {window.FramebufferSize.X}x{window.FramebufferSize.Y} ({view.PresentMode}), {flight.WorldVessels.Count} vessels, {TimedFrames} frames each" +
+                (paced ? ", each its work alone (less its wait for the display):" : ":"));
         }
         finally
         {
@@ -550,7 +648,7 @@ public sealed class PerformanceTests(ITestOutputHelper output)
         }
 
         output.WriteLine("  rate   median ms   95% ms   worst ms   fps (median)");
-        foreach (var (rate, median, p95, worst) in results)
+        foreach (var (rate, median, p95, worst, _) in results)
             output.WriteLine($"{rate,5:0.##}x {median,10:0.00} {p95,8:0.00} {worst,10:0.00} {1000 / median,14:0}");
         return results;
     }

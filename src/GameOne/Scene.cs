@@ -121,9 +121,12 @@ internal static class Scene
     /// The longest window (game seconds) a frame at a formula's rate is cut into
     /// (<see cref="Flight.FormulaWindows"/>): every vessel's rules once a window, and every vessel
     /// moved by formula to its end. Short enough that a window's rules (the holds' turn, the fuel)
-    /// are near enough smooth; long enough that a frame at the top rate (273 s) is a few dozen.
+    /// are near enough smooth, and that the collisions under formula follow each way across it
+    /// closely (<see cref="FormulaCollisions"/>: some 14 cm at worst, in the lowest orbit over the
+    /// planet's air, the error growing as the window's fourth power); long enough that a frame at
+    /// the top rate (273 s) is a couple of dozen, as each costs every vessel in the world its move.
     /// </summary>
-    public const float FormulaWindowSeconds = 8f;
+    public const float FormulaWindowSeconds = 12f;
 
     /// <summary>
     /// How far ahead (game seconds) a body's physics is asked for before a vessel is to need it

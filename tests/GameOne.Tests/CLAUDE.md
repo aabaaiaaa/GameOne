@@ -164,6 +164,18 @@ a regression. The very low pass with the highest warp asked fails on any machine
 about 23 ms: the warp's steps may take `Flight.WarpBudgetSeconds`, 12 ms, and the drawing
 about 10 more), and that is accepted: the warp's budget stays as it is.
 
+The top rate's paced tests (`A_moon_transfer_at_16384x_holds_60_fps`,
+`A_hundred_satellites_at_16384x_hold_60_fps`, `A_full_world_at_16384x_reports_its_frame_rate`)
+run vsync on, as the game does: run them after a change to the formula's frame (`Flight.Warp.cs`,
+`Formula`, `FormulaCollisions`, the window's length) or to what every vessel costs a window, with
+the headless `WarpPerfTests` (the same scenes' frames part by part, no window) to see where the
+time goes. Paced, the CPU idles between frames and, on Windows' Balanced power mode, a frame's
+every part ran 2 to 5 times slower than the same frames unpaced (Release, the hundred
+satellites: the flight's steps 6 to 12 ms a frame against 2.8 unpaced), and once a frame runs
+over a display frame the next asks for twice the game time and runs to the warp's budget: so run
+them plugged in on "Best performance", and read a reached rate short of the top beside the
+frame's parts before cutting anything.
+
 ## The short performance tests (`ShortPerfTests`)
 
 - **What they are:** four headless scenes, each loading a part of the physics (a hundred

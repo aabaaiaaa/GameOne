@@ -11,8 +11,9 @@ namespace GameOne.Tests;
 /// <param name="Reached">The rate the frames ran at (game seconds in a real frame's seconds).</param>
 /// <param name="Parts">Each step part's time in a frame, ms.</param>
 /// <param name="Details">Each piece's time in a frame, ms (within its part's).</param>
+/// <param name="Again">How many times the scene was begun again, having run out (see <see cref="WarpPerfTests.Measure"/>).</param>
 internal sealed record WarpMeasure(double FrameMs, double StepMs, double Steps, double PhysicsSteps, double Reached,
-    IReadOnlyDictionary<StepPart, double> Parts, IReadOnlyDictionary<StepDetail, double> Details);
+    IReadOnlyDictionary<StepPart, double> Parts, IReadOnlyDictionary<StepDetail, double> Details, int Again);
 
 /// <summary>
 /// Where a frame in warp goes, headless: the flight's steps at the rate asked, within
@@ -35,26 +36,28 @@ public sealed class WarpPerfTests(ITestOutputHelper output)
     [PerfFact] public void Where_a_frame_at_the_top_rate_goes_among_a_hundred_satellites() => Report("Hundred satellites", WarpScenes.HundredSatellites(), Scene.TopRate);
 
     [PerfFact]
-    public void Where_a_frame_at_the_top_rate_goes_in_a_full_world()
+    public void Where_a_frame_at_the_top_rate_goes_on_a_moon_transfer()
     {
-        // The preset's four a copy, crossing each other's orbits (so collisions do come among them,
-        // which would drop the warp), and the one flown 500 m over the highest of them, across
-        // all their planes: every window asks after the whole world (Collisions), with nothing
-        // coming. Room is left for free play's rocket.
-        var ring = WorldTests.ManySatellites(Flight.Capacity / 4 - 1);
-        var flown = UnwatchedTests.Satellite(ring.NextVesselId, 10500f, 45f, 0f);
-        var world = ring with { Vessels = [.. ring.Vessels, flown], NextVesselId = ring.NextVesselId + 1 };
-        Report("A full world", WarpScenes.Flying(world, flown.Id), Scene.TopRate);
+        // The transfer lasts some hundred frames at the top rate before its pass by the moon comes
+        // down near its ground and drops the warp: begun again each time it has.
+        var (world, id) = WarpScenes.MoonTransferWorld();
+        var (sim, flown) = WarpScenes.Flying(world, id);
+        Report("Moon transfer", (sim, flown), Scene.TopRate, () => WarpScenes.Again(sim, world, id));
     }
 
-    private void Report(string name, (Simulation Sim, Vessel Flown) scene, float rate)
+    [PerfFact] public void Where_a_frame_at_the_top_rate_goes_in_a_low_orbit() => Report("Low orbit", WarpScenes.LowOrbit(), Scene.TopRate);
+    [PerfFact] public void Where_a_frame_at_the_top_rate_goes_in_a_full_world() => Report("A full world", WarpScenes.FullWorld(), Scene.TopRate);
+
+    private void Report(string name, (Simulation Sim, Vessel Flown) scene, float rate, Func<Vessel>? again = null)
     {
-        var (sim, flown) = scene;
-        using var _ = sim;
-        var measure = Measure(sim, rate, TimedFrames);
-        output.WriteLine($"{name} at {rate:0}x ({TimedFrames} frames after {WarmUpFrames}):");
+        var (sim, _) = scene;
+        using var _s = sim;
+        var measure = Measure(sim, rate, TimedFrames, again);
+        var flown = sim.Flight.Controlled;
+        output.WriteLine($"{name} at {rate:0}x ({TimedFrames} frames after {WarmUpFrames}{(measure.Again > 0 ? $", begun again {measure.Again} times" : "")}):");
         output.WriteLine($"  frame (its steps, whole) median {measure.FrameMs:0.000} ms of the {Flight.WarpBudgetSeconds * 1000:0} ms budget; one step median {measure.StepMs:0.000} ms");
         output.WriteLine($"  {measure.Steps:0.#} steps a frame ({measure.PhysicsSteps:0.#} of them stepping a physics), reached {measure.Reached:0.0}x");
+        output.WriteLine($"  {sim.Flight.WorldVessels.Count} vessels in the world, {sim.Flight.WorldVessels.Count(v => v.State == FlightState.Crashed)} of them wrecked, {sim.Flight.Log.Count} entries in its log");
         output.WriteLine("  part / piece           ms a frame   share of the frame");
         foreach (var (part, ms) in measure.Parts.OrderByDescending(p => p.Value))
             output.WriteLine($"  {part,-22} {ms,9:0.000}   {ms / measure.FrameMs,6:0%}");
@@ -67,17 +70,36 @@ public sealed class WarpPerfTests(ITestOutputHelper output)
     /// <paramref name="frames"/> frames of <paramref name="sim"/> at <paramref name="rate"/> (the rate keys
     /// pressed up to it, <see cref="WarmUpFrames"/> frames run untimed first), each
     /// <c>Flight.RunFrame</c> with the game's budget: the medians of the steps' parts and pieces a
-    /// frame, the steps a frame, the rate reached and the frame's steps' whole time.
+    /// frame, the steps a frame, the rate reached and the frame's steps' whole time. With
+    /// <paramref name="again"/>, a scene that runs out (its warp dropped under the rate) is begun
+    /// again by it and the keys pressed up to the rate again, and only the frames begun at the rate
+    /// are timed.
     /// </summary>
-    internal static WarpMeasure Measure(Simulation sim, float rate, int frames)
+    internal static WarpMeasure Measure(Simulation sim, float rate, int frames, Func<Vessel>? again = null)
     {
+        using var fast = FastCores.Hold(); // as the game's window in front is
         var flight = sim.Flight;
-        for (var i = 0; i < Flight.Rates.Length && flight.PlayerRate < rate; i++)
-            sim.Step(new FlightInput(Faster: true));
-        Assert.Equal(rate, flight.TimeScale);
+        void Climb()
+        {
+            for (var i = 0; i < Flight.Rates.Length && flight.PlayerRate < rate; i++)
+                sim.Step(new FlightInput(Faster: true));
+            Assert.Equal(rate, flight.TimeScale);
+        }
+        var begun = 0;
+        bool RunOut()
+        {
+            if (again is null || flight.TimeScale >= rate)
+                return false;
+            again();
+            Climb();
+            begun++;
+            return true;
+        }
+        Climb();
 
         for (var i = 0; i < WarmUpFrames; i++)
-            flight.RunFrame(Simulation.FrameSeconds, default, Flight.WarpBudgetSeconds);
+            if (!RunOut())
+                flight.RunFrame(Simulation.FrameSeconds, default, Flight.WarpBudgetSeconds);
 
         var parts = Enum.GetValues<StepPart>();
         var details = Enum.GetValues<StepDetail>();
@@ -94,6 +116,11 @@ public sealed class WarpPerfTests(ITestOutputHelper output)
         {
             for (var i = 0; i < frames; i++)
             {
+                if (RunOut())
+                {
+                    i--;
+                    continue;
+                }
                 var before = Timings.Steps.Count;
                 var game = flight.RunFrame(Simulation.FrameSeconds, default, Flight.WarpBudgetSeconds);
                 Assert.True(Timings.Steps.Count < Timings.StepCapacity, "the timings' step ring filled: fewer frames, or a bigger ring");
@@ -129,7 +156,7 @@ public sealed class WarpPerfTests(ITestOutputHelper output)
         }
 
         return new WarpMeasure(Median(frameMs), Median(stepMs), Median(steps), Median(physics), Median(reached),
-            byPart.ToDictionary(p => p.Key, p => Median(p.Value)), byDetail.ToDictionary(p => p.Key, p => Median(p.Value)));
+            byPart.ToDictionary(p => p.Key, p => Median(p.Value)), byDetail.ToDictionary(p => p.Key, p => Median(p.Value)), begun);
     }
 
     private static double Median(List<double> values)

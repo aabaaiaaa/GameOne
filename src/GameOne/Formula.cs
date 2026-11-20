@@ -479,8 +479,9 @@ internal static class Formula
         var (position, stars) = orbit.StateAfter(since);
         // The orbit's points are among the stars as the ground's frame was at its start: turned
         // back into the ground's frame now, as every position and velocity in the game is.
-        var at = body.Turned(position, -since);
-        return (at, body.OverGround(at, body.TurnedDirection(stars, -since)));
+        var turn = Quaternion.CreateFromAxisAngle(body.NorthPole, body.TurnAngle(-since)); // as Turned and TurnedDirection each make it
+        var at = body.Centre + Vector3.Transform(position - body.Centre, turn);
+        return (at, body.OverGround(at, Vector3.Transform(stars, turn)));
     }
 
     /// <summary>Moves <paramref name="v"/> to where its orbit has it at <paramref name="worldTime"/>, turned as it turns there (or to its aim, steered).</summary>
