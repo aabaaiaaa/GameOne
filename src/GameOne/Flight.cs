@@ -1871,19 +1871,7 @@ internal sealed partial class Flight : IDisposable
                 // Landed or afloat, throttling up is all it takes to fly again; staging works there too.
                 vessel.TakeOff();
                 if (input.Stage && !launched)
-                {
-                    // Its run asked before it parts: until the part is added, the run may seem to
-                    // have lost what the part is.
-                    var run = RunOf(vessel);
-                    foreach (var dropped in vessel.Separate(_nextId))
-                    {
-                        _nextId++;
-                        dropped.ResetLandingLights(WorldTime); // its lights start where they should be, not faded in
-                        _world.Add(dropped);
-                        _worldChanges++;
-                        run?.Add(dropped); // a part is its vessel's run's, if it has one
-                    }
-                }
+                    StageVessel(vessel);
                 if (vessel.State != FlightState.Flying)
                     continue;
                 vessel.Run(dt, input.Lean, input.Hold, WorldTime, FrameVelocity, HoldFloor);
@@ -1898,6 +1886,30 @@ internal sealed partial class Flight : IDisposable
             vessel.MoveLegs(dt);
             vessel.MoveDoors(dt);
         }
+    }
+
+    /// <summary>
+    /// Stages <paramref name="vessel"/> (see <see cref="Vessel.Separate"/>): the one staging path,
+    /// the flown vessel's Space and any vessel's alike. In the physics its parts come apart in its
+    /// physics; under formula by the numbers, nothing brought into the physics and the warp left
+    /// as it is. What came away is added to the world and to the vessel's run, if it has one.
+    /// Returns how many came away. Room is made for them by the step (<see cref="MakeRoom"/>).
+    /// </summary>
+    internal int StageVessel(Vessel vessel)
+    {
+        // Its run asked before it parts: until the part is added, the run may seem to have lost
+        // what the part is.
+        var run = RunOf(vessel);
+        var parts = vessel.Separate(_nextId, _world);
+        foreach (var dropped in parts)
+        {
+            _nextId++;
+            dropped.ResetLandingLights(WorldTime); // its lights start where they should be, not faded in
+            _world.Add(dropped);
+            _worldChanges++;
+            run?.Add(dropped); // a part is its vessel's run's, if it has one
+        }
+        return parts.Length;
     }
 
     // The flown vessel's target and where it is, looked up once a step (see ResolveTarget): the

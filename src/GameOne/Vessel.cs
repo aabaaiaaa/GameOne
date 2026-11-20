@@ -1681,13 +1681,30 @@ internal sealed class Vessel
         // user: no nodes flown under formula), as the throttle and holds go on as they were.
         if (!OnFormula)
             FollowNodes(dt, now);
-        if (EngineLit)
+        // (Under formula the formula burns it, with its thrust: see BurnByFormula.)
+        if (EngineLit && !OnFormula)
             _fuel[Stage] = MathF.Max(0f, _fuel[Stage] - Throttle * CurrentStage.FuelFlow * dt);
         // The manoeuvre hold lets go once no node is left to steer by.
         if (Hold == HoldMode.Manoeuvre && Chain is null)
             Hold = HoldMode.None;
         // (Under formula it steers by no node either: the burn left isn't worked out for it.)
         Steer(dt, lean, hold, holdVelocity, holdFloor, Hold == HoldMode.Manoeuvre && !OnFormula ? BurnLeft(now) : null);
+    }
+
+    /// <summary>
+    /// Under formula, burns the fuel <paramref name="seconds"/> of its engine at its throttle takes,
+    /// as the formula pushes it (see <see cref="Formula"/>): its rules run only once a window at a
+    /// formula's rate, too seldom to burn it there. Returns the share of that time the fuel lasted
+    /// (0 with the engine out).
+    /// </summary>
+    internal float BurnByFormula(float seconds)
+    {
+        if (!EngineLit || seconds <= 0f)
+            return 0f;
+        var use = Throttle * CurrentStage.FuelFlow * seconds;
+        var lasted = use > _fuel[Stage] ? _fuel[Stage] / use : 1f;
+        _fuel[Stage] = MathF.Max(0f, _fuel[Stage] - use);
+        return lasted;
     }
 
     /// <summary>Whether any of it is in the water (as it was after the last physics step).</summary>
@@ -1714,12 +1731,17 @@ internal sealed class Vessel
     /// and this one flies on as the stages above it. Their next engine lights a moment later, once the
     /// stages are clear of each other, at whatever the throttle is set to. Before the payload on top
     /// is let go, though, its fairing comes off (see <see cref="JettisonFairing"/>). Returns the
-    /// vessels that came away (none if nothing did), numbered from <paramref name="id"/>.
+    /// vessels that came away (none if nothing did), numbered from <paramref name="id"/>. Under
+    /// formula it comes apart by the numbers instead (<see cref="SeparateByFormula"/>), nothing
+    /// brought into the physics, any of <paramref name="world"/>'s parting from it going on
+    /// parting from the part it came off.
     /// </summary>
-    internal Vessel[] Separate(int id)
+    internal Vessel[] Separate(int id, IReadOnlyList<Vessel>? world = null)
     {
-        if (State is not (FlightState.Flying or FlightState.Landed or FlightState.Floating) || OnFormula)
-            return []; // under formula it has no body to come apart (it never stages itself: only the one flown does, in the physics)
+        if (State is not (FlightState.Flying or FlightState.Landed or FlightState.Floating))
+            return [];
+        if (OnFormula)
+            return SeparateByFormula(id, world);
         if (JettisonsFairing)
             return JettisonFairing(id);
         if (_physics!.Separate(_craft, atRest: State is FlightState.Landed or FlightState.Floating) is not var (droppedCraft, rest))
@@ -1791,6 +1813,145 @@ internal sealed class Vessel
         }
         _sounds.Add(new SoundEvent(bottom, 1f, SoundCue.LegsLocked, Body));
         return halves;
+    }
+
+    /// <summary>
+    /// Staging under formula, by the numbers (a simple version of the physics' <see cref="Separate"/>,
+    /// as a vessel nobody watches needs only to go on as it would): the bottom stage dropped where
+    /// it was in the stack, the stages above going on from where they were in it, each with its own
+    /// stages, mass and fuel, so each burn after gives the delta-v its numbers say. Both go on from
+    /// the whole's velocity and attitude (with its share of the whole's turning, and in flight the
+    /// physics' gentle push apart along the axis), each under formula from that moment on a
+    /// stand-in craft (<see cref="RocketPhysics.StandIn"/>), and in flight parting from each other
+    /// (<see cref="PartingWith"/>), so brought into one physics later they part as the physics'
+    /// stages do. Landed or afloat, the rest is set on the dropped stage as the physics sets it
+    /// (its bell out of the interstage), and both stay as they were: the formula keeps a vessel
+    /// at rest still. Nothing is brought into the physics. Before the payload is let go its
+    /// fairing comes off (<see cref="JettisonFairingByFormula"/>).
+    /// </summary>
+    private Vessel[] SeparateByFormula(int id, IReadOnlyList<Vessel>? world)
+    {
+        if (!CanStage)
+            return [];
+        if (JettisonsFairing)
+            return JettisonFairingByFormula(id);
+        var atRest = State is FlightState.Landed or FlightState.Floating;
+        var (rotation, turning, centre, velocity) = (_rotation, _angularVelocity, _trueCentre, _trueVelocity);
+        var turn = QuaternionDouble.From(rotation);
+        var origin = centre - turn.Rotate(_centreOffset);
+        var up = Vector3.Transform(Vector3.UnitY, rotation);
+        var (first, last) = (Stage, TopStage);
+        var lift = RocketGeometry.StackStep(CurrentStage) + (atRest ? Vehicle.Stages[first + 1].BellHeight + 0.05f : 0f);
+        var droppedCentre = origin + turn.Rotate(RocketGeometry.CentreOfMassOffset(Vehicle, first, first));
+        var restCentre = origin + turn.Rotate(new Vector3(0f, lift, 0f) + RocketGeometry.CentreOfMassOffset(Vehicle, first + 1, last));
+        // Each goes on as it moved as part of the whole (see RocketPhysics.GoOnAsPartOf), pushed apart in flight.
+        Vector3Double PartVelocity(Vector3Double at, float push) => atRest
+            ? velocity
+            : velocity + (Vector3Double)(Vector3.Cross(turning, (at - centre).ToSingle()) + up * (Scene.SeparationSpeed * push));
+
+        var dropped = new Vessel(_worlds, Body, null, _mission, _sounds,
+            RocketPhysics.StandIn(Vehicle, first, first, LegDeploy, fairingOn: false, BayDoors, _craft.DoorStops), (float[])_fuel.Clone(), id, Flight)
+        {
+            State = State,
+            _at = _at,
+            Site = Site,
+            LegDeploy = LegDeploy,
+            _legsWanted = _legsWanted,
+            BayDoors = BayDoors, // its bay, if it has one, is the bottom stage's too
+            _bayDoorsWanted = _bayDoorsWanted,
+            _hasBeenAirborne = true,
+            _wasTouching = atRest,
+            MaxAltitude = Altitude,
+            MaxGround = Ground,
+        };
+        dropped.BeginOnFormula(droppedCentre, PartVelocity(droppedCentre, -0.5f), rotation, turning, _at);
+        dropped._aim = dropped.Up;
+
+        _craft = RocketPhysics.StandIn(Vehicle, first + 1, last, 0f, FairingOn);
+        _ignitionDelay = Scene.StageIgnitionSeconds;
+        _legsWanted = false;
+        LegDeploy = 0f;
+        _bayDoorsWanted = false;
+        BayDoors = 0f;
+        BeginOnFormula(restCentre, PartVelocity(restCentre, 0.5f), rotation, turning, _at);
+        if (!atRest)
+        {
+            // Anything of the world's still parting from the whole goes on parting from the part it
+            // came off: a stage dropped earlier from the bottom one (below it), a fairing half from the top.
+            for (var i = 0; world is not null && i < world.Count; i++) // by index: a foreach over the interface would box its enumerator
+                if (world[i].PartingWith == this && world[i].Vehicle == Vehicle && world[i].TopStage < first)
+                    world[i].PartingWith = dropped;
+            (dropped.PartingWith, PartingWith) = (this, dropped);
+        }
+        _sounds.Add(new SoundEvent(Position, 1f, SoundCue.LegsLocked, Body));
+        return [dropped];
+    }
+
+    /// <summary>
+    /// Under formula, the fairing comes off in two halves as <see cref="JettisonFairing"/> places
+    /// and pushes them: each from where it was round the payload, going on as it moved as part of
+    /// the whole, pushed out on its own side at <see cref="Scene.FairingSeparationSpeed"/> and
+    /// tumbling outwards, under formula from that moment on a stand-in craft and parting from the
+    /// payload (<see cref="PartingWith"/>). Their clipping through anything nearby is ignored: the
+    /// formula never collides gentle touches. The payload goes on as it was, bare.
+    /// </summary>
+    private Vessel[] JettisonFairingByFormula(int id)
+    {
+        var (rotation, turning, centre, velocity) = (_rotation, _angularVelocity, _trueCentre, _trueVelocity);
+        var spin = Vector3.Transform(Vector3.UnitY, rotation);
+        var origin = centre - QuaternionDouble.From(rotation).Rotate(_centreOffset);
+        var bottom = origin + QuaternionDouble.From(rotation).Rotate(new Vector3(0, RocketGeometry.StageBase(Vehicle, Stage, TopStage), 0));
+        var half = GameOne.Vehicle.HalfOf(Fairing);
+        var offset = RocketGeometry.CentreOfMassOffset(half, 0, 0);
+        _craft.FairingOn = false;
+        var halves = new Vessel[2];
+        for (var i = 0; i < 2; i++)
+        {
+            var turned = rotation * Quaternion.CreateFromAxisAngle(Vector3.UnitY, i * MathF.PI); // as JettisonFairing turns each
+            var outward = Vector3.Transform(Vector3.UnitZ, turned);
+            var tumble = Vector3.Cross(spin, outward) * 0.8f; // its top falls away first
+            var at = bottom + QuaternionDouble.From(turned).Rotate(offset);
+            var moving = velocity + (Vector3Double)(Vector3.Cross(turning, (at - centre).ToSingle()) + outward * Scene.FairingSeparationSpeed);
+            halves[i] = new Vessel(_worlds, Body, null, _mission, _sounds, RocketPhysics.StandIn(half, 0, 0, 0f, fairingOn: false), [0f], id + i, Flight)
+            {
+                State = FlightState.Flying,
+                _at = _at,
+                Site = Site,
+                _hasBeenAirborne = true,
+                _wasTouching = false,
+                MaxAltitude = Altitude,
+                MaxGround = Ground,
+                PartingWith = this,
+            };
+            halves[i].BeginOnFormula(at, moving, turned, turning + tumble, _at);
+        }
+        _sounds.Add(new SoundEvent(bottom.ToSingle(), 1f, SoundCue.LegsLocked, Body));
+        return halves;
+    }
+
+    /// <summary>
+    /// Puts one just made by staging under formula (see <see cref="SeparateByFormula"/>) from world
+    /// time <paramref name="now"/>, its centre of mass at <paramref name="centre"/> moving
+    /// <paramref name="velocity"/> (in double), turned <paramref name="rotation"/> and turning
+    /// <paramref name="spin"/>: its centre of mass from its origin where a body would have it
+    /// (RocketGeometry's), on its orbit if it can be, else stepped, as one leaving the physics is
+    /// (<see cref="LeavePhysics"/>); landed or afloat, still where it is, aboard any raft under it.
+    /// </summary>
+    private void BeginOnFormula(Vector3Double centre, Vector3Double velocity, Quaternion rotation, Vector3 spin, double now)
+    {
+        var still = State is FlightState.Landed or FlightState.Floating;
+        (_physics, OnFormula) = (null, true);
+        _centreOffset = RocketGeometry.CentreOfMassOffset(Vehicle, Stage, TopStage);
+        MoveByFormula(centre, velocity, rotation, spin, orbitChanged: true);
+        (_lastVelocity, _lastSpin) = (Velocity, spin);
+        _formulaLegs = still && _craft.LegsDeployed ? RocketPhysics.RestingLegs(Body, Legs, _model).Extension : Vector4.One;
+        AboardUnderFormula = null;
+        if (still)
+            BoardUnderFormula();
+        var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, _centreOfMass, Velocity) && !EngineLit;
+        _motion = Formula.Begin(Body, centre, velocity, rotation, spin, now, onItsOrbit);
+        _autoFrame = Frames.Auto(Body, _autoFrame, Body.Altitude(_centreOfMass), still);
+        _at = now;
     }
 
     /// <summary>

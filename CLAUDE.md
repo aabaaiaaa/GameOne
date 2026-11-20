@@ -324,7 +324,11 @@ dotnet run --project src/GameOne
   nothing out; `Flight.Load` resets `Unwatched` (`Reset`). `Formula` moves them, each at its own
   body by that body's ground, air and pull (the moon: no air, no sea)
   (simpler, even over-efficient, as the user allows: thrust along the aim at once, no bounce, hop
-  or tip; engines, holds and fuel go on; no nodes flown, no staging): on its orbit by Kepler with
+  or tip; engines, holds and fuel go on, the fuel burnt by the formula's steps with the thrust;
+  no nodes flown; staged (`Flight.StageVessel`, nothing in the game asks it yet: autopilots will)
+  by the numbers, `Vessel.SeparateByFormula`: the parts at their places in the stack, each with its
+  own mass and fuel, parting as the physics' do, a fairing's halves pushed out on their sides,
+  clipping ignored, nothing brought into the physics): on its orbit by Kepler with
   its engine off, above the air and clear of the body's highest ground (`Formula.OnItsOrbitAt`:
   at a body with no air only its height keeps it clear); in the air, burning, or below that
   height, stepped every `Scene.FormulaStepSeconds` (in double, as the physics' copy is: its pull

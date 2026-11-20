@@ -93,8 +93,10 @@ internal struct FormulaMotion
 /// stepped every <see cref="Scene.FormulaStepSeconds"/>, in double, as the physics falls it (gravity, the
 /// turn's pulls and the air's drag: <see cref="GroundBody.FallStep"/>), its thrust
 /// (<see cref="Vessel.Throttle"/> × <see cref="Vessel.MaxAcceleration"/>) along its
-/// <see cref="Vessel.Aim"/>, which its holds turn as they do in the physics (the fuel burns in
-/// <see cref="Vessel.Run"/>, as for every vessel). Its attitude follows its aim at once (no turning
+/// <see cref="Vessel.Aim"/>, which its holds turn as they do in the physics. The fuel burns in each
+/// step with its thrust (<see cref="Vessel.BurnByFormula"/>), at the step's mean mass and cut where
+/// the fuel runs out, so a burn gives the delta-v its numbers say however seldom its rules run (once
+/// a window at a formula's rate). Its attitude follows its aim at once (no turning
 /// time: a simplification allowed under formula); one that can't be steered keeps turning as it was.
 /// Low over the ground its speed over it is held to <see cref="Scene.GroundTopSpeed"/> each step that
 /// starts or would end there, as the physics holds it; so while faster there it is stepped, not on
@@ -307,6 +309,7 @@ internal static class Formula
             m.Standing = false;
             return;
         }
+        v.BurnByFormula((float)(worldTime - m.Shown)); // burning where it stands
         var at = v.CentreOfMass;
         var up = v.Body.Up(at);
         var weight = -Vector3.Dot(v.Body.Gravity(at) + v.Body.OutwardPull(at), up);
@@ -436,7 +439,12 @@ internal static class Formula
         var (p, u) = (m.At, m.Velocity);
         var next = u;
         if (v.EngineLit)
-            next += (Vector3Double)v.Aim * (v.Throttle * v.MaxAcceleration * StepSeconds);
+        {
+            // Pushed at the step's mean mass, for as much of it as the fuel lasts.
+            var (thrust, before) = (v.Throttle * v.CurrentStage.Thrust, v.Mass);
+            var lasted = v.BurnByFormula(StepSeconds);
+            next += (Vector3Double)v.Aim * (thrust / ((before + v.Mass) / 2f) * StepSeconds * lasted);
+        }
         var read = p + u * Lead;
         var drag = Scene.DragRate * v.Body.AirDensity(v.Body.Altitude(read.ToSingle()));
         next += v.Body.FallStep(next, v.Body.Pull(read), drag, StepSeconds);
