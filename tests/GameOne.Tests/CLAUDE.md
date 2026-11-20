@@ -51,6 +51,17 @@ test covers.
   flash, the main view's coming mark and its click, the compass's tick); the fast collisions
   themselves in `FastCollisionTests`, `CollisionTests` and `CollisionWarningTests`.
 - **Whole flights by frame of reference** are in `FrameFlightTests` (`FramePilots.cs`).
+- **The time warp's formula rates** (past `Scene.PhysicsTopRate`) are in `FormulaRateTests` (a
+  frame as windows, cut at its events, its budget, saving and starting again there),
+  `WarpGateTests` (the gate), `WarpDropTests` (the drops), `WarpWarningTests` (collisions and near
+  misses coming at a witnessed vessel), `WarpBurnTests` (burns, holds, rings and nodes by formula),
+  `WarpToTests` (a warp to a point), `FormulaCollisionTests` (collisions between vessels under
+  formula within a window), `FormulaStagingTests` (staging under formula, by
+  `Flight.StageVessel` directly, as nothing in the game asks it yet), and `AveragedLightTests`;
+  the scenes they and the warp's performance tests start from are `WarpScenes`. A pilot that
+  wants the fastest the physics runs asks for `Scene.PhysicsTopRate`, never a number: past it
+  nothing is stepped by Jolt. A rate key is one step a press, so a test reaches a rate by pressing
+  it that many times (each in a frame of no time, to run no steps on the way).
 - **The moon's whole flights** are in `MoonTripTests` (`MoonPilots.cs`): the upper stage from a
   low orbit into the moon's sphere, captured into an orbit round it, landed on it, and a dive
   into it; each leg starts where it is about (`MoonTrip`), with the fuel the satellite mission's
@@ -171,8 +182,10 @@ game doesn't take: their figures are the best case, alike run to run; `GAMEONE_P
 runs them where Windows puts the process, as the game is, for the gap. Each holds 60 fps on the
 frames' work and on the real time between them (what the screen shows). Run them after a change to the formula's frame (`Flight.Warp.cs`,
 `Formula`, `FormulaCollisions`, the window's length) or to what every vessel costs a window, with
-the headless `WarpPerfTests` (the same scenes' frames part by part, no window) to see where the
-time goes. Paced, the CPU idles between frames and, on Windows' Balanced power mode, a frame's
+the headless `WarpPerfTests` (the same scenes' frames part by part, no window; `GAMEONE_PERF=1`,
+in Release, `--filter "FullyQualifiedName~WarpPerfTests"`; they report and never fail) to see
+where the time goes. Never as part of the normal suite: both kinds are skipped without
+`GAMEONE_PERF=1`. Paced, the CPU idles between frames and, on Windows' Balanced power mode, a frame's
 every part ran 2 to 5 times slower than the same frames unpaced (Release, the hundred
 satellites: the flight's steps 6 to 12 ms a frame against 2.8 unpaced), and once a frame runs
 over a display frame the next asks for twice the game time and runs to the warp's budget: so run

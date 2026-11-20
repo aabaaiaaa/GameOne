@@ -127,7 +127,7 @@ the moon (`LowPass.Start`, found over three laps, 30 m over the highest ground i
 the main view on it and three small views of three more landers on the same track 30, 60 and 90 s
 ahead, each frame of 60 fps's real time run and drawn (in warp within the game's own budget for
 its steps, `Flight.WarpBudgetSeconds`, 12 ms), at normal speed and again with the highest warp
-asked (32x; timed at whatever the game leaves it at): the moon's ground streamed in fast under the
+asked (the physics' top rate, `Scene.PhysicsTopRate`, 8x, the fastest the gate allows so low over the moon; timed at whatever the game leaves it at): the moon's ground streamed in fast under the
 cameras, the tiles laid and the patches chosen as it goes. Each to the same 16.7 ms for the whole
 frame, printing the warp the game left and the warp reached, the ground tiles laid, the frame's parts, and the
 tiles' and the terrain patches' (`Timings`). It is the moon feature's before-merge performance run.
@@ -151,6 +151,18 @@ GAMEONE_PERF=1 dotnet test GameOne.slnx --filter "FullyQualifiedName~Performance
 
 Leave the window alone while it runs: anything that captures or covers it (a screenshot tool,
 say) stalls frames and spoils the timing.
+
+**`WarpPerfTests`** are the same warp scenes headless, with no window: where a frame in warp goes
+(the flight's steps at the rate asked, within `Flight.WarpBudgetSeconds` as the game gives them,
+60 frames warmed up then 300 timed, each part and piece of them from `Timings`, with the steps a
+frame and the rate reached), at 32x, the physics' top rate and the top rate on a moon transfer,
+in a low orbit and among a hundred satellites, and at the top rate in a full world. They report
+and never fail on their times: run them only when working on the warp, in Release, beside the
+paced tests above, to see where a frame's time goes:
+
+```sh
+GAMEONE_PERF=1 dotnet test GameOne.slnx -c Release --filter "FullyQualifiedName~WarpPerfTests" --logger "console;verbosity=detailed"
+```
 
 - **`Simulation`:** the game's flight without the game. It creates the physics and the flight, then
   steps them with a pilot until a condition is met (`Run`) or the flight ends (`RunToEnd`), a real
@@ -824,8 +836,9 @@ say) stalls frames and spoils the timing.
   each frame, allocating nothing; patching allocating nothing once warm; and the head-on pairs'
   hyperbolas (`FormulaCollisionTests.Meeting`, put back 600 s and 10,000 s: some 500 to 11,000 km
   out, coming in past the moon's distance and out again for good) followed to 20 s, 3,600 s and
-  the solar system's edge in under 50 ms a call (about 0.3 ms: the way out past the moon's
-  distance isn't sampled for its sphere; sampled every 2 s to the edge, it took some 32 s).
+  the solar system's edge in under 50 ms a call (about 0.3 ms), which holds only while the way out
+  past the moon's distance isn't sampled for its sphere (sampled every 2 s to the edge, a call
+  costs some 32 s).
 - **`SolarEdgeTests`:** the solar system's edge (`Scene.SolarSystemEdge`, round the sun): a path
   escaping the planet at 1,500 m/s from 20 km up, sideways and straight up, and a bound ellipse
   whose apoapsis is 2e10 m out, each ending at the edge (`PathLeg.LeavesSystem`), its end within
@@ -886,6 +899,20 @@ say) stalls frames and spoils the timing.
   satellites drifting side by side within their sizes, their gap wavering, dropping it once in
   eight raises; and two satellites 300 m apart on one orbit never dropping it in 120 frames at
   the top rate.
+- **`WarpGateTests`:** the gate on the formula's rates (`Flight.WarpHeldBy`): a booster falling
+  in the air, flown, in a small view or watched by the main camera, stopping the rate keys at the
+  physics' top rate and named on the time line; one waiting on the pad or landed on the moon
+  holding nothing; one not yet at rest holding it; climbing out of the air at the physics' top
+  rate staying there (nothing raises it by itself); a vessel in the air seen at a formula's rate
+  dropping it to the physics' top rate; throttling up in orbit at a formula's rate dropping
+  nothing, the lit engine holding nothing; set moving from rest at a formula's rate dropping it;
+  a vessel watched whose link-up still waits holding it from the first frame (a small view's and
+  the main camera's); and the time line saying who holds it and why it dropped.
+- **`AveragedLightTests`:** the light averaged at the high rates (`AveragedLight`): above 256x it
+  eases to averaged over `Scene.AveragedLightEaseSeconds` of real time and back as the warp drops;
+  Home's dark share (`Sun.DarkShare`) its night's share of the day; a pad's lights and a landing
+  light near the ground held at their dark share while averaged; and at the top rate the flight's
+  light averaged, the drop bringing the true light back.
 - **`WarpToTests`:** warping to a point on the flown vessel's path (`FlightInput.WarpTo`,
   `Flight.WarpingTo`, a right click on the path in the map): 40 s on round a low orbit at the top
   rate, there in one frame and at normal speed on the time asked (its last window cut there), the
@@ -1493,7 +1520,7 @@ machine's other work, too.
   Rest), the pieces of Tiles and Contact under them (`StepDetail`, as `Tiles: Samples`,
   `Contact: Vessels` and so on: timed within their part, so they don't add to the step, and a
   part's come to a little less than it) and the whole step, in ms; and the speed (game time over the steps' time, beside the 32x
-  the warp asks for). A step here is a flight step, a frame's worth of game time (1/60 s), which
+  they measure it against, `ShortPerfTests.MaxWarp`). A step here is a flight step, a frame's worth of game time (1/60 s), which
   is two of Jolt's 1/120 s steps (a sample's `PhysicsSteps`): "ms per step" is per flight step,
   never per Jolt step, whereas the panel's "steps a frame" counts Jolt's. Each prints the median,
   95th percentile, mean, the mean's share of the step's mean, and spread (the runs' medians, the

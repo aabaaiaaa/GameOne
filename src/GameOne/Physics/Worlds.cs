@@ -10,9 +10,9 @@ namespace GameOne.Physics;
 /// pool, and the next body to need one takes it, rebuilt for that body
 /// (<see cref="RocketPhysics.Rebuild"/>): Jolt's world is kept, so that costs less than a new one.
 /// So a body nothing is in has no physics, and costs nothing; the witnessed (the flown vessel and
-/// the small views, <see cref="Scene.MaxSmallViews"/>) are at six bodies at most, though an emptied
-/// world is kept a while and one that must stay in its physics (settling, parting) keeps one
-/// running. Nothing here is written for any number of bodies: a world is found by its body, never
+/// the small views, <see cref="Scene.MaxSmallViews"/>, and the one the main camera is on) are at
+/// seven bodies at most, though an emptied world is kept a while: nothing nobody watches keeps one
+/// running (the formula plays out whatever it is doing). Nothing here is written for any number of bodies: a world is found by its body, never
 /// as "the other one".
 /// </summary>
 /// <remarks>

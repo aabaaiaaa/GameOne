@@ -79,119 +79,39 @@ frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
   cost); the rest are as they were. The
   next gains are still "The step's cost for each vessel" (below) in the game's own code, or 1
   (queries) where it asks what Jolt already knows.
-- **Time warp that keeps up with its rate** (the user, 2026-11-18, playing: "x32 actually runs
-  much slower (x7 or less sometimes)"; the user's next piece of work, a session of its own that
-  draws on the performance ideas here; to discuss before building). The fastest rate, ×32, gets
-  nowhere near ×32 of real time: a trip to the moon is bearable, anything further out would take
-  far too long. The user: "the performance issues do need clever ways to optimise how to speed up
-  the orbital trajectories."
-  - **The rate wanted** (the user, 2026-11-19): far past ×32, enough for a vessel going round the
-    sun to finish a lap in one to two seconds of real time. The planet's year is 12 days of
-    1,200 s (14,400 s), so about ×7,000 to ×14,000: two to four minutes of game time a frame at
-    60 fps. No physics steps that, so the top rates need a warp where nothing is stepped: every
-    vessel moved by formula (Kepler on its orbit, the landed and afloat carried round with their
-    ground), the physics' worlds idle, and only the low rates the physics warp they are today.
-    The moon goes round in about 27 minutes, a few frames at the top rate, so the crossings of
-    the spheres, the collisions and the comings down must be found from the orbits, never by
-    stepping past them.
-  - **The user's view of how** (2026-11-19): the formula must do the trajectories, the orbits and
-    the unwitnessed collisions, and the slow-down for witnessed collisions made to work with it,
-    so physics is set up only as needed, as bubbles, for actual collisions and near misses (this
-    joins "Local physics, as an experiment" and its bubbles that travel, below, which it makes
-    essential):
-    - In open space a bubble need only be as big as the objects colliding at that moment.
-    - At a body, the tiles are part of the same idea: only the tiles a vessel could touch need
-      physics, so it is only ever a bubble round the vessel, if at all. A vessel near no other
-      object needs no physics.
-    - A vessel that isn't moving needs none either: a landed one, even the one flown.
-    - The vessels the player controls are what set a bubble off: anything on course to collide
-      with one, or to pass it in a near miss, brings the physics in; so does the player moving a
-      landed vessel. Vessels near each other in orbit but plainly on no collision course need none.
-    - A control input at a very high rate could drop the warp to ×1 (not a rule: a possible
-      saving, so control needn't be handled at those rates); though thrust and the like still
-      working in warp would help travel between solar systems later.
-  - **Decided** (the user, 2026-11-19): the low rates keep the physics for the flown and
-    witnessed vessels as today (×1, ×2, ×4, perhaps higher: where the line falls is the
-    measurements' call), so any difference in handling between the formula and the physics is
-    less noticeable; the formula takes over above it. The physics left out at ×1 too, where
-    nothing needs it (a flown vessel alone, say), is to be tried as an optimisation on its own.
-    Burns work in warp at any rate, under the formula, the aim held by a hold (prograde, a node,
-    the rings'). The user: a burn with little delta-v left would burn out too fast to stop by
-    hand, but the burns this is for (long ones, between solar systems) have plenty. The steering
-    rings work in warp at every rate (the user: "less twitchy controls compared to keyboard
-    taps"): a click on a ring sets its angle and the vessel turns to it there as at ×1 (at a
-    high rate the turn, a few seconds of game time, is over within a frame). A steering key at a
-    formula rate drops the warp to the physics' top rate (the user's choice), so the keys always
-    steer as they do today; the rings, the holds and the throttle go on working in warp.
-    The formula's rates only above the air (a body with none: above its highest ground, its orbit
-    floor); below it, the physics' top rate is the fastest. The warp drops to the physics' top
-    rate, by itself, ahead of (within a frame or so of) the air coming up or the ground coming
-    within reach, a collision or near miss warned of (as today's warnings drop it), a manoeuvre
-    node, and a burn's fuel running out. Crossing a sphere's edge doesn't drop it, so a long
-    coast past the moon goes on; a warp to a point on the path still stops on that moment.
-    The rates double all the way (the user: "the formula scale should not jump massively"):
-    paused, ¼, ½, ×1, ×2, ×4 in the physics (where the physics stops, sooner than ×32, is the
-    measurements' call: ×2 to ×8), then the formula's from the next doubling on: ×8, ×16, … up
-    to ×16,384, one past ×8,192 (the user's choice), where a lap of the sun takes 0.88 s (1.76 s
-    at ×8,192, the moon's lap 1.6 s at ×1,024). One step a press (the user: "Just one at a time"),
-    with no stepping on while a rate key is held;
-    a warp to a point on the path goes at the new top rate.
-    Travel between solar systems doubles on past it when it is built.
-    The day at those rates (the user's choice): at ×16,384 the planet's day (1,200 s) passes some
-    14 times a real second, so above the rate where a day passes faster than about one in 5 s
-    real (about ×256) the light is shown averaged, not flickering: an even dusk over the ground,
-    the sun's disc hidden or blurred into its band, the pad and landing lights steady at their
-    average; the true light comes back as the warp drops.
-  - **To discuss with that:** what the HUD, the map and the small views show meanwhile; and the
-    world's other clocks at that rate (the sea's waves, the eclipses), which may need to skip
-    rather than ease.
-  - **First, measure** (done, 2026-11-19, Release, headless, a frame's steps only, no drawing,
-    `WarpPerfTests`): at ×32 the flown upper stage's frame takes 9.4 to 10.3 ms of the 12 ms
-    budget on a moon transfer, 9.5 ms in a low orbit (both reach ×32.0), and 12.2 ms among a
-    hundred satellites, which stops short at ×29. A step costs 0.3 ms (0.43 ms with the
-    hundred), 32 steps a frame. Jolt is the most in every scene (67%, 74% and 50% of the
-    frame, 6.1 to 7.0 ms: 0.2 ms a step even for one vessel in empty space); then the contact
-    part (17%, 18%, 12%), nearly all of it each vessel's own checks (`StepDetail.Vessels`,
-    14%, 14%, 9%); then the rules (8%, 3%, 34%). The moon transfer's scene then was past its
-    crossing into the moon's sphere, on a conic that never reached it; measured again 120 s after
-    the burn (its path going on into the moon's sphere), at the physics' top rate (×8, as ×32 is
-    a formula's rate now): 4.7 ms a frame, 0.58 ms a step, the contact part the most (56%,
-    `Vessels` 48%: the stage still low over the planet, its hull measured), then Jolt (34%, the
-    same 0.2 ms a step), the rules (6%), the water (4%). The figures below for the moon transfer
-    are that ×8 frame's; the other two scenes' are their ×32 frames'.
-  - **The ideas here that bear on it,** each with what the measuring found of its share of a
-    ×32 frame (moon transfer / low orbit / hundred satellites) and the scene it helps:
-    - the crossing search in `Patched.Legs` kept or shared (asked several times a frame on a
-      transfer, the looking ahead at warp among them): not timed on its own; the rules' time
-      outside any piece (`StepDetail.Collisions`, `Formula`, `FormulaCollisions`) is 0.20 ms
-      (4%) / 0.23 ms (2%) / 0.96 ms (8%), where the looking ahead is, so at most that; helps a
-      transfer and a crowd, not a coast in one orbit;
-    - the step's cost for each vessel and the fixed cost of a world: the contact part, 2.6 ms
-      (56%) / 1.7 ms (18%) / 1.4 ms (12%), its `Vessels` check 2.3 / 1.4 / 1.1 ms of it, and the
-      water's 0.18 to 0.27 ms (2% to 4%) and the rest's 0.11 to 0.13 ms (1% to 2%) in every
-      scene: helps all three,
-      most the flown vessel alone in a low orbit (the checks are of one vessel, 0.04 ms a step);
-    - the flight's step allocating (paid once a step, so 32 times over at ×32): not measured
-      (`Timings` doesn't count allocations), so its share is unknown; to be counted before it
-      is weighed;
-    - Jolt's worker pool sized to the work: Jolt's step is a big share, 1.6 ms (34%, of eight
-      steps) / 7.0 ms (74%) / 6.1 ms (50%), 0.2 ms a step for one to a hundred vessels
-      alike, which says its cost is
-      mostly fixed for the world (the pad's rocket, the foundations and masts are in every
-      flight), not the workers' wake, which is a guess to test: helps every scene, most the low
-      orbit;
-    - the tiles' worker skipping cells it can't finish in time (it lags in warp): the tiles in
-      the step are 0.09 to 0.13 ms (1%) in all three, so no gain shows in a frame here; its lag is
-      off the step, on its own thread, and wants a scene near the ground to see;
-    - a point of interest's place cached (asked through a long warp): none of these scenes has a
-      mission's points, so it costs nothing in them; helps a lander mission's warp only.
-  - **The bigger lever:** "Local physics, as an experiment" (below), and its bubbles that travel,
-    the flown vessel itself under formula when nothing is near it, so a coast in orbit or on a
-    transfer is Kepler's, not stepped, and rates past ×32 become possible there.
-  - **What it would gain:** warp at the rate asked, and faster rates for long coasts. **What it
-    would cost or risk:** whatever each idea above costs; for the flown vessel under formula, the
-    formula must steer and burn as the physics does, and hand back before anything comes near.
-    **Which case it would help:** every long coast, most of all beyond the moon.
+- **Time warp: what is left past the fast warp** (the user, 2026-11-18 and 19; the fast warp's
+  ladder to ×16,384, the formula's rates past `Scene.PhysicsTopRate`, the gate, the drops, burns
+  and the rings in warp and the averaged light are built; to discuss before building):
+  - **The physics left out at ×1 where nothing needs it** (the user, 2026-11-19: "to be tried as
+    an optimisation on its own"): a flown vessel alone, coasting above the air with nothing near
+    it, moved by formula at the physics' rates too, as it is at the formula's. Would gain: Jolt's
+    fixed cost of a world (0.2 ms a step even for one vessel in empty space, measured at ×32
+    before the fast warp, `WarpPerfTests`) and the vessel's own checks, at every rate up to ×8.
+    Costs or risks: the hand-back to the physics before anything comes near, a steering key or a
+    touch, at normal speed, where any difference between the formula and the physics is seen most;
+    joins "Local physics, as an experiment" (below).
+  - **Rates past ×16,384** (the user: travel between solar systems "doubles on past it when it is
+    built"): `Scene.TopRate` is the ladder's one number, but the window's count a frame grows with
+    it (`Scene.FormulaWindowSeconds`), so it waits on the performance ideas below and on "A window
+    per vessel's need" in "To try: the top rate's frame in a full world".
+  - **The performance ideas that bore on the warp,** each with what the measuring found of its
+    share of a ×32 frame in the physics before the fast warp (Release, headless, `WarpPerfTests`:
+    moon transfer at ×8 / low orbit / hundred satellites; their ×32 frames 9.4 to 12.2 ms of the
+    12 ms budget, a step 0.3 to 0.43 ms) and the scene it helps; at the physics' rates they still
+    hold, and each has its own entry below:
+    - the crossing search in `Patched.Legs` kept or shared: at most the rules' time outside any
+      piece, 0.20 ms (4%) / 0.23 ms (2%) / 0.96 ms (8%); helps a transfer and a crowd;
+    - the step's cost for each vessel and the fixed cost of a world: the contact part 2.6 ms
+      (56%) / 1.7 ms (18%) / 1.4 ms (12%), its `Vessels` check 2.3 / 1.4 / 1.1 ms of it, the
+      water's 0.18 to 0.27 ms and the rest's 0.11 to 0.13 ms in every scene; helps all three;
+    - the flight's step allocating: not measured (`Timings` doesn't count allocations);
+    - Jolt's worker pool sized to the work: Jolt's step 1.6 ms (34%, of eight steps) / 7.0 ms
+      (74%) / 6.1 ms (50%), 0.2 ms a step for one to a hundred vessels alike, so mostly fixed for
+      the world; helps every scene, most the low orbit;
+    - the tiles' worker skipping cells it can't finish in time: the tiles in the step 0.09 to
+      0.13 ms (1%), so no gain shows here; its lag wants a scene near the ground to see;
+    - a point of interest's place cached: none of these scenes has a mission's points; helps a
+      lander mission's warp only.
 - **To try: the step's cost for each vessel, and the fixed cost of a world** (performance ideas,
   from the `StepDetail` split above, 2026-11-03, and the test-run-times work's slowest tests,
   2026-11-04, Debug, timed with `Timings`; one piece of work, as they share the idea and the
@@ -682,7 +602,9 @@ frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
   use (the same frames, holds and readings the player has, as the test pilots do), how it
   hands back, and how it sits with "low hand-holding" (it flies for the player only when asked,
   and never tells the player what to do). Needs nothing first; "Calling up another vessel"
-  needs it.
+  needs it. Staging under formula is built (`Flight.StageVessel`, tested directly in
+  `FormulaStagingTests`: nothing in the game stages a vessel nobody watches yet); an autopilot
+  staging a vessel nobody watches needs a flight test of it through that path.
 - **Calling up another vessel** (the user, 2026-10-30). An extension of the autopilots (above):
   the player asks for another vessel to be launched and to rendezvous with theirs, flown there by
   its autopilot, for themed play such as refuelling a vessel in orbit without hand-flying the
@@ -976,5 +898,7 @@ frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
   - **Bubbles that travel** (the user's idea, 2026-11-18, to discuss before building): physics
     bubbles in open space that travel with their vessels, merged by closing speed as vessels near
     each other (and split again as they part), and even the flown vessel on formula when nothing
-    is near it, which needs the formula to steer and burn as the physics does (today it turns its
-    attitude to its aim at once and flies no nodes).
+    is near it, which needs the formula to steer and burn as the physics does (at the fast warp's
+    formula rates it does, for the witnessed: its aim turned at its turn rate, its attitude
+    following the aim at once, its holds, rings and nodes flown; at the physics' rates the flown
+    vessel is still the physics').

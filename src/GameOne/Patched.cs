@@ -189,9 +189,10 @@ internal static class Patched
         var pull = body.Mu / (lowest * lowest) + body.Mu / (distance * distance);
 
         // Out past the child's distance and its sphere, it can't be in it: that stretch (out to
-        // where it comes back down, if it does: a lap on for the next, a hyperbola or an escape
-        // never) isn't sampled, so a path out to the solar system's edge costs no more than one
-        // out to the child.
+        // where it comes back down, if it does) isn't sampled, nor the next: a closed orbit's a lap
+        // on, and a hyperbola come in from out there the one as it goes out again for good (an
+        // escape going out has none). So a path out to the solar system's edge costs no more than
+        // one out to the child.
         var (gapFrom, gapTo, up, across) = Gap(orbit, leg.Start, (distance + radius) * 1.01);
         var t = leg.Start;
         var (r, w) = Relative(leg, child, reference, t);

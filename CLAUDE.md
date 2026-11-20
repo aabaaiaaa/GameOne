@@ -282,13 +282,45 @@ dotnet run --project src/GameOne
   `Worlds.StepScale`, every body's at once, directly to check the shortened step on its own).
   Slowed, the steps a real second are the same, each shorter, so the frame rate holds (checked
   paced, `A_fast_pass_holds_60_fps`: see the tests' [`CLAUDE.md`](tests/GameOne.Tests/CLAUDE.md)).
-  A right click on the flown vessel's path (zoomed out, where the path is drawn) warps to that
-  point (`FlightInput.WarpTo`, from `NodeEditor.WarpPoint`, a marker or a vessel under the
-  pointer winning: `Hud.RightClickWarp`): `Flight.WarpingTo` runs at the fastest rate and
-  `RunFrame` cuts the frame that gets there short at it, so it stops at normal speed on that
-  moment; while the engine burns the time is held to the path's new end once a frame. A rate
-  key, a switch, a warning dropping the warp (`DropWarp`), the vessel no longer flying (landed,
-  afloat, lost) or a world loaded or a flight begun (`Begun`) ends it early at normal speed.
+  **The ladder** (`Flight.Rates`, `Flight.Warp.cs`) doubles from 1/4 to `Scene.TopRate`
+  (16,384x), one step a press of a rate key (holding one doesn't step on): the physics' rates up
+  to `Scene.PhysicsTopRate` (8x: a warped frame that many full 1/60 s steps, within
+  `Flight.WarpBudgetSeconds`), the formula's past it (`Flight.IsFormulaRate`, from 16x). A frame
+  at a formula's rate (`AdvanceByFormula`) steps nothing of Jolt's: every vessel, the flown one
+  too, is under formula (`EnterFormula`, the worlds kept made but not stepped; given back as the
+  rate drops, `LeaveFormula`), the frame cut into windows of at most `Scene.FormulaWindowSeconds`
+  (12 s, `FormulaStep`: the vessels' rules once a window, every vessel moved to its end, the
+  crossings, the edge, the collisions under formula, `FormulaCollisions`, and the runs), each cut
+  short at the earliest event in it (`NextCut`: the warp to a point's time, a vessel's crossing,
+  `FormulaMotion.CrossesAt`, a burn's fuel running out, a drop's moment), so nothing is stepped
+  over; it stops at a window's end once the budget is spent. The witnessed fly there by formula:
+  burns, the holds, the rings (a click or a drag turns the vessel at every rate) and their nodes
+  (`BurnByFormula`, their rules every `Scene.FormulaBurnStepSeconds` of a burn above the air).
+  **The gate:** while a witnessed vessel (the flown one, a small view's, the main camera's) flies
+  in the air or low over the ground, or isn't yet at rest (`Flight.WarpHeldBy`, the readout's
+  `Warp held`), Faster past the physics' top rate does nothing; a witnessed vessel in the air seen
+  at a formula's rate drops the warp. **The drops** (`WarpDrop`: `Air`, `Ground`, `SetMoving`,
+  `Steering`, `Collision`, `NearMiss`, `Node`, `FuelOut`; `DropToPhysics`, kept as
+  `Flight.LastDrop` and said on the time line for `Scene.WarpDropShownSeconds`) go to the physics'
+  top rate, `Scene.WarpDropLeadSeconds` (4 s of game time) ahead of what each is for (the way into
+  the air or the airless ground's reach, a node less half its burn, the fuel's end), and at once for
+  a vessel action (launch, staging, the legs, the bay doors, the throttle at rest) or a steering
+  key, before the input is taken, so that is taken in the physics. A collision or near miss
+  coming at a witnessed vessel is asked once a window (`Collisions.AheadOfTheWarp`) and drops it
+  once for each other vessel (`ForgetWarpWarned` forgets one only once it is out of reach). The
+  warp never climbs back by itself (only the rate keys and a warp to a point raise it), and
+  crossing a sphere's edge doesn't drop it; at the physics' rates the warnings still drop it to
+  normal speed (`DropWarp`). From `Scene.AveragedLightRate` (256x) the light is shown averaged
+  (`AveragedLight`, eased over `Scene.AveragedLightEaseSeconds` of real time: see "The air, in
+  C# and GLSL"), the pad and landing lights held at their place's dark share of a day
+  (`Sun.DarkShare`). A right click on the flown vessel's path (zoomed out, where the path is
+  drawn) warps to that point (`FlightInput.WarpTo`, from `NodeEditor.WarpPoint`, a marker or a
+  vessel under the pointer winning: `Hud.RightClickWarp`): `Flight.WarpingTo` runs at the
+  fastest rate the gate allows and `RunFrame` cuts the frame that gets there short at it, so it
+  stops at normal speed on that moment; while the engine burns the time is held to the path's new
+  end once a frame. A rate key, a switch, a warning dropping the warp (`DropWarp`), the vessel no
+  longer flying (landed, afloat, lost) or a world loaded or a flight begun (`Begun`) ends it early
+  at normal speed (a drop, at the physics' top rate).
 - **Vessels nobody watches:** each vessel is at one body (`Vessel.Body`), and everything it
   exposes is in that body's frame; each body in use has its own physics (`Physics/Worlds.cs`, one
   `RocketPhysics` a body, `Vessel.Physics` a vessel's own body's), made as a vessel there first
@@ -297,9 +329,8 @@ dotnet run --project src/GameOne
   never in the step), stepped while a craft is in it, each in turn in `Bodies.All` order, and
   released after `Scene.PhysicsIdleSeconds` with none: a body with nothing in its physics has
   none, so it costs nothing, and the witnessed (the flown vessel, the small views' and the one the
-  main camera is on) are at seven bodies at most, one each (one emptied is kept a while, and one
-  that must stay in its physics, settling in the water or parting, keeps one running where nobody
-  watches). Nothing is written for two bodies: a vessel is asked which body it is at, never "the
+  main camera is on) are at seven bodies at most, one each (one emptied is kept a while: nothing
+  nobody watches keeps one running). Nothing is written for two bodies: a vessel is asked which body it is at, never "the
   other one". At each body, only the witnessed and what could soon hit them are in its physics;
   every other vessel is out of it, moved by formula (`Vessel.OnFormula`: its body taken out by
   `LeavePhysics`, its removed `Craft` kept as a stand-in so `Craft` reads stay safe, every live Jolt
@@ -310,10 +341,11 @@ dotnet run --project src/GameOne
   views', the vessel the main camera is on, `FlightInput.Watching`, and the main view's near its
   camera), and whatever could come within
   `Scene.HandoverDistance` of something in the physics, or of the camera, within
-  `Scene.HandoverSeconds` at their closing speed, grown out from the witnessed; always in it, one
-  parting, settling in the water, playing out a wreck, touching something but not yet at rest, on
-  the pad, or on a raft (the raft moves it). Being near a site keeps nothing in the physics (the
-  formula checks the towers and masts itself). One leaves only past `Scene.HandoverHysteresis`
+  `Scene.HandoverSeconds` at their closing speed, grown out from the witnessed, and nothing else:
+  whatever one nobody watches is doing (parting, settling in the water, on the pad, landed, aboard
+  a raft), the formula plays it out, at every rate, never bringing the physics in nor changing the
+  warp (a wreck already in the physics plays its hit out there, `RocketPhysics.Wreck`). Being near a site keeps nothing in the physics (the formula
+  checks the towers and masts itself). One leaves only past `Scene.HandoverHysteresis`
   times its reach; at most `Scene.HandoversInPerStep` come back a step, every body's together,
   each into its own body's physics, soonest needed first (one
   switched to or given a view at once: `Flight.BringIn`, and the other of a collision under formula
@@ -325,7 +357,8 @@ dotnet run --project src/GameOne
   body by that body's ground, air and pull (the moon: no air, no sea)
   (simpler, even over-efficient, as the user allows: thrust along the aim at once, no bounce, hop
   or tip; engines, holds and fuel go on, the fuel burnt by the formula's steps with the thrust;
-  no nodes flown; staged (`Flight.StageVessel`, nothing in the game asks it yet: autopilots will)
+  nodes flown by the witnessed alone, at the formula's rates, `Flight.BurnByFormula`; staged
+  (`Flight.StageVessel`, nothing in the game asks it under formula yet: autopilots will)
   by the numbers, `Vessel.SeparateByFormula`: the parts at their places in the stack, each with its
   own mass and fuel, parting as the physics' do, a fairing's halves pushed out on their sides,
   clipping ignored, nothing brought into the physics): on its orbit by Kepler with
@@ -339,15 +372,22 @@ dotnet run --project src/GameOne
   from where it started in double by what the Kepler orbit (in floats) says since (`FormulaOrbit`).
   Its touch is judged once, by its whole speed, against the physics' limits and with the
   physics' own reasons (the tower's is "Flew into the service tower."), read along each step so
-  no ridge or floe is stepped over. Where the physics' outcome can't be matched it hands the
-  vessel back: into water shallower than its plunge's reach (the seabed's rules hold there, as in
-  the physics, and the plunge is the physics' to play; it costs a body until it settles), and onto
-  a raft, landed or standing burning, brought back at once. Two under formula collide as part 1
-  judges them (`Unwatched.FindCollisions`, every `Scene.FormulaCollisionSeconds` over the interval
-  ahead: swept boxes, then their bodies, each an axis as wide as itself, judged only as a touch
-  begins, face on along a nose, else side to side; two at different bodies never): both wrecked over `ImpactTolerance`, and
-  never slowed for; a gentler touch passes through (nothing changes: one may fall through
-  another's top to the ground). The map shows predicted collisions between any two vessels at
+  no ridge or floe is stepped over. Nothing is handed back to the physics for it: into water
+  shallower than its plunge's reach it comes onto the seabed at `Scene.FormulaSeabedSpeedShare`
+  of its speed into the water, judged there by the ground's rules; come down on a raft (landed,
+  afloat or standing burning) it is aboard it (`Vessel.AboardUnderFormula`), carried by the
+  raft's pose at the world's time, and comes back into the physics frozen aboard there
+  (`RocketPhysics.Board`) only when something witnessed brings it in. Two under formula collide as
+  part 1 judges them: at the physics' rates by `Unwatched.FindCollisions`, every
+  `Scene.FormulaCollisionSeconds` over the interval ahead (swept boxes, then their bodies, each an
+  axis as wide as itself, judged only as a touch begins, face on along a nose, else side to
+  side; two at different bodies never); at the formula's, by `FormulaCollisions`, back along each
+  window's ways once every vessel is at its end (each way the cubic Hermite through its ends,
+  boxed and swept, each overlapping pair's closest approach found, and within reach their bodies
+  solved as at the physics' rates, `FormulaContact`; one whose motion was remade in the window
+  left out of it), so none is skipped however long the frame: both wrecked over `ImpactTolerance`,
+  and never slowed for, nor the warp dropped; a gentler touch passes through (nothing changes: one
+  may fall through another's top to the ground). The map shows predicted collisions between any two vessels at
   one body (`CollisionSearch`, off the step on its own thread, the landed and afloat held where they stand;
   `Paths` draws them; no pass is asked while the world's clock stands still), information only.
   Every vessel lost, watched or not, and every one removed (to make room, as a world loads or is
@@ -767,7 +807,12 @@ dotnet run --project src/GameOne
   and `skyLightAt`, the twins of `Air`'s march). The tables are bound at 6 as `uAir`. Change one and
   change the other. The coefficients are not repeated by hand: the GLSL is written from `Scene`.
   `AirTableTests` checks the tables against the model (heights up to and above the air); the
-  GLSL's formulas are checked only by compiling and by the screenshots.
+  GLSL's formulas are checked only by compiling and by the screenshots. The averaged light's
+  branch (the Frame block's `averaged`, from `FrameInput.LightAveraged`: `sunHeightAt`,
+  `sunSeenAveraged`, `skySun`, `averagedSunlight` and its mixes into the ground's, the moon's and
+  the smoke's light) is the GLSL's alone, with no C# twin: `Air`, `SolarSystem` and the eclipses
+  stay the true light's, and only the pad and landing lights' dark share (`Sun.DarkShare`) is
+  worked out in C#.
 - **The moon in the sky, in C# and GLSL:** the sky's ray-cast of the moon (`Shaders.MoonFunctions`)
   reads its map (`MoonGround.Map`, heights and kinds bound at 8 and 9, read by gathers) through
   `FrameUniforms.MoonFrame` (the ground's frame into its own axes), and repeats `MoonGround`'s

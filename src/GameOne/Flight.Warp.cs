@@ -360,8 +360,10 @@ internal sealed partial class Flight
     /// <summary>
     /// Forgets, as every frame begins and whatever the rate, each pair that dropped the warp
     /// (<see cref="_warpWarned"/>) whose coming is over: either wrecked or gone from the world, the
-    /// two at different bodies, or moving apart beyond the reach it was found within
-    /// (<see cref="Collisions.WarpReach"/>: passed, or turned away), so one coming again later drops
+    /// two at different bodies, or moving apart (passed, or turned away) beyond
+    /// <see cref="Collisions.WarpReach"/>: their sizes, or a near miss's reach if that is larger,
+    /// whatever the near-miss setting, so with it off a collision found within their sizes is
+    /// forgotten only further out than that. So one coming again later drops
     /// it again. Two drifting side by side within their reach stay one coming however their
     /// closing wavers about nothing, so it drops the warp once.
     /// </summary>
