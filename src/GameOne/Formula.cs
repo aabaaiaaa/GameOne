@@ -309,7 +309,7 @@ internal static class Formula
             m.Standing = false;
             return;
         }
-        v.BurnByFormula((float)(worldTime - m.Shown)); // burning where it stands
+        v.BurnByFormula((float)(worldTime - m.Shown)); // burning where it stands, since it was last asked (or since its touch's step's burn ended)
         var at = v.CentreOfMass;
         var up = v.Body.Up(at);
         var weight = -Vector3.Dot(v.Body.Gravity(at) + v.Body.OutwardPull(at), up);
@@ -555,6 +555,7 @@ internal static class Formula
         var f = MathF.Min(tower, ground);
         var at = Vector3.Lerp(p0, p1, f);
         var velocity = Vector3.Lerp(u0, u1, f);
+        var burntTo = m.Time + StepSeconds; // the step's fuel was burnt to its end (see Step)
         m.Time += f * StepSeconds;
         if (tower <= ground)
         {
@@ -563,6 +564,10 @@ internal static class Formula
         }
         else
             Judge(v, at, velocity, rotation);
+        // Standing there burning, it burns on from where the step's burn ended (see Stand), not
+        // from when it was last asked: so nothing between is burnt twice.
+        if (m.Standing)
+            m.Shown = burntTo;
         return true;
     }
 

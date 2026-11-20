@@ -125,9 +125,11 @@ public sealed class FormulaStagingTests(ITestOutputHelper output)
     {
         // Two flights from the same place, far out where the pull is slight, each staging its
         // stack under formula at once: one's upper stage at full throttle, burning its fuel out,
-        // the other's coasting. What is between them at the end is the burn's alone, the pull
-        // the same in both (but for the few kilometres the burn moves it, far too little to
-        // matter so far out).
+        // the other's coasting. What is between them just after the burn is the burn's alone,
+        // but for the pull's difference over the few tens of kilometres the burn has moved it
+        // (a hundredth of a percent of it so far out). Compared any later, that difference grows
+        // with the distance between them: two top-rate frames on (546 s, hundreds of kilometres
+        // apart) it is some 0.4%.
         const float Radius = 300_000f;
         var (burning, burner) = Staged(Coasting(1, Vehicle.TwoStage, 0, 1, Radius, MathF.PI, throttle: 1f));
         using var _b = burning;
@@ -140,13 +142,15 @@ public sealed class FormulaStagingTests(ITestOutputHelper output)
         var byHand = upper.ExhaustVelocity * Math.Log((upper.DryMass + upper.FuelMass) / upper.DryMass);
         Assert.Equal(byHand, expected, 0.01 * byHand / 100);
 
-        var seconds = Scene.StageIgnitionSeconds + upper.BurnSeconds + 10f;
-        var frames = (int)MathF.Ceiling(seconds / (Scene.TopRate * Simulation.FrameSeconds)) + 1;
-        for (var i = 0; i < frames; i++)
+        // A window a frame, until the tank is dry.
+        burning.RealFrame = coasting.RealFrame = Scene.FormulaWindowSeconds / Scene.TopRate;
+        var start = burning.Flight.WorldTime;
+        while (burner.Fuel > 0f && burning.Flight.WorldTime - start < 120.0)
         {
             burning.Step(default);
             coasting.Step(default);
         }
+        output.WriteLine($"dry {burning.Flight.WorldTime - start:0.0} s after staging, {Vector3.Distance(burner.CentreOfMass, coaster.CentreOfMass) / 1000f:0.0} km from the coaster");
         Assert.Equal(burning.Flight.WorldTime, coasting.Flight.WorldTime, 6);
         Assert.Equal(0f, burner.Fuel);
         Assert.True(burner.OnFormula && coaster.OnFormula);
@@ -155,7 +159,7 @@ public sealed class FormulaStagingTests(ITestOutputHelper output)
         var body = burner.Body;
         var gained = (body.AmongStars(burner.CentreOfMass, burner.Velocity) - body.AmongStars(coaster.CentreOfMass, coaster.Velocity)).Length();
         output.WriteLine($"the burn gave {gained:0.00} m/s; the numbers say {expected:0.00} ({(gained / expected - 1) * 100:0.00}%)");
-        Assert.InRange(gained, expected * 0.99f, expected * 1.01f);
+        Assert.InRange(gained, expected * 0.999f, expected * 1.001f);
     }
 
     [Fact]
@@ -189,6 +193,79 @@ public sealed class FormulaStagingTests(ITestOutputHelper output)
         Assert.True(Vector3.Dot(Vector3.Normalize(pushes[0]), Vector3.Normalize(pushes[1])) < -0.99f, "the two pushed out on opposite sides");
         Assert.True(Vector3.Distance(payload.Velocity, velocity) < 1e-3f, "the payload goes on as it was");
         Assert.All(sim.Worlds.All, w => Assert.Empty(w.Crafts));
+    }
+
+    [Theory]
+    [InlineData("on level ground")]
+    [InlineData("aboard the drone ship")]
+    public void Staged_at_rest_under_formula_the_rest_stands_on_the_dropped_stage_and_both_stay_still(string where)
+    {
+        // The two-stage rocket standing on its legs, nobody watching, at the top rate. Staged, as
+        // the physics stages one at rest: the upper stage set on the booster, its bell lifted out
+        // of the interstage, no parting; and as the formula keeps a vessel at rest, both stay
+        // landed where they are (aboard the deck, both carried by it).
+        var aboard = where == "aboard the drone ship";
+        Vector3 at;
+        if (aboard)
+        {
+            Rafts.Ship.Set(0.0);
+            at = Rafts.Ship.Current.Position + Rafts.Ship.Normal * Scene.DroneShipFreeboard;
+        }
+        else
+            at = FormulaTests.Level.Value.At;
+        var state = Drops.Placed(at, Planet.East(at), 0f, Vehicle.TwoStage, first: 0, last: 1, mission: Mission.ReachOrbit, flight: 1,
+            clearance: -1.5f * Scene.LegStroke, id: 1) with { State = FlightState.Landed, Velocity = Vector3.Zero, TouchedDown = true };
+        var (sim, stack) = Staged(state);
+        using var _ = sim;
+        var flight = sim.Flight;
+        Assert.Equal(FlightState.Landed, stack.State);
+        if (aboard)
+            Assert.Same(Rafts.Ship, stack.AboardUnderFormula?.Raft);
+        var (origin, up, velocity) = (stack.Position, stack.Up, stack.Velocity);
+
+        Assert.Equal(1, flight.StageVessel(stack));
+        var dropped = flight.WorldVessels.Single(v => v.Vehicle == Vehicle.TwoStage && v != stack);
+        Assert.Equal((0, 0), (dropped.Stage, dropped.TopStage));
+        Assert.Equal((1, 1), (stack.Stage, stack.TopStage));
+        Assert.Equal(FlightState.Landed, dropped.State);
+        Assert.Equal(FlightState.Landed, stack.State);
+        Assert.True(stack.OnFormula && dropped.OnFormula);
+        Assert.Null(stack.PartingWith);
+        Assert.Null(dropped.PartingWith);
+        var lift = RocketGeometry.StackStep(Vehicle.TwoStage.Stages[0]) + Vehicle.TwoStage.Stages[1].BellHeight + 0.05f;
+        output.WriteLine($"dropped {Vector3.Distance(dropped.Position, origin):0.000} m from the stack's origin; the rest {Vector3.Dot(stack.Position - dropped.Position, up):0.000} m up the axis ({lift:0.000} asked)");
+        Assert.True(Vector3.Distance(dropped.Position, origin) < 0.01f);
+        Assert.True(Vector3.Distance(stack.Position, dropped.Position + up * lift) < 0.01f);
+        Assert.True(Vector3.Distance(dropped.Velocity, velocity) < 0.01f && Vector3.Distance(stack.Velocity, velocity) < 0.01f, "as still as the stack was");
+        if (aboard)
+        {
+            // The rest, a stage's height up, is over the deck too.
+            Assert.Same(Rafts.Ship, dropped.AboardUnderFormula?.Raft);
+            Assert.Same(Rafts.Ship, stack.AboardUnderFormula?.Raft);
+        }
+        var (droppedAt, restAt) = (dropped.Position, stack.Position);
+
+        for (var i = 0; i < 10; i++)
+        {
+            sim.Step(default);
+            Assert.All(sim.Worlds.All, w => Assert.Empty(w.Crafts));
+        }
+        Assert.Equal(Scene.TopRate, flight.TimeScale);
+        Assert.Equal(FlightState.Landed, dropped.State);
+        Assert.Equal(FlightState.Landed, stack.State);
+        if (aboard)
+        {
+            Rafts.Ship.Set(flight.WorldTime);
+            var (low, high) = (Rafts.Ship.HeightAbove(dropped.Position), Rafts.Ship.HeightAbove(stack.Position));
+            output.WriteLine($"{flight.WorldTime:0} s: the booster {low:0.00} m over the deck, the rest {high:0.00}");
+            Assert.InRange(low ?? float.NaN, -0.5f, 3f);
+            Assert.InRange((high - low) ?? float.NaN, lift - 0.5f, lift + 0.5f); // still standing on it
+        }
+        else
+        {
+            Assert.True(Vector3.Distance(dropped.Position, droppedAt) < 0.01f);
+            Assert.True(Vector3.Distance(stack.Position, restAt) < 0.01f);
+        }
     }
 
     [Fact]

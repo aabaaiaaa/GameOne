@@ -236,7 +236,7 @@ internal sealed class Vessel
         Vehicle = Vehicle,
         First = Stage,
         Last = TopStage,
-        Fuel = (float[])_fuel.Clone(),
+        Fuel = FuelAsShown(),
         State = State,
         Position = origin,
         CentreOfMassOffset = offset, // what its orbit is read from (the store's "in orbit"), wherever it is moved to
@@ -509,6 +509,7 @@ internal sealed class Vessel
         Formula.Advance(this, 0f, now);
         if (State == FlightState.Crashed)
             return; // brought to now, it touched something on the way, and is gone
+        BurnOwed(now); // the stretch since its last formula step, which its place is already moved on by
         _physics = _worlds.Need(Body);
         var frozen = State is FlightState.Landed or FlightState.Floating;
         _craft = _physics.Restore(Vehicle, Stage, TopStage, Position, _rotation, Velocity, _angularVelocity, LegDeploy, FairingOn,
@@ -549,6 +550,7 @@ internal sealed class Vessel
         _ground = change.Direction((Vector3Double)_ground).ToSingle();
         if (OnFormula)
         {
+            BurnOwed(now); // begun again from here (below): the stretch since its last formula step burnt first
             Body = body;
             var at = change.Point(_trueCentre);
             var velocity = change.Velocity(_trueCentre, _trueVelocity);
@@ -1707,6 +1709,32 @@ internal sealed class Vessel
         return lasted;
     }
 
+    /// <summary>
+    /// Under formula, burning while stepped, the fuel of the stretch from its last whole formula
+    /// step (<see cref="FormulaMotion.Time"/>) to world time <paramref name="now"/>: what its shown
+    /// state has been moved on by (thrust and all, see <see cref="Formula.Advance"/>) that no step
+    /// has burnt yet. None otherwise (on its orbit or standing, nothing is owed).
+    /// </summary>
+    private float FuelOwed(double now) =>
+        OnFormula && EngineLit && _motion.Stepping && !_motion.Standing && now > _motion.Time
+            ? MathF.Min(_fuel[Stage], Throttle * CurrentStage.FuelFlow * (float)(now - _motion.Time))
+            : 0f;
+
+    /// <summary>
+    /// Burns what is owed (<see cref="FuelOwed"/>) as it leaves the formula's steps at world time
+    /// <paramref name="now"/>, its motion given back to the physics or begun again (a crossing,
+    /// staging), so the fuel matches where it is.
+    /// </summary>
+    private void BurnOwed(double now) => _fuel[Stage] -= FuelOwed(now);
+
+    /// <summary>Its tanks as it is shown (saved so: see <see cref="Capture"/>), what is owed (<see cref="FuelOwed"/>) taken out.</summary>
+    private float[] FuelAsShown()
+    {
+        var fuel = (float[])_fuel.Clone();
+        fuel[Stage] -= FuelOwed(_motion.Shown);
+        return fuel;
+    }
+
     /// <summary>Whether any of it is in the water (as it was after the last physics step).</summary>
     private bool InWater => _wetParts != 0 || _craft.Submerged > 0f;
 
@@ -1835,6 +1863,7 @@ internal sealed class Vessel
             return [];
         if (JettisonsFairing)
             return JettisonFairingByFormula(id);
+        BurnOwed(_motion.Shown); // both parts begun again from here: the stretch since its last formula step burnt first
         var atRest = State is FlightState.Landed or FlightState.Floating;
         var (rotation, turning, centre, velocity) = (_rotation, _angularVelocity, _trueCentre, _trueVelocity);
         var turn = QuaternionDouble.From(rotation);

@@ -513,6 +513,66 @@ public sealed class FormulaTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Touching_down_burning_under_formula_it_burns_its_fuel_once_however_seldom_it_is_asked()
+    {
+        // Coming down on its engine at nine tenths of its weight, with fuel for some 4 s more, as
+        // "landing with its engine lit": asked by the formula every physics step, as at normal
+        // speed, and asked only twice (once to where it stands burning, once more there), as a
+        // formula rate's window asks it, it has burnt the same fuel by then.
+        var (ground, downhill) = Level.Value;
+        var state = OnItsEngine(Drops.Placed(ground, downhill, 2f, fuel: 0.02f), 0.9f);
+        var (fine, often, _) = Start(state, watched: false);
+        using var _f = fine;
+        var (coarse, seldom, _) = Start(state, watched: false);
+        using var _c = coarse;
+        Assert.True(often.OnFormula && seldom.OnFormula && often.EngineLit);
+        var start = fine.Flight.WorldTime;
+        Assert.Equal(start, coarse.Flight.WorldTime);
+        var (t, touched) = (start, (double?)null);
+        while (t < start + 30.0 && (touched is null || t < touched + 1.0))
+        {
+            t += RocketPhysics.StepSeconds;
+            Formula.Advance(often, RocketPhysics.StepSeconds, t);
+            if (touched is null && often.Motion.Standing)
+                touched = t;
+        }
+        Assert.NotNull(touched);
+        Assert.True(often.Motion.Standing && often.EngineLit, "it should still stand burning");
+        Formula.Advance(seldom, (float)(t - start), t); // stops at its touch
+        Assert.True(seldom.Motion.Standing);
+        Formula.Advance(seldom, 0f, t);
+        var tank = state.Vehicle.Stages[state.First].FuelMass;
+        var (left, leftSeldom) = (often.Fuel * tank, seldom.Fuel * tank);
+        output.WriteLine($"touched down {touched - start:0.00} s on; {t - start:0.00} s on, {left:0.000} kg left asked often, {leftSeldom:0.000} kg asked twice");
+        Assert.True(left > 0f);
+        Assert.Equal(left, leftSeldom, 0.05);
+    }
+
+    [Fact]
+    public void Brought_back_into_the_physics_between_formula_steps_its_fuel_is_burnt_to_that_moment()
+    {
+        // A satellite in orbit at full throttle, unwatched, brought back into the physics half a
+        // formula step after its last: its place has been moved on by the thrust since, so its
+        // fuel has been burnt for that too.
+        var satellite = UnwatchedTests.Satellite(0, 9000f, 0f, 60f);
+        var (sim, v, _) = Start(satellite with { Throttle = 1f }, watched: false);
+        using var _s = sim;
+        Assert.True(v.OnFormula && v.EngineLit);
+        var stepped = v.Motion.Time;
+        Formula.Advance(v, 0f, stepped);
+        Assert.True(v.Motion.Stepping);
+        var stage = v.CurrentStage;
+        var before = v.Fuel * stage.FuelMass;
+        var half = Scene.FormulaStepSeconds / 2;
+        v.ReturnToPhysics(stepped + half);
+        Assert.False(v.OnFormula);
+        Assert.Equal(stepped, v.Motion.Time); // no step taken: only the half step's fuel
+        var after = v.Fuel * stage.FuelMass;
+        output.WriteLine($"{before - after:0.0000} kg burnt in the half step, {stage.FuelFlow * half:0.0000} by its flow");
+        Assert.Equal(stage.FuelFlow * half, before - after, 1e-3);
+    }
+
+    [Fact]
     public void A_vessel_under_formula_into_the_tower_is_wrecked_as_in_the_physics()
     {
         // A booster, legs stowed, upright 20 m over the top of Home's tower, falling at 20 m/s.
