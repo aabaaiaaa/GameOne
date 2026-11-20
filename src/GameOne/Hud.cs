@@ -1112,19 +1112,21 @@ internal sealed class Hud : IDisposable
 
     /// <summary>
     /// Puts the link-up's window (if one is drawn this frame) in front of every other window of the
-    /// HUD, then the credits and the menu screen (if they are up) in front of it: the licence's logo
-    /// and notice are never covered, and a menu stays usable. Neither has a popup of its own, so
-    /// bringing it to the front hides nothing of its own. Called once every window is laid out.
+    /// HUD, then the menu screen and, last, the credits (if they are up) in front of it: a menu stays
+    /// usable, and the licence's logo and notice are never covered, not even by a menu that came to
+    /// reach them (the credits take no input, so the menu keeps its clicks). Neither has a popup of
+    /// its own, so bringing it to the front hides nothing of its own. Called once every window is
+    /// laid out. (ImGui's internals, kept by BRUTAL's bindings: see CLAUDE.md's BRUTAL quirks.)
     /// </summary>
     private void OrderLinkUp()
     {
         if (_linkWindow.IsNull())
             return;
         ImGui.Internal.BringWindowToDisplayFront(_linkWindow);
-        if (!_creditsWindow.IsNull())
-            ImGui.Internal.BringWindowToDisplayFront(_creditsWindow);
         if (!_menuWindow.IsNull())
             ImGui.Internal.BringWindowToDisplayFront(_menuWindow);
+        if (!_creditsWindow.IsNull())
+            ImGui.Internal.BringWindowToDisplayFront(_creditsWindow);
     }
 
     /// <summary>Begins a menu screen's window named <paramref name="name"/> (as <see cref="ImGui.Begin(ImString, ImGuiWindowFlags)"/>), kept for <see cref="OrderLinkUp"/>.</summary>
