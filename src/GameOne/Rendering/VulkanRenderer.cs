@@ -55,6 +55,7 @@ internal sealed unsafe partial class VulkanRenderer : IDisposable
         public Matrix4x4 MoonFrame;     // the ground's frame into the moon's own axes (FrameInput.MoonOrientation turned back): a rotation, the same in every view
         public Vector4 Moonlight;       // rgb = what the moon gives back of the sunlight (FrameInput.MoonShine, the same in every view); w = 1 where this view draws the moon as a mesh (PatchBody.DrawsMoon), so the sky leaves it out
         public Vector4 SunDisc;         // xyz = the way to the sun's centre from this view's camera (worked out in double: far out, it is not the sun's direction from the planet), w = its disc's angular radius from there (FrameInput.SunDisc)
+        public Vector4 Averaged;        // the averaged light: x = its weight (FrameInput.LightAveraged), y = its sun's strength (Scene.AveragedSunStrength), z = the sine of its sky's sun's height (Scene.AveragedSunElevationDegrees)
         public Vector4 Terrain;         // x = map resolution, y = min height, z = max height (above the sea), w = the noise's scale (Scene.DetailScale)
         public Vector4 CameraClip;      // the camera in clip space: the projection's last row
         public WavePhaseArray WavePhases; // the sea's waves' phases (Sea.Phases), four to a vec4
@@ -816,6 +817,7 @@ internal sealed unsafe partial class VulkanRenderer : IDisposable
         _eyes[0] = input.CameraPosition;
         _sunDirection = input.SunDirection;
         _sunDisc = input.SunDisc;
+        _lightAveraged = input.LightAveraged;
         _moonCentre = input.CameraPosition + input.MoonFromCamera;
         _moonOrientation = input.MoonOrientation;
 
@@ -843,6 +845,7 @@ internal sealed unsafe partial class VulkanRenderer : IDisposable
             MoonFrame = Matrix4x4.CreateFromQuaternion(Quaternion.Conjugate(input.MoonOrientation)),
             Moonlight = new Vector4(input.MoonShine, 0),
             SunDisc = input.SunDisc,
+            Averaged = new Vector4(input.LightAveraged, GameOne.Scene.AveragedSunStrength, MathF.Sin(float.DegreesToRadians(GameOne.Scene.AveragedSunElevationDegrees)), 0),
             Terrain = TerrainUniform,
             CameraClip = CameraClip(_projection),
         };

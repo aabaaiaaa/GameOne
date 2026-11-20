@@ -175,6 +175,51 @@ internal static class Shaders
             return discSeen(apart, frame.sunDisc.w, moon);
         }
 
+        // The averaged light (frame.averaged; AveragedLight): at the high rates the day passes too
+        // fast to show, so the light is drawn as an even dusk instead, mixed in by its weight
+        // (frame.averaged.x) as it eases. Its sun on a face is the day's mean from straight over
+        // the place (averagedSunlight, bodyUpAt), with no shadows; the air's tables take its sun
+        // frame.averaged.z over every place's horizon (sunHeightAt), the sky's scattering its way
+        // (skySun); no eclipse (sunSeenAveraged), and no sun's disc, corona or flare.
+        const vec3 PLANET_NORTH = vec3({{Exact(GroundBody.Planet.NorthPole.X)}}, {{Exact(GroundBody.Planet.NorthPole.Y)}}, {{Exact(GroundBody.Planet.NorthPole.Z)}}); // the planet's north pole (GroundBody.NorthPole)
+
+        // The sun's height at a place whose up is up, as the air's tables take it (the cosine of
+        // its way off straight up): the true sun's, mixed towards the averaged light's.
+        float sunHeightAt(vec3 up) { return mix(dot(up, frame.sunDir.xyz), frame.averaged.z, frame.averaged.x); }
+
+        // A share of the sun seen past the moon, the averaged light's at its weight: none covered.
+        float sunSeenAveraged(float seen) { return mix(seen, 1.0, frame.averaged.x); }
+
+        // The way to the sun the sky's scattering goes by: the true sun's, turned by the averaged
+        // light's weight towards its sun, frame.averaged.z over the camera's horizon due east, where
+        // the sun's day rises (the sun's true way east or west of a place flips each half day, too
+        // fast to show: its band's rising is the same all day).
+        vec3 skySun()
+        {
+            vec3 s = frame.sunDir.xyz;
+            if (frame.averaged.x <= 0.0)
+                return s;
+            vec3 up = upAt(frame.cameraPos.xyz);
+            vec3 east = cross(PLANET_NORTH, up);
+            float across = length(east);
+            east = across > 1e-4 ? east / across : normalize(cross(up, vec3(1.0, 0.0, 0.0))); // (over a pole, any way round)
+            vec3 low = up * frame.averaged.z + east * sqrt(1.0 - frame.averaged.z * frame.averaged.z);
+            vec3 mixed = mix(s, low, frame.averaged.x);
+            return length(mixed) > 1e-4 ? normalize(mixed) : low;
+        }
+
+        // The averaged light's sun on a face turned straight up (linear, before exposure): the day's
+        // mean, neither dimmed by the air nor shadowed.
+        vec3 averagedSunlight() { return toLinear(frame.sunColor.rgb) * frame.averaged.y; }
+
+        // Up at p from the centre of the body it is at (the moon's where its datum is nearer than
+        // the planet's sea): where the averaged light's sun stands over it.
+        vec3 bodyUpAt(vec3 p)
+        {
+            vec3 fromMoon = p - (frame.cameraPos.xyz + frame.moon.xyz);
+            return frame.moon.w > 0.0 && length(fromMoon) - frame.moon.w < altitudeOf(p) ? normalize(fromMoon) : upAt(p);
+        }
+
         // The sun's light at p (linear): its own, dimmed by the air between p and it (none with the
         // sea in the way) and by the moon covering it.
         vec3 sunlightAt(vec3 p)
@@ -188,7 +233,7 @@ internal static class Shaders
         // is as dark as the sky drawn from there, skyColor).
         vec3 skyLightAt(vec3 p)
         {
-            return airSkyLight(altitudeOf(p), dot(upAt(p), frame.sunDir.xyz)) * (SKY_EXPOSURE / PI) * sunSeen(p);
+            return airSkyLight(altitudeOf(p), sunHeightAt(upAt(p))) * (SKY_EXPOSURE / PI) * sunSeenAveraged(sunSeen(p));
         }
 
         // The unit direction from p to the moon's centre (given from the camera, frame.moon).
@@ -338,7 +383,8 @@ internal static class Shaders
         vec3 airMarch(vec3 o, vec3 d, float from, float to, int steps, float dense, out vec3 through)
         {
             float a = from, b = to, enter, leave;
-            if (shadowStretch(o, d, enter, leave) && enter < to && leave > from)
+            // (The averaged light, over half eased in, has its sun over every horizon: no shadow.)
+            if (frame.averaged.x < 0.5 && shadowStretch(o, d, enter, leave) && enter < to && leave > from)
             {
                 if (enter <= from && leave >= to)
                 {
@@ -357,7 +403,7 @@ internal static class Shaders
                 dense = 0.0; // (the thick end in the shadow: evenly)
             float span = b - a, n = float(steps);
             float offset = hash3(ivec3(floor(d * 4096.0)));
-            float mu = dot(d, frame.sunDir.xyz);
+            float mu = dot(d, skySun());
             float rayleigh = rayleighPhase(mu), haze = hazePhase(mu);
             vec3 sun = toLinear(frame.sunColor.rgb);
             vec3 depth = before, light = vec3(0.0);
@@ -381,7 +427,7 @@ internal static class Shaders
                 if (molecules > 0.0 || mist > 0.0)
                 {
                     // The eye's dimming runs to the sample, so that much of this step's own is in it.
-                    vec3 sunHere = sun * airTransmittance(h, dot(p / r, frame.sunDir.xyz));
+                    vec3 sunHere = sun * airTransmittance(h, sunHeightAt(p / r));
                     vec3 scattered = RAYLEIGH_SCATTER * (molecules * rayleigh) + vec3(MIE_SCATTER * mist * haze);
                     light += sunHere * exp(-(depth + extinction * into)) * scattered * weight;
                 }
@@ -417,7 +463,7 @@ internal static class Shaders
             if (to <= from)
                 return vec3(0.0);
             vec3 through;
-            return airMarch(o, d, from, to, steps, near <= 0.0 ? 1.0 : 0.0, through) * SKY_EXPOSURE * sunSeenFromCamera();
+            return airMarch(o, d, from, to, steps, near <= 0.0 ? 1.0 : 0.0, through) * SKY_EXPOSURE * sunSeenAveraged(sunSeenFromCamera());
         }
 
         // The sky as the camera sees it, in SKY_SAMPLES steps.
@@ -453,12 +499,12 @@ internal static class Shaders
                 // changes along it, without the march's search for the planet's shadow (the midpoint's
                 // own sunlight has it) or its jitter.
                 vec3 p = o + d * (0.5 * (from + to));
-                float r = length(p), h = r - frame.planet.w, inAir = to - from, mu = dot(d, frame.sunDir.xyz);
+                float r = length(p), h = r - frame.planet.w, inAir = to - from, mu = dot(d, skySun());
                 float molecules = airDensity(h), mist = hazeDensity(h);
                 vec3 extinction = RAYLEIGH_SCATTER * molecules + vec3(MIE_EXTINCTION * mist) + OZONE_ABSORPTION * ozoneDensity(h);
                 vec3 scattered = RAYLEIGH_SCATTER * (molecules * rayleighPhase(mu)) + vec3(MIE_SCATTER * mist * hazePhase(mu));
                 through = exp(-extinction * inAir);
-                light = toLinear(frame.sunColor.rgb) * airTransmittance(h, dot(p / r, frame.sunDir.xyz)) * exp(-extinction * (0.5 * inAir)) * scattered * (inAir * SKY_EXPOSURE) * sunSeenFromCamera();
+                light = toLinear(frame.sunColor.rgb) * airTransmittance(h, sunHeightAt(p / r)) * exp(-extinction * (0.5 * inAir)) * scattered * (inAir * SKY_EXPOSURE) * sunSeenAveraged(sunSeenFromCamera());
                 return;
             }
             // Its steps closer together at the lower end, where the air is thicker, on a way that climbs
@@ -466,7 +512,7 @@ internal static class Shaders
             // evenly (there the air is as thick all along, and squeezing them by the eye shows as grain).
             float rise = length(o + d * to) - length(o + d * from);
             float dense = rise > 1000.0 ? 1.0 : rise < -1000.0 ? -1.0 : 0.0;
-            light = airMarch(o, d, from, to, airSteps(to - from, 1, FOG_SAMPLES), dense, through) * SKY_EXPOSURE * sunSeenFromCamera();
+            light = airMarch(o, d, from, to, airSteps(to - from, 1, FOG_SAMPLES), dense, through) * SKY_EXPOSURE * sunSeenAveraged(sunSeenFromCamera());
         }
 
         // A lit colour seen through the air between the camera and worldPos: dimmed by the air in the
@@ -523,6 +569,7 @@ internal static class Shaders
             mat4 moonFrame;      // the turn from the ground's frame into the moon's own axes, its map's (rotation only, the same in every view)
             vec4 moonlight;      // rgb = what the moon gives back of the sunlight, before the air, dimmed in a lunar eclipse (SolarSystem.MoonShine, the same in every view); w = 1 where this view draws the moon as a mesh (within Scene.MoonMeshReach), so the sky leaves it out
             vec4 sunDisc;        // xyz = the way to the sun's centre from this view's camera (worked out in double: far out it differs from sunDir, the way from the planet), w = its disc's angular radius from there
+            vec4 averaged;       // the averaged light (AveragedLight): x = its weight (0 the true light, 1 averaged, mixed between as it eases), y = its sun's strength (Scene.AveragedSunStrength), z = the sine of its sky's sun's height (Scene.AveragedSunElevationDegrees)
             vec4 terrain;        // x = the map's resolution, y = its lowest height, z = its highest, w = the scale the detail's and waves' noise is laid out on (Scene.DetailScale, as in C#)
             vec4 cameraClip;     // the camera itself in clip space, for points given from the camera: viewProj * (p - camera, 0) + this
             vec4 wavePhases[2];  // the sea's waves' phases at the world's time (Sea.Phases), four to a vec4, in Sea.Waves' order
@@ -1531,16 +1578,24 @@ internal static class Shaders
             vec3 l = frame.sunDir.xyz;
             vec3 up = upAt(vWorldPos);
             float diffuse = max(dot(n, l), 0.0);
-            float visible = diffuse > 0.0 ? lightVisibility(vWorldPos, n) : 0.0;
+            // (No shadows looked up in the light wholly averaged, which has none.)
+            float averaged = frame.averaged.x;
+            float visible = diffuse > 0.0 && averaged < 1.0 ? lightVisibility(vWorldPos, n) : 0.0;
             vec3 sun = sunlightAt(vWorldPos) * SUN_EXPOSURE;
+            // In the averaged light, mixed in by its weight: the sun's day's mean from straight over
+            // the body it is at, unshadowed, and no glint (a day's spread of light has no one way to
+            // shine back along: one from overhead would sit under the camera, a bright spot on the sea).
+            vec3 overhead = bodyUpAt(vWorldPos);
+            vec3 meanSun = averagedSunlight() * SUN_EXPOSURE;
+            vec3 direct = mix(sun * (diffuse * visible), meanSun * max(dot(n, overhead), 0.0), averaged);
             // The sky's light thins with the air and goes as night falls (the air's table has both).
             vec3 skyLight = skyLightAt(vWorldPos);
-            vec3 bounce = toLinear(vec3(0.45, 0.42, 0.36)) * (sun * max(dot(up, l), 0.0) / PI + skyLight);
+            vec3 bounce = toLinear(vec3(0.45, 0.42, 0.36)) * (mix(sun * max(dot(up, l), 0.0), meanSun, averaged) / PI + skyLight);
             vec3 toMoon = moonDirAt(vWorldPos);
             vec3 sky = mix(bounce, skyLight, dot(n, up) * 0.5 + 0.5) * 0.8 + NIGHT_LIGHT
                 + moonlight(vWorldPos, toMoon) * max(dot(n, toMoon), 0.0);
-            float specular = pow(max(dot(n, normalize(l + v)), 0.0), gloss) * shine;
-            vec3 rgb = albedo * (sky + sun * diffuse * visible + pointLighting(vWorldPos, n) + padLighting(vWorldPos, n));
+            vec3 glint = sun * (pow(max(dot(n, normalize(l + v)), 0.0), gloss) * shine * visible * (1.0 - averaged));
+            vec3 rgb = albedo * (sky + direct + pointLighting(vWorldPos, n) + padLighting(vWorldPos, n));
             if (kind == KindLamp)
                 rgb = mix(rgb, albedo * 6.0, draw.material.w); // a lamp's own face: off, lit as any surface; on, it shines, whatever lights it
             if (kind == KindWater)
@@ -1553,7 +1608,7 @@ internal static class Shaders
                 // and the water's fragments are most of a view over the sea.)
                 rgb = mix(rgb, skyColor(r, 2), fresnel * 0.5 * (1.0 - ice)); // (held back: the sea stays blue out to the horizon)
             }
-            rgb += sun * specular * visible;
+            rgb += glint;
 
             oColor = vec4(finish(fog(rgb, vWorldPos)), color.a);
         }
@@ -1760,8 +1815,12 @@ internal static class Shaders
             mat3 toMoon = mat3(frame.moonFrame);
             float lit = max(dot(n, sun), 0.0);
             vec3 light = vec3(0.0);
-            if (lit > 0.0)
-                light = planetShadowLight(world) * (lit * sunSeenOver(m, height, sun) * shadowed);
+            float averaged = frame.averaged.x;
+            if (lit > 0.0 && averaged < 1.0)
+                light = planetShadowLight(world) * (lit * sunSeenOver(m, height, sun) * shadowed * (1.0 - averaged));
+            // The averaged light's sun, mixed in by its weight: the day's mean from straight over
+            // the place (m, its way from the moon's centre), unshadowed.
+            light += vec3(frame.averaged.y * max(dot(n, m), 0.0) * averaged);
             light += vec3(planetshine(world) * max(dot(n, toMoon * normalize(frame.planet.xyz - world)), 0.0));
             return toLinear(frame.sunColor.rgb) * light * (albedo * SUN_EXPOSURE);
         }
@@ -1941,12 +2000,12 @@ internal static class Shaders
             // The vessels' sun shadows on it, from the shadow map (by that normal, for the lookup's
             // nudge), only where the sun is on it.
             vec3 sun = sunFromMoon();
-            float shadowed = dot(n, sun) > 0.0 ? shadowMapVisibility(vWorldPos, nScene) : 1.0;
+            float shadowed = dot(n, sun) > 0.0 && frame.averaged.x < 1.0 ? shadowMapVisibility(vWorldPos, nScene) : 1.0;
             vec3 rgb = moonLight(m, height, albedo, n, sun, vWorldPos, shadowed);
             // And the view's lights (the landing lights of the vessels near it) and the engine
             // flame, as on the planet's ground.
             rgb += albedo * (pointLighting(vWorldPos, nScene) + padLighting(vWorldPos, nScene));
-            rgb += corona(normalize(vWorldPos - frame.cameraPos.xyz), 1.0 - sunSeenFromCamera(), true);
+            rgb += corona(normalize(vWorldPos - frame.cameraPos.xyz), (1.0 - sunSeenFromCamera()) * (1.0 - frame.averaged.x), true); // (none in the averaged light)
             oColor = vec4(finish(rgb), 1.0);
         }
         """;
@@ -1979,7 +2038,7 @@ internal static class Shaders
             // thinning above the camera (none from above the air).
             vec3 cameraUp = upAt(frame.cameraPos.xyz);
             float cameraHeight = altitudeOf(frame.cameraPos.xyz);
-            float covered = 1.0 - sunSeenFromCamera();
+            float covered = (1.0 - sunSeenFromCamera()) * (1.0 - frame.averaged.x); // (none in the averaged light: no eclipse)
             if (covered > 0.0)
                 sky += toLinear(frame.sunColor.rgb) * airTransmittance(cameraHeight, 0.0)
                     * (covered * ECLIPSE_HORIZON_GLOW * airDensity(cameraHeight) * exp(-abs(dot(cameraUp, d)) / ECLIPSE_HORIZON_HEIGHT));
@@ -2013,7 +2072,7 @@ internal static class Shaders
             float fromSun = atan(length(cross(d, toSun)), dot(d, toSun));
             float soft = max(0.5 * SUN_DISC_SOFTENING * sunRadius, 0.5 * fwidth(fromSun));
             vec3 sunHere = toLinear(frame.sunColor.rgb) * airTransmittance(altitudeOf(frame.cameraPos.xyz), dot(upAt(frame.cameraPos.xyz), toSun));
-            rgb += sunHere * (1.0 - smoothstep(sunRadius - soft, sunRadius + soft, fromSun)) * 20.0;
+            rgb += sunHere * (1.0 - smoothstep(sunRadius - soft, sunRadius + soft, fromSun)) * (20.0 * (1.0 - frame.averaged.x)); // (none in the averaged light, whose sun is a day's mean)
             // Where the ray meets the sun's sphere, if it does (its distance from its angular radius).
             float sunDistance = SUN_RADIUS / sin(sunRadius);
             float sunMiss = sunDistance * sin(fromSun);
@@ -2446,14 +2505,17 @@ internal static class Shaders
             // it glows when the sun is behind it. And the engine flame lights it up from inside. The
             // sunlight is the air's here, so its floor in shadow goes with it (none at night).
             vec3 l = frame.sunDir.xyz;
-            float visible = mix(0.45, 1.0, lightVisibility(vWorldPos, l));
+            float averaged = frame.averaged.x;
+            float visible = averaged < 1.0 ? mix(0.45, 1.0, lightVisibility(vWorldPos, l)) : 1.0;
             vec3 sun = sunlightAt(vWorldPos) * SUN_EXPOSURE;
             float forward = pow(max(dot(normalize(vWorldPos - frame.cameraPos.xyz), l), 0.0), 8.0);
             // With the moon's light (unshadowed), at the share the sun's has without its forward glow.
             vec3 sky = skyLightAt(vWorldPos) * 0.8 + NIGHT_LIGHT + moonlight(vWorldPos, moonDirAt(vWorldPos)) * SMOKE_LIT_SHARE;
             vec3 toFlame = frame.pointLightPos.xyz - vWorldPos;
             vec3 flame = frame.pointLight.rgb * 1.5 / (1.0 + 3.0 * dot(toFlame, toFlame) / (frame.pointLightPos.w * frame.pointLightPos.w));
-            vec3 rgb = toLinear(puff.color.rgb) * (sky + sun * visible * (SMOKE_LIT_SHARE + 0.8 * forward) + flame);
+            // In the averaged light, mixed in by its weight: the sun's day's mean, from overhead, with no forward glow.
+            vec3 direct = mix(sun * visible * (SMOKE_LIT_SHARE + 0.8 * forward), averagedSunlight() * (SUN_EXPOSURE * SMOKE_LIT_SHARE), averaged);
+            vec3 rgb = toLinear(puff.color.rgb) * (sky + direct + flame);
 
             oColor = vec4(finish(rgb * vFogThrough + vFogLight), alpha);
         }

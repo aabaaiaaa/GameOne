@@ -92,6 +92,25 @@ internal static class Scene
     /// <summary>The fastest rate of all (<see cref="Flight.Rates"/>, doubling from 1/4): a lap of the sun in under a second of real time.</summary>
     public const float TopRate = 16384f;
 
+    /// <summary>
+    /// The rate from which the light is shown averaged (<see cref="AveragedLight"/>): there a day of
+    /// the planet's passes in under five real seconds (<see cref="DaySeconds"/> over it), too fast to
+    /// show as anything but flicker.
+    /// </summary>
+    public const float AveragedLightRate = 256f;
+
+    /// <summary>Real seconds the light takes to ease fully to its average, or back to the true light as the warp drops.</summary>
+    public const float AveragedLightEaseSeconds = 0.5f;
+
+    /// <summary>The averaged light's sun, on a face turned straight up: its day's mean on a level face (about 1/π of its full strength) as a share of it.</summary>
+    public const float AveragedSunStrength = 0.32f;
+
+    /// <summary>How high over each view's horizon the averaged light's sky has its sun (degrees): a dusk sky, the same all day.</summary>
+    public const float AveragedSunElevationDegrees = 8f;
+
+    /// <summary>How many times through its day a place's dark share (<see cref="Sun.DarkShare"/>) samples its sun's height at.</summary>
+    public const int AveragedLightSamples = 48;
+
     /// <summary>How long (game seconds) ahead of what it is for the warp drops to <see cref="PhysicsTopRate"/> (<see cref="WarpDrop"/>), so the physics is running as it happens.</summary>
     public const float WarpDropLeadSeconds = 4f;
 

@@ -313,9 +313,11 @@ internal sealed unsafe partial class VulkanRenderer
             _shadowClears.AsSpan(0, clears));
 
         // Each sun area, from the uniforms of the first view it is chosen for (whose light matrix is
-        // that area's): the main view's for the first, a small view's for each of the others.
+        // that area's): the main view's for the first, a small view's for each of the others. None
+        // drawn in the light wholly averaged (FrameInput.LightAveraged), which has no sun shadows:
+        // the areas are cleared, so a lookup there reads lit.
         cb.BindPipeline(VkPipelineBindPoint.Graphics, _shadowPipeline);
-        for (var area = 0; area < _sunAreas; area++)
+        for (var area = 0; area < _sunAreas && _lightAveraged < 1f; area++)
         {
             var owner = SunAreaOwner(area, views);
             if (owner < 0)

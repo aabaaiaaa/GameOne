@@ -62,6 +62,13 @@ internal ref struct FrameInput
     public Vector4 SunDisc;
 
     /// <summary>
+    /// How far the light is shown averaged this frame (<see cref="AveragedLight.Weight"/>: 0 the
+    /// true light, 1 averaged, between as it eases): the sun's day's mean from straight over every
+    /// place, no sun shadows, the sky's sun low over each view's horizon, and no sun's disc, corona or flare.
+    /// </summary>
+    public float LightAveraged;
+
+    /// <summary>
     /// The moon's orientation this frame (<see cref="SolarSystem.MoonOrientation"/> at <see cref="WorldTime"/>:
     /// its own axes into the ground's frame): the sky reads its map through it.
     /// </summary>

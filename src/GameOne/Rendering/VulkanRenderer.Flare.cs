@@ -62,6 +62,7 @@ internal sealed unsafe partial class VulkanRenderer
     private Matrix4x4 _viewProj, _projection;
     private Vector3 _cameraPosition, _sunDirection, _moonCentre;
     private Vector4 _sunDisc; // the main view's (FrameInput.SunDisc)
+    private float _lightAveraged; // how far the light is averaged (FrameInput.LightAveraged): the flare, the sun's shadows and its disc go with it
 
     /// <summary>
     /// How far short of the near side of the sun's sphere the probe's disc is (a share of the way
@@ -206,7 +207,8 @@ internal sealed unsafe partial class VulkanRenderer
             || Vector3.Distance(_moonCentre, _cameraPosition) - GameOne.Scene.MoonRadius < probeDistance;
         var seen = hidesProbe ? 1f : SunSeenFromCamera();
         var brightness = GameOne.Scene.FlareStrength * _lightVisibility * onScreen * GameOne.Air.FlareDimming(_cameraPosition, _sunDirection, seen)
-            * MapFlare(_mapShown); // and in the map, its ghosts kept faint over the paths and labels
+            * MapFlare(_mapShown) // and in the map, its ghosts kept faint over the paths and labels
+            * (1f - _lightAveraged); // and none in the averaged light, whose sun is a day's mean with no disc
         if (brightness < 0.002f)
             return;
 

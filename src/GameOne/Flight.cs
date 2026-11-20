@@ -1661,10 +1661,12 @@ internal sealed partial class Flight : IDisposable
         if (_underFormula && !ByFormula)
             LeaveFormula(given); // there at normal speed: back in the physics as the frame ends
         // The lights (the places' and each vessel's landing lights) fade by the frame's real
-        // seconds, whatever the warp, and are lit as the frame's own end has the sun.
-        Lights.Step(WorldTime, realSeconds);
+        // seconds, whatever the warp, and are lit as the frame's own end has the sun; the light
+        // eased towards its average by the rate the frame ends at, and they held with it.
+        Light.Step(TimeScale, realSeconds);
+        Lights.Step(WorldTime, realSeconds, Light.Weight);
         for (var i = 0; i < _world.Count; i++) // by index: a foreach over the list would allocate
-            _world[i].StepLandingLights(WorldTime, realSeconds);
+            _world[i].StepLandingLights(WorldTime, realSeconds, Light.Weight);
         LinkUp.Step(_realTime);
         foreach (var link in _viewLinks)
             link.Step(_realTime);
@@ -2268,6 +2270,9 @@ internal sealed partial class Flight : IDisposable
     /// <summary>Each lit place's lights, on from its own dusk to its own dawn, faded by real time (see <see cref="PlaceLights"/>): reset by a load, stepped by every frame.</summary>
     public PlaceLights Lights { get; } = new();
 
+    /// <summary>How far the light is shown averaged at the high rates (see <see cref="AveragedLight"/>): stepped by every frame, reset as a flight begins or a world is restored.</summary>
+    public AveragedLight Light { get; } = new();
+
     // The map's collisions (see LookForCollisions): the search, on its own thread; the world as it is
     // handed to it, and the vessels it stands for, slot by slot (kept, so the handing allocates
     // nothing), for the pass out and for the one whose collisions are shown, with when that one was
@@ -2720,6 +2725,7 @@ internal sealed partial class Flight : IDisposable
         if (_warpTo is not null)
             DropWarp();
         BackToThePhysics();
+        Light.Reset(TimeScale); // the true light at once, at the rate it starts at
         Restarted?.Invoke();
     }
 

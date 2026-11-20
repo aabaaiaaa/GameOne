@@ -55,6 +55,8 @@ internal sealed class Readout
             if (hud.TimeScale > 1f) // measured only in warp
                 Show("Warp reached", $"{hud.RunningScale:0}x"); // how fast the world really ran, as the time line's "running"
         }
+        if (flight.Light.Weight > 0.5f)
+            Show("Light", "averaged"); // the high rates' even dusk (AveragedLight), more than half eased in
 
         ReadFlight(flight, _shown);
         if (Timings.Enabled && Timings.Summary is { } timings)

@@ -291,10 +291,15 @@ internal readonly record struct LightSet(int Place, ReadOnlyMemory<PadLight> Lig
 /// </summary>
 internal sealed class PlaceLights
 {
-    private readonly float[] _lit = new float[PadLights.All.Count];
+    private readonly float[] _lit = new float[PadLights.All.Count];   // as shown
+    private readonly float[] _faded = new float[PadLights.All.Count]; // as each place's own dark has them, faded
     private readonly bool[] _dark = new bool[PadLights.All.Count];
 
-    /// <summary>Each place's lights as a fraction, 0 (off) to 1 (fully on).</summary>
+    /// <summary>
+    /// Each place's lights as a fraction, 0 (off) to 1 (fully on): its own dark's, faded, or while
+    /// the light is averaged (<see cref="AveragedLight"/>) mixed by its weight towards the place's
+    /// dark share of a day (<see cref="Sun.DarkShare"/>), so they hold steady as the days flicker past.
+    /// </summary>
     public ReadOnlySpan<float> Lit => _lit;
 
     /// <summary>Whether the place at <paramref name="place"/> (its index in <see cref="PadLights.All"/>) is held dark.</summary>
@@ -313,19 +318,24 @@ internal sealed class PlaceLights
         {
             var rising = Sun.Height(GroundBody.Planet, places[i].Origin, worldTime + 1.0) > Sun.Height(GroundBody.Planet, places[i].Origin, worldTime);
             _dark[i] = Sun.IsDark(GroundBody.Planet, places[i].Origin, worldTime, wasDark: rising);
-            _lit[i] = _dark[i] ? 1f : 0f;
+            _lit[i] = _faded[i] = _dark[i] ? 1f : 0f;
         }
     }
 
-    /// <summary>Each place's dark at <paramref name="worldTime"/>, then its lights a step of <paramref name="realSeconds"/> nearer on (dark) or off.</summary>
-    public void Step(double worldTime, float realSeconds)
+    /// <summary>
+    /// Each place's dark at <paramref name="worldTime"/>, then its lights a step of
+    /// <paramref name="realSeconds"/> nearer on (dark) or off, shown mixed by
+    /// <paramref name="averaged"/> (<see cref="AveragedLight.Weight"/>) towards its dark share.
+    /// </summary>
+    public void Step(double worldTime, float realSeconds, float averaged = 0f)
     {
         var places = PadLights.All;
         var step = realSeconds / Scene.PadLightFadeSeconds;
         for (var i = 0; i < places.Count; i++) // by index: a foreach over the list would allocate
         {
             _dark[i] = Sun.IsDark(GroundBody.Planet, places[i].Origin, worldTime, _dark[i]);
-            _lit[i] = _dark[i] ? MathF.Min(1f, _lit[i] + step) : MathF.Max(0f, _lit[i] - step);
+            _faded[i] = _dark[i] ? MathF.Min(1f, _faded[i] + step) : MathF.Max(0f, _faded[i] - step);
+            _lit[i] = averaged > 0f ? float.Lerp(_faded[i], Sun.DarkShare(GroundBody.Planet, places[i].Origin, worldTime), averaged) : _faded[i];
         }
     }
 }

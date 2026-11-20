@@ -102,6 +102,38 @@ internal static class Sun
     public static bool IsDark(GroundBody body, Vector3 p, double worldTime, bool wasDark) =>
         IsDark(Height(body, p, worldTime), wasDark) || Eclipsed(body, p, worldTime, wasDark);
 
+    /// <summary>
+    /// The share of a day <paramref name="place"/> (in <paramref name="body"/>'s frame) is dark at
+    /// <paramref name="worldTime"/>, by <see cref="IsDark(float, bool)"/>'s heights: the sun's height
+    /// there at <see cref="Scene.AveragedLightSamples"/> even times through the body's own day, the
+    /// place turned round its body's north pole under the sun as it is now (the sun's own way among
+    /// the stars over a day left out), walked in the order the day brings them so dusk's and dawn's
+    /// heights each hold as they do in play (the first lap to settle, the second counted). What the
+    /// pad and landing lights hold at while the light is averaged (<see cref="AveragedLight"/>).
+    /// Eclipses are left out: the averaged light hides them. Allocates nothing.
+    /// </summary>
+    internal static float DarkShare(GroundBody body, Vector3 place, double worldTime)
+    {
+        var (sun, up, pole) = (Direction(body, worldTime), body.Up(place), body.NorthPole);
+        // The sun's height as the place turns: its up's part along the pole stays, the part across
+        // it goes round, so the height is along + round cos t, t the turn past the place's noon.
+        // Sampled at the same turns past noon whatever the time now, so the share holds all day.
+        var polar = Vector3.Dot(up, pole);
+        var across = up - pole * polar;
+        var along = Vector3.Dot(sun, pole) * polar;
+        var round = (sun - pole * Vector3.Dot(sun, pole)).Length() * across.Length();
+        var samples = Scene.AveragedLightSamples;
+        var dark = along + round < Scene.DuskSunHeight; // (at noon: dark only if the sun never rises high enough)
+        var count = 0;
+        for (var i = 0; i < 2 * samples; i++)
+        {
+            dark = IsDark(along + round * MathF.Cos(MathF.Tau * (i % samples + 0.5f) / samples), dark);
+            if (i >= samples && dark)
+                count++;
+        }
+        return (float)count / samples;
+    }
+
     /// <summary>Whether the bodies leave too little of the sun's disc seen from <paramref name="p"/> (in <paramref name="body"/>'s frame) for light, held as <see cref="IsDark(GroundBody, Vector3, double, bool)"/> says.</summary>
     private static bool Eclipsed(GroundBody body, Vector3 p, double worldTime, bool wasDark) =>
         Seen(body, p, worldTime) < (wasDark ? Scene.EclipseLightSeen : Scene.EclipseDarkSeen);

@@ -320,6 +320,7 @@ internal sealed class GameView : IDisposable
             Views = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_viewInputs),
             MoonFromCamera = _scene.MoonFromCamera,
             SunDisc = _scene.SunDisc,
+            LightAveraged = flight.Light.Weight,
             MapShown = Paths.MapFade(Camera),
         };
         FillSky(ref frame, flight.WorldTime);

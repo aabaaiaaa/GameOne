@@ -907,8 +907,10 @@ internal sealed class Vessel
     public float LandingLights { get; private set; }
 
     // The landing lights' held states: dark where it is (Sun.IsDark's), near the ground (by the
-    // two heights), and whether they have been set at all since it was made.
+    // two heights), and whether they have been set at all since it was made; and their fraction as
+    // its own dark has them, faded (LandingLights is that, but while the light is averaged).
     private bool _lightsDark, _lightsNear, _lightsSet;
+    private float _lightsFaded;
 
     /// <summary>Whether it can have its landing lights on at all: it has them and isn't wrecked (one that can't has none, at once).</summary>
     private bool CanLight => HasLandingLights && State != FlightState.Crashed;
@@ -956,7 +958,7 @@ internal sealed class Vessel
         var rising = SunHeight(worldTime + 1.0) > SunHeight(worldTime);
         _lightsDark = IsDark(worldTime, wasDark: rising);
         _lightsNear = NearForLights(wasNear: false);
-        LandingLights = LandingLightsWanted ? 1f : 0f;
+        LandingLights = _lightsFaded = LandingLightsWanted ? 1f : 0f;
     }
 
     /// <summary>
@@ -964,14 +966,17 @@ internal sealed class Vessel
     /// step of <paramref name="realSeconds"/> nearer on or off (a full swing in
     /// <see cref="Scene.PadLightFadeSeconds"/>, so neither the warp nor slow motion changes it).
     /// One never set since it was made starts straight where it should be instead; one that can't
-    /// have them (a fairing half, a wreck) has none at once, with no sun or terrain asked.
+    /// have them (a fairing half, a wreck) has none at once, with no sun or terrain asked. While
+    /// the light is averaged (<paramref name="averaged"/>, <see cref="AveragedLight.Weight"/>) they
+    /// are shown mixed by it towards, near the ground, the dark share of a day where it is
+    /// (<see cref="Sun.DarkShare"/>), else off, so they hold steady as the days flicker past.
     /// </summary>
-    internal void StepLandingLights(double worldTime, float realSeconds)
+    internal void StepLandingLights(double worldTime, float realSeconds, float averaged = 0f)
     {
         if (!CanLight)
         {
             _lightsSet = true;
-            LandingLights = 0f;
+            LandingLights = _lightsFaded = 0f;
             return;
         }
         if (!_lightsSet)
@@ -982,7 +987,10 @@ internal sealed class Vessel
         _lightsDark = IsDark(worldTime, _lightsDark);
         _lightsNear = NearForLights(_lightsNear);
         var step = realSeconds / Scene.PadLightFadeSeconds;
-        LandingLights = LandingLightsWanted ? MathF.Min(1f, LandingLights + step) : MathF.Max(0f, LandingLights - step);
+        _lightsFaded = LandingLightsWanted ? MathF.Min(1f, _lightsFaded + step) : MathF.Max(0f, _lightsFaded - step);
+        LandingLights = averaged > 0f
+            ? float.Lerp(_lightsFaded, _lightsNear ? Sun.DarkShare(Body, Position, worldTime) : 0f, averaged)
+            : _lightsFaded;
     }
 
     public FlightState State { get; internal set; }

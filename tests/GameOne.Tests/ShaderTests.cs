@@ -69,7 +69,7 @@ public sealed class ShaderTests(ITestOutputHelper output)
         Assert.Contains("float sunRadius = frame.sunDisc.w;", main);
         // The eclipse's share by that disc too (as the corona's), and the spheres met by their rays'
         // closest approach as a difference of vectors, which holds from the map's furthest zoom.
-        Assert.Contains("float covered = 1.0 - sunSeenFromCamera();", main);
+        Assert.Contains("float covered = (1.0 - sunSeenFromCamera()) * (1.0 - frame.averaged.x);", main); // (none in the averaged light)
         Assert.Contains("return discSeen(apart, frame.sunDisc.w, moon);", Shaders.SkyFragment);
         Assert.Contains("float b = dot(o, d), miss = length(o - d * b);", Shaders.SkyFragment);
         Assert.Contains("float towards = dot(toSea, d), seaMiss = length(toSea - d * towards);", main);

@@ -102,7 +102,7 @@ public sealed class MoonDrawingTests(ITestOutputHelper output)
         // covers within the reach: so the mesh draws that part itself, by the sky's own function
         // (its light from the camera's share of the sun's disc, as drawn, covered), and the sky the rest.
         var main = Shaders.MoonFragment[Shaders.MoonFragment.LastIndexOf("void main()", StringComparison.Ordinal)..];
-        Assert.Contains("corona(normalize(vWorldPos - frame.cameraPos.xyz), 1.0 - sunSeenFromCamera(), true)", main); // (the share by the disc as drawn from the camera)
+        Assert.Contains("corona(normalize(vWorldPos - frame.cameraPos.xyz), (1.0 - sunSeenFromCamera()) * (1.0 - frame.averaged.x), true)", main); // (the share by the disc as drawn from the camera; none in the averaged light)
         Assert.Contains("rgb += corona(d, covered, false);", Shaders.SkyFragment);
     }
 
