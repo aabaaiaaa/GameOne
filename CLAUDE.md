@@ -441,7 +441,8 @@ dotnet run --project src/GameOne
   flight started or a world restored puts the camera back on the flown vessel, `GameView.Restart`;
   each frame's `FlightInput.View` is kept as the flown vessel's, but not from a world restored
   until the vessel carried on is taken, as the camera shows what it did meanwhile; `LinkUp`,
-  drawn by `Hud`: the picture breaking into static, clearing as it connects, `Scene.LinkUpSeconds`
+  drawn by `Hud` over the whole screen, the small views' row and the rest of the HUD behind it,
+  only the credits and a menu in front of it, taking no clicks: the picture breaking into static, clearing as it connects, `Scene.LinkUpSeconds`
   (1 s) of real time in all, the same however soon the physics is made; the vessel is flown, its
   body's physics made if it isn't, the frame after the link-up is first drawn, never the switch's
   own, and the link-up is longer only if that takes longer; that frame's input, gathered for the
@@ -452,7 +453,7 @@ dotnet run --project src/GameOne
   the click, and the physics is made and the vessel brought in the frame after that, behind the
   static; until then the vessel is left under formula and witnessed by nothing, and a view closed
   meanwhile lets its link-up go (`CloseView`), nothing made; the readout's `Link <vessel>`.
-  The main camera put on a vessel at a body whose physics isn't made has one over the main view
+  The main camera put on a vessel at a body whose physics isn't made has one over the whole screen
   likewise (`Flight.WatchLink`; the readout's `Camera link`).
 - **The main camera's subject:** the main camera is on the flown vessel, or, by a right click,
   on another vessel, a body, a site or a point of interest (`CameraCentre`, `CameraSubject`:

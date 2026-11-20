@@ -5,6 +5,7 @@ using System.Text;
 using Brutal.GlfwApi;
 using Brutal.ImGuiApi;
 using Brutal.ImGuiApi.Backends;
+using Brutal.ImGuiApi.Internal;
 using Brutal.Numerics;
 
 namespace GameOne;
@@ -806,9 +807,10 @@ internal sealed class Hud : IDisposable
         else
             _timingsRect = RectangleF.Empty;
         var strip = Strip(flight, views, display, frames);
-        LinkUp(flight.LinkUp.On ? flight.LinkUp : flight.WatchLink, display, strip); // (a switch's covers the camera's)
+        LinkUp(flight.LinkUp.On ? flight.LinkUp : flight.WatchLink, display); // (a switch's covers the camera's)
         Actions(flight, camera, new Vector2(display.X, display.Y), frames);
         LastMessage = default;
+        (_menuWindow, _creditsWindow) = (default, default);
         // (Kept for the timings panel's next frame, as each is drawn after it: empty unless drawn.)
         _messageRect = _controlsRect = _captionRect = RectangleF.Empty;
         switch (Screen)
@@ -851,6 +853,7 @@ internal sealed class Hud : IDisposable
             _creditsRect = RectangleF.Empty;
         if (Caption is { } caption)
             CaptionLine(caption, display, strip ?? display.Y - Margin);
+        OrderLinkUp();
         ErrorSign(display);
     }
 
@@ -1065,22 +1068,76 @@ internal sealed class Hud : IDisposable
 
     private uint _linkFrames; // the link-ups' static, a new pattern each time one is drawn
 
+    /// <summary>The link-up's window this frame, while one is drawn (see <see cref="LinkUp(GameOne.LinkUp, float2)"/>); null otherwise.</summary>
+    private ImGuiWindowPtr _linkWindow;
+
+    /// <summary>The menu screen's window this frame, while one is up (see <see cref="BeginMenu"/>); null otherwise. Static, as some screens are laid out by static methods (there is one HUD, on one ImGui context).</summary>
+    private static ImGuiWindowPtr _menuWindow;
+
+    /// <summary>The credits panel's window this frame, while it shows; null otherwise.</summary>
+    private ImGuiWindowPtr _creditsWindow;
+
+    private const ImGuiWindowFlags LinkUpFlags =
+        ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.NoBackground
+        | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoNav
+        | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoBringToFrontOnFocus;
+
     /// <summary>
-    /// The communications link-up over the main view (above the small views' row at
-    /// <paramref name="strip"/>), while <paramref name="link"/> is on (see <see cref="GameOne.LinkUp"/>,
-    /// whose state this only draws): the picture broken up into static, torn bands across it,
-    /// "ESTABLISHING LINK" and the vessel's name, all clearing as it connects. Flavour only: it
-    /// says nothing to do.
+    /// The communications link-up over the whole screen, the small views' row and every panel of
+    /// the HUD included, while <paramref name="link"/> is on (see <see cref="GameOne.LinkUp"/>, whose
+    /// state this only draws): the picture broken up into static, torn bands across it,
+    /// "ESTABLISHING LINK" and the vessel's name, all clearing as it connects. It is a window of
+    /// its own that takes no input, so a click or a hover goes to whatever is under it; the HUD is
+    /// put behind it, and the credits and any menu in front of it, once all are laid out
+    /// (<see cref="OrderLinkUp"/>). Flavour only: it says nothing to do.
     /// </summary>
-    private void LinkUp(LinkUp link, float2 display, float? strip)
+    private void LinkUp(LinkUp link, float2 display)
     {
-        if (link.Vessel is not null)
-            LinkStatic(ImGui.GetBackgroundDrawList(), link, new float2(0, 0), new float2(display.X, strip ?? display.Y), 64, 36, 1.6f, ++_linkFrames);
+        _linkWindow = default;
+        if (link.Vessel is null)
+            return;
+        ImGui.SetNextWindowPos(new float2(0, 0), ImGuiCond.Always);
+        ImGui.SetNextWindowSize(display, ImGuiCond.Always);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new float2(0, 0));
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0f);
+        ImGui.Begin("##link-up"u8, LinkUpFlags);
+        _linkWindow = ImGui.Internal.GetCurrentWindow();
+        var draw = ImGui.GetWindowDrawList();
+        draw.PushClipRect(new float2(0, 0), display); // (the window's own clip keeps off its padding's edge)
+        LinkStatic(draw, link, new float2(0, 0), display, 64, 36, 1.6f, ++_linkFrames);
+        draw.PopClipRect();
+        ImGui.End();
+        ImGui.PopStyleVar(2);
+    }
+
+    /// <summary>
+    /// Puts the link-up's window (if one is drawn this frame) in front of every other window of the
+    /// HUD, then the credits and the menu screen (if they are up) in front of it: the licence's logo
+    /// and notice are never covered, and a menu stays usable. Neither has a popup of its own, so
+    /// bringing it to the front hides nothing of its own. Called once every window is laid out.
+    /// </summary>
+    private void OrderLinkUp()
+    {
+        if (_linkWindow.IsNull())
+            return;
+        ImGui.Internal.BringWindowToDisplayFront(_linkWindow);
+        if (!_creditsWindow.IsNull())
+            ImGui.Internal.BringWindowToDisplayFront(_creditsWindow);
+        if (!_menuWindow.IsNull())
+            ImGui.Internal.BringWindowToDisplayFront(_menuWindow);
+    }
+
+    /// <summary>Begins a menu screen's window named <paramref name="name"/> (as <see cref="ImGui.Begin(ImString, ImGuiWindowFlags)"/>), kept for <see cref="OrderLinkUp"/>.</summary>
+    private static bool BeginMenu(ImString name)
+    {
+        var open = ImGui.Begin(name, MenuFlags);
+        _menuWindow = ImGui.Internal.GetCurrentWindow();
+        return open;
     }
 
     /// <summary>
     /// <paramref name="link"/>'s picture broken up over the rectangle from <paramref name="min"/> to
-    /// <paramref name="max"/> (the main view's, or a small view's under its label), into
+    /// <paramref name="max"/> (the whole screen, or a small view's under its label), into
     /// <paramref name="draw"/>: a grid of <paramref name="columns"/> by <paramref name="rows"/> grey
     /// specks, each <paramref name="frame"/>'s own, torn bands across it, and the title (at
     /// <paramref name="titleScale"/> times the HUD's text) and the vessel's name, all as faded as
@@ -1249,7 +1306,7 @@ internal sealed class Hud : IDisposable
         var choice = GameMenuChoice.None;
         ImGui.SetNextWindowPos(new float2(across, display.Y * 0.45f), ImGuiCond.Always, new float2(0.5f, 0.5f));
         ImGui.SetNextWindowBgAlpha(0.85f);
-        if (ImGui.Begin(GameMenuName, MenuFlags))
+        if (BeginMenu(GameMenuName))
         {
             ImGui.PushFont(font, 30f);
             Centred("PAUSED", new float4(1, 1, 1, 1));
@@ -1339,7 +1396,7 @@ internal sealed class Hud : IDisposable
         var (width, across) = MenuAcross(display, LogWidth, LogWidth);
         ImGui.SetNextWindowPos(new float2(across, display.Y * 0.45f), ImGuiCond.Always, new float2(0.5f, 0.5f));
         ImGui.SetNextWindowBgAlpha(0.85f);
-        if (ImGui.Begin("##log"u8, MenuFlags))
+        if (BeginMenu("##log"u8))
         {
             ImGui.PushFont(_font, 30f);
             Centred("WORLD LOG", new float4(1, 1, 1, 1));
@@ -1374,7 +1431,7 @@ internal sealed class Hud : IDisposable
         var (width, across) = MenuAcross(display, SettingsWidth, SettingsWidth);
         ImGui.SetNextWindowPos(new float2(across, display.Y * 0.45f), ImGuiCond.Always, new float2(0.5f, 0.5f));
         ImGui.SetNextWindowBgAlpha(0.85f);
-        if (ImGui.Begin("##settings"u8, MenuFlags))
+        if (BeginMenu("##settings"u8))
         {
             ImGui.PushFont(_font, 30f);
             Centred("SETTINGS", new float4(1, 1, 1, 1));
@@ -1529,7 +1586,7 @@ internal sealed class Hud : IDisposable
         var (width, across) = MenuAcross(display, MenuWidest, MenuNarrowest, scrollbar); // (room kept for a scrollbar)
         ImGui.SetNextWindowPos(new float2(across, MenuMiddle(display.Y, _menuHeight)), ImGuiCond.Always, new float2(0.5f, 0.5f));
         ImGui.SetNextWindowBgAlpha(0.85f);
-        if (ImGui.Begin("##missions"u8, MenuFlags))
+        if (BeginMenu("##missions"u8))
         {
             ImGui.PushFont(_font, 30f);
             Centred("CHOOSE A MISSION", new float4(1, 1, 1, 1));
@@ -1742,7 +1799,7 @@ internal sealed class Hud : IDisposable
         var (width, across) = MenuAcross(display, WorldListWidth, WorldListWidth, scrolls ? scrollbar : 0f);
         ImGui.SetNextWindowPos(new float2(across, MenuMiddle(display.Y, _worldListHeight)), ImGuiCond.Always, new float2(0.5f, 0.5f));
         ImGui.SetNextWindowBgAlpha(0.88f);
-        if (ImGui.Begin("##worlds"u8, MenuFlags))
+        if (BeginMenu("##worlds"u8))
         {
             ImGui.PushFont(_font, 30f);
             Centred("CHOOSE A WORLD", new float4(1, 1, 1, 1));
@@ -1990,7 +2047,7 @@ internal sealed class Hud : IDisposable
         ImGui.SetNextWindowPos(new float2(across, MenuMiddle(display.Y, layout.Height)), ImGuiCond.Always, new float2(0.5f, 0.5f));
         ImGui.SetNextWindowBgAlpha(0.88f);
         var click = (CarryOnClick.None, -1);
-        if (ImGui.Begin(CarryOnName, MenuFlags))
+        if (BeginMenu(CarryOnName))
         {
             // The world's name, centred, or wrapped to the screen's width if it is too long for a line.
             ImGui.PushFont(font, 30f);
@@ -2100,7 +2157,7 @@ internal sealed class Hud : IDisposable
         ImGui.SetNextWindowPos(new float2(across, display.Y * 0.45f), ImGuiCond.Always, new float2(0.5f, 0.5f));
         ImGui.SetNextWindowBgAlpha(0.88f);
         var click = TryAgainClick.None;
-        if (ImGui.Begin(TryAgainName, MenuFlags))
+        if (BeginMenu(TryAgainName))
         {
             ImGui.PushFont(font, 30f);
             Centred("TRY AGAIN", new float4(1, 1, 1, 1));
@@ -2943,7 +3000,7 @@ internal sealed class Hud : IDisposable
                 ImGui.SetCursorPos(new float2(0, header));
                 if (ImGui.InvisibleButton($"##fly{vessel.Id}", new float2(width, MathF.Max(1f, height - header))) && flyable)
                     views.Swap(view);
-                if (ImGui.IsItemHovered())
+                if (ImGui.IsItemHovered() && !flight.LinkUp.On && !flight.WatchLink.On) // (a tooltip is drawn over every window: not over the link-up's static)
                     ImGui.SetTooltip(Escape(!flyable ? "Debris: it can't be flown"
                         : vessel.Flight == flight.Controlled.Flight ? $"Click (or Tab) to fly the {vessel.Name.ToLowerInvariant()}"
                         : $"Click to fly the {vessel.Name.ToLowerInvariant()} (from another flight: Tab only goes round the flown one's)"));
@@ -3696,6 +3753,7 @@ internal sealed class Hud : IDisposable
             ImGui.PopTextWrapPos();
             ImGui.PopFont();
             _creditsRect = ThisWindow();
+            _creditsWindow = ImGui.Internal.GetCurrentWindow();
         }
         else
             _creditsRect = RectangleF.Empty;

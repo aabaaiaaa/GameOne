@@ -667,14 +667,14 @@ internal sealed partial class Flight : IDisposable
 
     /// <summary>
     /// The communications link-up, while a vessel is being switched to or carried on
-    /// (see <see cref="LinkUp"/>): what the HUD draws over the main view, and the
+    /// (see <see cref="LinkUp"/>): what the HUD draws over the whole screen, and the
     /// readout's <c>Link</c>.
     /// </summary>
     public LinkUp LinkUp { get; } = new();
 
     /// <summary>
     /// The link-ups over the small views (see <see cref="OpenView"/>): one shown over a view given to
-    /// a vessel at a body whose physics isn't made, as <see cref="LinkUp"/> is over the main view,
+    /// a vessel at a body whose physics isn't made, as <see cref="LinkUp"/> is over the whole screen,
     /// at most one a view. Made once, so opening a view allocates nothing for it.
     /// </summary>
     private readonly LinkUp[] _viewLinks = [.. Enumerable.Range(0, Scene.MaxSmallViews).Select(_ => new LinkUp())];
@@ -692,7 +692,7 @@ internal sealed partial class Flight : IDisposable
     }
 
     /// <summary>
-    /// The link-up over the main view as its camera is put on a vessel at a body whose physics isn't
+    /// The link-up over the whole screen as the main camera is put on a vessel at a body whose physics isn't
     /// made (<see cref="FlightInput.Watching"/>), as a small view's is over it (<see cref="OpenView"/>):
     /// the physics made and the vessel brought in behind its static, the frame after it is first
     /// drawn. The readout's <c>Camera link</c>.
@@ -2505,7 +2505,7 @@ internal sealed partial class Flight : IDisposable
     /// The main camera put on <paramref name="vessel"/> (none: back on the flown one), taken from the
     /// input at the start of the frame (<see cref="FlightInput.Watching"/>): as for a new small view
     /// (<see cref="OpenView"/>), the vessel back in the physics now if its body's is made, else its
-    /// link-up begun over the main view (<see cref="WatchLink"/>), drawn at the end of this frame and
+    /// link-up begun over the whole screen (<see cref="WatchLink"/>), drawn at the end of this frame and
     /// due in the next, the vessel left under formula and witnessed by nothing until then. A link-up
     /// for a vessel the camera is no longer on is let go, and nothing is made for it.
     /// </summary>
