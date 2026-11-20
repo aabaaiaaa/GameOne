@@ -879,6 +879,37 @@ public sealed class FormulaTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Carried_aboard_by_formula_in_steps_however_short_it_moves_with_the_deck()
+    {
+        // Landed on the drone ship's deck under formula, then carried by steps as a slow-down
+        // shortens them (down to a ten-thousandth of a second), and by full physics steps, the
+        // ship set to each step's time first (as the physics and the formula's windows set it) or
+        // not: each step's velocity is the deck's own there, never the centres' float noise over
+        // the step.
+        var (sim, v, watch) = Start(OverTheDeck(2f), watched: false);
+        using var _ = sim;
+        Fly(sim, v, watch, 60, x => x.State != FlightState.Flying);
+        Assert.Same(Rafts.Ship, v.AboardUnderFormula?.Raft);
+        var time = sim.Flight.WorldTime;
+        var worst = 0f;
+        foreach (var step in (ReadOnlySpan<double>)[1e-4, 1e-3, Physics.RocketPhysics.StepSeconds, Physics.RocketPhysics.StepSeconds / 0.3])
+            for (var i = 0; i < 40; i++)
+            {
+                time += step;
+                var set = i % 2 == 0;
+                if (set)
+                    Rafts.Ship.Set(time);
+                v.CarryByFormula(time);
+                if (!set)
+                    Rafts.Ship.Set(time);
+                var off = (v.Velocity - Rafts.Ship.VelocityAt(v.CentreOfMass)).Length();
+                worst = MathF.Max(worst, off);
+                Assert.True(off < 0.05f, $"{step * 1000:0.0} ms steps, the ship set first {set}: {v.Velocity.Length():0.000} m/s carried, {off:0.000} m/s off the deck's own");
+            }
+        output.WriteLine($"carried at most {worst * 1000:0.0} mm/s off the deck's own velocity");
+    }
+
+    [Fact]
     public void A_vessel_under_formula_lands_on_a_floe_and_is_carried_there_by_formula()
     {
         var floe = FloeTests.BigFloe();

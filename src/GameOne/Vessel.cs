@@ -363,28 +363,26 @@ internal sealed class Vessel
     /// <summary>
     /// Under formula, aboard a raft (<see cref="AboardUnderFormula"/>), moves it where the raft has
     /// carried it at world time <paramref name="time"/> (its pose then, <see cref="Raft.Pose"/>),
-    /// moving with the deck there (its centre of mass's velocity over the last
-    /// <see cref="CarrySeconds"/> of the deck's way, or since it was last carried if that is
-    /// sooner: each step's at the physics' rates, so a step poses its raft once, not twice).
+    /// moving with the deck there: the raft's own velocity at its centre of mass
+    /// (<see cref="Raft.VelocityAt"/>, worked out once a time for everything aboard it) where the
+    /// raft is set to that time already, as the physics and the formula's windows set it each step;
+    /// else its centre of mass's way over the last <see cref="CarrySeconds"/> of the deck's. Never
+    /// over the step since it was last carried, however short: in a slow-down the centres' float
+    /// noise over a step that short would be tens of metres a second.
     /// </summary>
     internal void CarryByFormula(double time)
     {
         if (AboardUnderFormula is not { } aboard)
             return;
         var (centre, rotation) = Carried(aboard, time);
-        var since = time - _carried.Time;
-        var before = _carried.Raft == aboard.Raft && _carried.Place == aboard.Place && since > 0.0 && since <= CarrySeconds
-            ? _carried.Centre
-            : Carried(aboard, time - (since = CarrySeconds)).Centre;
-        _carried = (aboard.Raft, aboard.Place, time, centre);
-        MoveByFormula(centre, (Vector3Double)((centre - before) / (float)since), rotation, Vector3.Zero, orbitChanged: false);
+        var velocity = aboard.Raft.SetAt.Equals(time)
+            ? aboard.Raft.VelocityAt(centre)
+            : (centre - Carried(aboard, time - CarrySeconds).Centre) / CarrySeconds;
+        MoveByFormula(centre, (Vector3Double)velocity, rotation, Vector3.Zero, orbitChanged: false);
     }
 
-    /// <summary>How far back a deck's way is read for the velocity it carries one aboard with (see <see cref="CarryByFormula"/>): far shorter than its waves.</summary>
+    /// <summary>How far back a deck's way is read for the velocity it carries one aboard with, where the raft isn't set to the time (see <see cref="CarryByFormula"/>): far shorter than its waves.</summary>
     private const float CarrySeconds = 0.05f;
-
-    /// <summary>Where it was last carried to (<see cref="CarryByFormula"/>), by which raft from where on it, and when.</summary>
-    private (Raft? Raft, Vector3 Place, double Time, Vector3 Centre) _carried = (null, default, double.NaN, default);
 
     /// <summary>Where <paramref name="aboard"/> puts its centre of mass, and how it turns it, as the raft is at world time <paramref name="time"/>.</summary>
     private (Vector3 Centre, Quaternion Rotation) Carried((Raft Raft, Vector3 Place, Quaternion Rotation) aboard, double time)
