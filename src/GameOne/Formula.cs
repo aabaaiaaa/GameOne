@@ -78,12 +78,6 @@ internal struct FormulaMotion
     /// </summary>
     public bool Standing;
     public FlightState Ending;
-
-    /// <summary>
-    /// Whether it is held where it is, for the physics to take it on from there (see
-    /// <see cref="Vessel.NeedsPhysics"/>: it comes back in that step): nothing moves it meanwhile.
-    /// </summary>
-    public bool Held;
 }
 
 /// <summary>
@@ -105,7 +99,8 @@ internal struct FormulaMotion
 /// Low over the ground its speed over it is held to <see cref="Scene.GroundTopSpeed"/> each step that
 /// starts or would end there, as the physics holds it; so while faster there it is stepped, not on
 /// its orbit (which is asked at each flight step's place, and so can't pass over the band unasked).
-/// Landed or afloat it doesn't move: each body's physics is in its ground's frame.</para>
+/// Landed or afloat it doesn't move (each body's physics is in its ground's frame), but aboard a
+/// raft, which carries it by its pose at the world's time (<see cref="Vessel.CarryByFormula"/>).</para>
 /// <para>Each step is checked for its touch (<see cref="Touch"/>): the service towers and light
 /// masts (<see cref="TowersAndMasts"/>, the predictions' own check, so the two can't drift), and its
 /// lowest point coming onto what is under it (the ground, the calm sea, a pad's, a zone's or a
@@ -139,6 +134,7 @@ internal static class Formula
     /// How far past where it floats a vessel's plunge into the water can take it, as a multiple of
     /// its draft: a booster floating 9.15 m deep plunges 10.8 m from rest and 12.9 m hitting the
     /// water at 14 m/s, the splashdown's limit about (SplashdownTests), so 1.41 times; with room.
+    /// In water shallower than that its plunge reaches the seabed (see <see cref="Judge"/>).
     /// </summary>
     private const float PlungeReach = 1.5f;
 
@@ -218,15 +214,18 @@ internal static class Formula
     /// Moves <paramref name="v"/> to where the formula has it at world time
     /// <paramref name="worldTime"/>, <paramref name="dt"/> on from the last time it was asked (0
     /// only brings it to that time), judging its touch on the way. Nothing is done for a vessel in
-    /// the physics, or for one landed, afloat or wrecked.
+    /// the physics, or for one wrecked; one landed or afloat is only carried by a raft it is aboard.
     /// </summary>
     public static void Advance(Vessel v, float dt, double worldTime)
     {
-        if (!v.OnFormula || v.State != FlightState.Flying)
-            return; // landed, afloat (or on the pad), it stays where it is; a wreck is gone
+        if (!v.OnFormula || v.State == FlightState.Crashed)
+            return; // a wreck is gone
         ref var m = ref v.Motion;
-        if (m.Held)
-            return; // for the physics to take on, where it is (see Judge)
+        // Aboard a raft (landed, afloat or standing on it burning), carried with it.
+        if (v.State is FlightState.Landed or FlightState.Floating || m.Standing)
+            v.CarryByFormula(worldTime);
+        if (v.State != FlightState.Flying)
+            return; // landed, afloat (or on the pad), it stays where it is, or where its raft has it
         if (m.Standing)
         {
             Stand(v, ref m, worldTime);
@@ -653,14 +652,16 @@ internal static class Formula
                 - v.Body.Altitude(point));
             if (depth < PlungeReach * (extent / Scene.WaterBuoyancy + below))
             {
-                // The seabed within its plunge's reach: where it ends (on the seabed, wrecked on it,
-                // or afloat over it) turns on the water's slowing of it, which the formula doesn't
-                // follow closely enough (a booster 7.5 m down comes onto the seabed at 5.6 m/s in
-                // the physics, against the 6.3 the feet take). So the physics plays it: it is
-                // handed back where it hits the water, as it is moving then.
-                v.MoveByFormula(at, velocity, rotation, v.FormulaSpin, orbitChanged: false);
-                v.Motion.Held = true;
-                v.HandBackByFormula();
+                // Its plunge reaching the seabed: it comes onto it at a share of its speed into the
+                // water (Scene.FormulaSeabedSpeedShare), judged there by the ground's
+                // rules (the seabed is ground), landed there upright or lying as it came down.
+                var onSeabed = speed * Scene.FormulaSeabedSpeedShare;
+                if (HitsTheGround(v, onSeabed, upright, legs) is { } hit)
+                {
+                    v.WreckByFormula(hit, at, touchdown: onSeabed);
+                    return;
+                }
+                Land(v, at, rotation, nose, up, onSeabed, FlightState.Landed, standing: upright, legs, seabed: true);
                 return;
             }
             Land(v, at, rotation, nose, up, speed, FlightState.Floating, standing: false, legs);
@@ -688,9 +689,11 @@ internal static class Formula
     /// Lands it (or floats it) where it touched: <paramref name="standing"/>, turned upright and on
     /// its feet (half-way up their stroke, as the legs give under it) or its bell; otherwise lying
     /// along what it came down on, its hull on it (or, afloat, its axis at the calm sea, half in).
-    /// Its engine still lit, it is set down so but not yet landed (see <see cref="FormulaMotion.Standing"/>).
+    /// On the <paramref name="seabed"/>, lowered through the water onto it. Its engine still lit, it
+    /// is set down so but not yet landed (see <see cref="FormulaMotion.Standing"/>). Either way as of
+    /// its touch's time (<see cref="FormulaMotion.Time"/>), by which a raft it is on boards it.
     /// </summary>
-    private static void Land(Vessel v, Vector3 at, Quaternion rotation, Vector3 nose, Vector3 up, float speed, FlightState state, bool standing, bool legs)
+    private static void Land(Vessel v, Vector3 at, Quaternion rotation, Vector3 nose, Vector3 up, float speed, FlightState state, bool standing, bool legs, bool seabed = false)
     {
         Vector3 axis;
         if (standing)
@@ -705,10 +708,10 @@ internal static class Formula
         var target = state == FlightState.Floating ? -2f * v.CurrentStage.Radius / Scene.WaterBuoyancy : standing && legs ? -v.Legs.Stroke / 2f : 0f;
         // Lowered (or raised) onto it: twice, as over a slope moving it moves what is under it.
         for (var i = 0; i < 2; i++)
-            at -= up * (v.FormulaLowest(at, turned).Clearance - target);
+            at -= up * (v.FormulaLowest(at, turned, solid: seabed).Clearance - target);
+        ref var m = ref v.Motion;
         if (v.EngineLit)
         {
-            ref var m = ref v.Motion;
             (m.Standing, m.Ending, m.Stepping) = (true, state, false);
             v.StandByFormula(v.OriginFor(at, turned), turned, speed);
         }

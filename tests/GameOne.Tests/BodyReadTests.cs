@@ -21,9 +21,13 @@ public sealed class BodyReadTests(ITestOutputHelper output)
     /// <summary>How many frames each run is stepped for: three seconds, a physics step a frame.</summary>
     private const int Frames = 360;
 
-    /// <summary>A lander dropped onto the moon's landing spot, falling at 3 m/s, in a physics made for the moon.</summary>
-    private static Simulation OnTheMoon() =>
-        new(world: new WorldState { Vessels = [MoonLandingTests.Lander(3f)], NextVesselId = 1 }, body: GroundBody.Moon);
+    /// <summary>A lander dropped onto the moon's landing spot, falling at 3 m/s, in a physics made for the moon (brought in at once: at another body than the pad's, it loads under formula).</summary>
+    private static Simulation OnTheMoon()
+    {
+        var sim = new Simulation(world: new WorldState { Vessels = [MoonLandingTests.Lander(3f)], NextVesselId = 1 }, body: GroundBody.Moon);
+        sim.Flight.BringIn(sim.Flight.WorldVessels.First(v => v.Id == 0));
+        return sim;
+    }
 
     /// <summary>A booster coming down onto Home's landing zone at 2 m/s from 1.2 m up, its legs out, in a physics made for the planet.</summary>
     private static Simulation AtHome()

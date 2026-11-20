@@ -435,6 +435,7 @@ public sealed class TerrainTileTests(ITestOutputHelper output)
         output.WriteLine($"slope {Slope(d):0.0}° at {d}, {Terrain.SurfaceHeight(d):0} m up");
         using var sim = new Simulation(world: World([state]));
         var booster = sim.Flight.WorldVessels.First(v => v.Flight == 0);
+        sim.Flight.BringIn(booster); // in the physics from the start (far from the pad, it loads under formula)
         var deepest = float.MaxValue;
         var tiled = true;
         var before = booster.Velocity;

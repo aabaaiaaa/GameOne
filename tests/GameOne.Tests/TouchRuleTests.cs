@@ -336,7 +336,8 @@ public sealed class TouchRuleTests(ITestOutputHelper output)
         sim.Step(new FlightInput(SwitchTo: first, Watched: halves));
         sim.Run((_, _) => new FlightInput(Watched: halves), _ =>
         {
-            Assert.False(first.OnFormula || second.OnFormula || booster.OnFormula, "one is under formula");
+            // (The booster only while a half flies by it: once both are down, nothing witnessed is near it.)
+            Assert.False(first.OnFormula || second.OnFormula || (booster.OnFormula && (first.State == FlightState.Flying || second.State == FlightState.Flying)), "one is under formula");
             return first.State != FlightState.Flying && second.State != FlightState.Flying;
         }, maxSeconds: 5);
         output.WriteLine($"on the booster: {first.State} {first.CrashReason}; beside it: {second.State} {second.CrashReason}; the booster {booster.State} {booster.CrashReason}");

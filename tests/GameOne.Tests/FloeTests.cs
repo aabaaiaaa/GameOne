@@ -253,6 +253,7 @@ public sealed class FloeTests(ITestOutputHelper output)
         foreach (var t in (ReadOnlySpan<float>)[0f, 0.5f, 1f])
             Assert.Null(Rafts.Under(Vector3.Transform(new Vector3(0, -bell + length * t, 0), booster.Model))); // its ends and middle are over the sea
         // Watched, so it comes down in the physics, whose judging of its body this is.
+        sim.Flight.BringIn(booster); // (far from the pad, it loads under formula)
         var watched = new[] { booster };
         sim.Run((_, _) => new FlightInput(Watched: watched), _ =>
         {

@@ -1077,10 +1077,24 @@ internal sealed class RocketPhysics : IDisposable
     }
 
     /// <summary><paramref name="craft"/> aboard <paramref name="raft"/>, frozen at <paramref name="p"/> turned <paramref name="rotation"/>, as the raft is now.</summary>
-    private void Board(Craft craft, Raft raft, Vector3 p, Quaternion rotation)
+    private void BoardAt(Craft craft, Raft raft, Vector3 p, Quaternion rotation)
     {
         var (position, turned) = OnDeck(At(raft), p, rotation);
         craft.Aboard = (raft, position, turned);
+    }
+
+    /// <summary>
+    /// <paramref name="craft"/>, frozen, aboard <paramref name="raft"/> at <paramref name="deckPlace"/>
+    /// turned <paramref name="deckRotation"/> in the raft's own frame (see <see cref="Craft.Aboard"/>):
+    /// for one coming back from under formula aboard it (see <see cref="Vessel.AboardUnderFormula"/>),
+    /// so it keeps its place on the deck exactly, and is carried from there (see <see cref="Carry"/>).
+    /// Nothing for one not frozen, which the raft's hull carries as it does any craft on it.
+    /// </summary>
+    public void Board(Craft craft, Raft raft, Vector3 deckPlace, Quaternion deckRotation)
+    {
+        if (craft.Removed || !craft.Frozen)
+            return;
+        craft.Aboard = (raft, deckPlace, deckRotation);
     }
 
     /// <summary>
@@ -1755,7 +1769,7 @@ internal sealed class RocketPhysics : IDisposable
             RestLegs(craft);
             craft.Submerged = Float(craft, push: false); // in the waves as they are now (WavesAt), so one frozen afloat wakes as the player comes
             if (RaftUnder(craft) is { } raft)
-                Board(craft, raft, position, rotation); // the raft is as it was when it was saved (WavesAt), so it is carried on from there
+                BoardAt(craft, raft, position, rotation); // the raft is as it was when it was saved (WavesAt), so it is carried on from there
         }
         craft.LegsLocked = LockedAsItStands(craft, frozen);
         return craft;
@@ -1847,7 +1861,7 @@ internal sealed class RocketPhysics : IDisposable
         craft.FrozenAt = Position(craft);
         craft.FrozenRotation = Rotation(craft);
         if (RaftUnder(craft) is { } raft)
-            Board(craft, raft, craft.FrozenAt, Rotation(craft));
+            BoardAt(craft, raft, craft.FrozenAt, Rotation(craft));
     }
 
     /// <summary>

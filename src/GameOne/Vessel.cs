@@ -197,6 +197,8 @@ internal sealed class Vessel
         (_lastVelocity, _lastSpin) = (Velocity, _angularVelocity);
         _formulaLegs = still && _craft.LegsDeployed ? RocketPhysics.RestingLegs(Body, Legs, _model).Extension : Vector4.One;
         OnFormula = true;
+        if (still)
+            BoardUnderFormula(); // on a raft, carried by it, as the physics would carry it restored there
         var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, _centreOfMass, Velocity) && !EngineLit;
         _motion = Formula.Begin(Body, _trueCentre, _trueVelocity, _rotation, _angularVelocity, now, onItsOrbit);
         (Apoapsis, Periapsis) = Body.Orbit(_centreOfMass, Body.AmongStars(_centreOfMass, Velocity));
@@ -224,7 +226,9 @@ internal sealed class Vessel
     {
         Body = Body.Name,
         Site = Site.Name,
-        PartingFrom = _craft.PartingFrom is { } from ? world.FirstOrDefault(v => v._craft == from && v.State != FlightState.Crashed)?.Id : null,
+        // Parting from another in the physics, or kept parting with one across the formula (see PartingWith).
+        PartingFrom = (_craft.PartingFrom is { } from ? world.FirstOrDefault(v => v._craft == from && v.State != FlightState.Crashed)?.Id : null)
+            ?? (PartingWith is { State: not FlightState.Crashed } partner && world.Contains(partner) ? partner.Id : null),
         Ground = _ground,
         Id = Id,
         Flight = Flight,
@@ -306,38 +310,78 @@ internal sealed class Vessel
     internal FormulaOrbit FormulaOrbit => _motion.OnOrbit;
 
     /// <summary>
-    /// Whether it came down under formula on a raft (the drone ship's deck, a floe: landed, or
-    /// standing there burning), which moves under it: the formula can't carry it there, so it is
-    /// to be in the physics, at once (see <see cref="Unwatched"/>).
+    /// Under formula, the raft it is aboard (the drone ship's deck, a floe: landed or afloat on it,
+    /// or standing there burning), and its origin and attitude in that raft's own frame (as
+    /// <see cref="Craft.Aboard"/> keeps a frozen craft's): the formula carries it with the raft's
+    /// pose at the world's time (<see cref="CarryByFormula"/>), and it comes back into the physics
+    /// aboard there (<see cref="ReturnToPhysics"/>). Null aboard nothing, and in the physics.
     /// </summary>
-    internal bool AboardByFormula { get; private set; }
-
-    // Whether the formula has handed it back to the physics where it is (see HandBackByFormula).
-    private bool _handedBack;
-
-    /// <summary>
-    /// Whether, under formula, it is to be in the physics at once, whoever is near: aboard a raft
-    /// (<see cref="AboardByFormula"/>), or handed back (<see cref="HandBackByFormula"/>).
-    /// </summary>
-    internal bool NeedsPhysics => OnFormula && (AboardByFormula || _handedBack);
+    internal (Raft Raft, Vector3 Place, Quaternion Rotation)? AboardUnderFormula { get; private set; }
 
     /// <summary>
-    /// Hands it back to the physics, under formula, where the formula has it now: for what comes
-    /// next, the formula can't give the physics' outcome (see <see cref="Formula"/>' Judge). It
-    /// comes back that step, outside the hand-ins' budget (see <see cref="Unwatched"/>).
+    /// Boards it under formula on whatever raft is under it (see <see cref="RaftUnderFormula"/>), by
+    /// the raft's pose as it was last set (<see cref="Raft.Current"/>, the one its top is read by, so
+    /// as it was set down on it): its place and attitude in the raft's frame (<see cref="AboardUnderFormula"/>);
+    /// aboard nothing if none is.
     /// </summary>
-    internal void HandBackByFormula() => _handedBack = true;
+    private void BoardUnderFormula()
+    {
+        AboardUnderFormula = null;
+        if (RaftUnderFormula() is not { } raft)
+            return;
+        var deck = raft.Current;
+        var inverse = Quaternion.Inverse(deck.Rotation);
+        AboardUnderFormula = (raft, Vector3.Transform(Position - deck.Position, inverse), Quaternion.Normalize(inverse * _rotation));
+    }
 
     /// <summary>
-    /// Whether, handed back by the formula (see <see cref="HandBackByFormula"/>), it is still
-    /// playing out in the physics what the formula couldn't (flying yet: not landed, afloat or
-    /// wrecked), so it stays there meanwhile: the waves can lift its lowest part out of the water
-    /// for a moment, when nothing else (touching, settling in the water) would keep it there. Over
-    /// once the physics has it landed, afloat or wrecked (see <see cref="AfterPhysics"/>), so one
-    /// flying off again later isn't held in by it.
+    /// The raft any of it is over under formula (see <see cref="Rafts.Under"/>), or null: points down
+    /// its axis, from its bell's bottom to its top, and round each as far out as it reaches
+    /// (<see cref="Width"/>), so one lying across a deck's or a floe's edge, its base out past it,
+    /// is aboard too, as the physics' own low points find it (see RocketPhysics' RaftUnder). The
+    /// first found, the same every time.
     /// </summary>
-    internal bool PlayingOut => !OnFormula && _playingOut && State == FlightState.Flying;
-    private bool _playingOut;
+    private Raft? RaftUnderFormula()
+    {
+        if (!Body.HasSea)
+            return null;
+        var (bottom, top, widest) = (-CurrentStage.BellHeight, Height, Width);
+        const int Along = 6;
+        for (var k = 0; k <= Along; k++)
+        {
+            var y = bottom + (top - bottom) * k / Along;
+            foreach (var (x, z) in (ReadOnlySpan<(float, float)>)[(0f, 0f), (1f, 0f), (-1f, 0f), (0f, 1f), (0f, -1f)])
+                if (Rafts.Under(Vector3.Transform(new Vector3(x * widest, y, z * widest), _model)) is { } under)
+                    return under.Raft;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Under formula, aboard a raft (<see cref="AboardUnderFormula"/>), moves it where the raft has
+    /// carried it at world time <paramref name="time"/> (its pose then, <see cref="Raft.Pose"/>),
+    /// moving with the deck there (its centre of mass's velocity over the last
+    /// <see cref="CarrySeconds"/> of the deck's way).
+    /// </summary>
+    internal void CarryByFormula(double time)
+    {
+        if (AboardUnderFormula is not { } aboard)
+            return;
+        var (centre, rotation) = Carried(aboard, time);
+        var (before, _) = Carried(aboard, time - CarrySeconds);
+        MoveByFormula(centre, (Vector3Double)((centre - before) / CarrySeconds), rotation, Vector3.Zero, orbitChanged: false);
+    }
+
+    /// <summary>How far back a deck's way is read for the velocity it carries one aboard with (see <see cref="CarryByFormula"/>): far shorter than its waves.</summary>
+    private const float CarrySeconds = 0.05f;
+
+    /// <summary>Where <paramref name="aboard"/> puts its centre of mass, and how it turns it, as the raft is at world time <paramref name="time"/>.</summary>
+    private (Vector3 Centre, Quaternion Rotation) Carried((Raft Raft, Vector3 Place, Quaternion Rotation) aboard, double time)
+    {
+        var deck = aboard.Raft.Pose(time);
+        var rotation = Quaternion.Normalize(deck.Rotation * aboard.Rotation);
+        return (deck.Position + Vector3.Transform(aboard.Place, deck.Rotation) + Vector3.Transform(_centreOffset, rotation), rotation);
+    }
 
     // How far out along its stroke each leg is, drawn under formula: hanging free in flight, and as
     // it stands once down (the stand-in's is as it was when it left, which its legs swinging out
@@ -353,23 +397,96 @@ internal sealed class Vessel
     internal Vector3 FormulaSpin => _angularVelocity;
 
     /// <summary>
+    /// The vessel it was parting from as one of the two left the physics (see <see cref="Craft.PartingFrom"/>:
+    /// a stage just dropped, not yet clear of what it came off, or the other way about), kept while
+    /// either is under formula, so the two part again as both come back into one physics (see
+    /// <see cref="ReturnToPhysics"/>), never thrown apart as two bodies inside each other would be.
+    /// A craft's parting is between two bodies in one world, which neither keeps out of it. Null
+    /// for none, and once the two are back parting.
+    /// </summary>
+    internal Vessel? PartingWith { get; set; }
+
+    /// <summary>
+    /// As it leaves the physics, keeps who it is parting with (<see cref="PartingWith"/>, both
+    /// ways), of <paramref name="world"/>'s: the craft its own parts from, and any in its physics
+    /// parting from it. Kept as it was if it parts from none now (the other gone under formula first).
+    /// </summary>
+    private void KeepParting(IReadOnlyList<Vessel> world)
+    {
+        if (_craft.PartingFrom is { } from && VesselOf(world, from) is { } other)
+            (PartingWith, other.PartingWith) = (other, this);
+        var crafts = _physics!.Crafts;
+        for (var i = 0; i < crafts.Count; i++) // by index: a foreach over the interface would box its enumerator
+            if (crafts[i].PartingFrom == _craft && VesselOf(world, crafts[i]) is { } parting)
+                (PartingWith, parting.PartingWith) = (parting, this);
+    }
+
+    /// <summary>The vessel of <paramref name="world"/> whose craft (or stand-in, under formula) <paramref name="craft"/> is, if any.</summary>
+    private static Vessel? VesselOf(IReadOnlyList<Vessel> world, Craft craft)
+    {
+        for (var i = 0; i < world.Count; i++)
+            if (world[i]._craft == craft)
+                return world[i];
+        return null;
+    }
+
+    /// <summary>
+    /// Just back in the physics, parts again from each of <paramref name="world"/>'s it was parting
+    /// with (<see cref="PartingWith"/>, either way) that is in the same physics: whichever came
+    /// back last is put to parting from the other (<see cref="RocketPhysics.Part"/>), until the two
+    /// are clear (see RocketPhysics' EndParting). One gone (wrecked, or out of the world) is let go.
+    /// </summary>
+    private void PartAgain(IReadOnlyList<Vessel> world)
+    {
+        for (var i = 0; i < world.Count; i++)
+        {
+            var x = world[i];
+            if (x == this || (x.PartingWith != this && PartingWith != x) || x.OnFormula || x.State == FlightState.Crashed || x._physics != _physics)
+                continue;
+            _physics!.Part(_craft, x._craft);
+            if (x.PartingWith == this)
+                x.PartingWith = null;
+            if (PartingWith == x)
+                PartingWith = null;
+        }
+        if (PartingWith is { } p && (p.State == FlightState.Crashed || !InWorld(world, p)))
+            PartingWith = null;
+    }
+
+    private static bool InWorld(IReadOnlyList<Vessel> world, Vessel v)
+    {
+        for (var i = 0; i < world.Count; i++)
+            if (world[i] == v)
+                return true;
+        return false;
+    }
+
+    /// <summary>
     /// Takes it out of the physics, to be moved by formula from world time <paramref name="now"/>:
     /// its body is taken out of the world (so it costs Jolt nothing), and it keeps where it is, its
-    /// velocity, attitude and turning, which the formula carries on from.
+    /// velocity, attitude and turning, which the formula carries on from; and, of the vessels of
+    /// <paramref name="world"/> (none given, none kept), who it is parting with (<see cref="PartingWith"/>).
     /// </summary>
-    internal void LeavePhysics(double now)
+    internal void LeavePhysics(double now, IReadOnlyList<Vessel>? world = null)
     {
         if (OnFormula || _craft.Removed || State == FlightState.Crashed)
             return; // a wreck's body plays its hit out in the physics (see RocketPhysics.Wreck)
+        if (world is not null)
+            KeepParting(world);
         Refresh();
         (_rotation, _angularVelocity) = (_physics!.Rotation(_craft), _physics!.AngularVelocity(_craft));
         _centreOffset = Vector3.Transform(_centreOfMass - Position, Quaternion.Conjugate(_rotation));
         _formulaLegs = State is FlightState.Landed or FlightState.Floating ? _craft.LegExtension : Vector4.One;
         (_trueCentre, _trueVelocity) = (_physics!.TrueCentreOfMass(_craft), _physics!.TrueVelocity(_craft)); // the physics' copy, which the formula goes on from
+        var aboard = _craft.Aboard; // its place on a raft's deck, frozen there (taken before its body goes)
         _physics!.Remove(_craft);
         _physics = null; // its body's world may be released, and reused for another, while it is out of it
         OnFormula = true;
-        (AboardByFormula, _handedBack, _playingOut) = (false, false, false);
+        // Aboard a raft, its place on the deck is kept (the physics' own, frozen there), and the
+        // formula carries it with the raft from here (see CarryByFormula).
+        AboardUnderFormula = aboard;
+        if (aboard is null && State is FlightState.Landed or FlightState.Floating)
+            BoardUnderFormula();
         // On its orbit above the air and clear of the ground, its engine off; stepped otherwise (see Formula).
         var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, _centreOfMass, Velocity) && !EngineLit;
         _motion = Formula.Begin(Body, _trueCentre, _trueVelocity, _rotation, _angularVelocity, now, onItsOrbit);
@@ -382,9 +499,10 @@ internal sealed class Vessel
     /// body's physics (made if it has none, <see cref="Worlds.Need"/>) where the
     /// formula has it then, moving and turning as the formula has it, so nothing jumps. Landed or
     /// afloat it comes back frozen, as one loaded so does (see <see cref="RocketPhysics.Restore"/>).
-    /// A wreck never comes back: it is gone.
+    /// It parts again from any of <paramref name="world"/>'s it was parting with that is back too
+    /// (<see cref="PartingWith"/>; none given, none). A wreck never comes back: it is gone.
     /// </summary>
-    internal void ReturnToPhysics(double now)
+    internal void ReturnToPhysics(double now, IReadOnlyList<Vessel>? world = null)
     {
         if (!OnFormula || State == FlightState.Crashed)
             return;
@@ -392,11 +510,18 @@ internal sealed class Vessel
         if (State == FlightState.Crashed)
             return; // brought to now, it touched something on the way, and is gone
         _physics = _worlds.Need(Body);
+        var frozen = State is FlightState.Landed or FlightState.Floating;
         _craft = _physics.Restore(Vehicle, Stage, TopStage, Position, _rotation, Velocity, _angularVelocity, LegDeploy, FairingOn,
-            frozen: State is FlightState.Landed or FlightState.Floating, BayDoors, _craft.DoorStops);
-        _physics.Keep(_craft, _trueCentre, _trueVelocity); // where the formula has it, in double
+            frozen, BayDoors, _craft.DoorStops);
+        _physics.Keep(_craft, _trueCentre, frozen ? Vector3Double.Zero : _trueVelocity); // where the formula has it, in double
+        // Aboard a raft, frozen on its deck where the formula carried it (the raft as it is now);
+        // standing there burning, the physics' deck carries it as it does any craft on it.
+        if (frozen && AboardUnderFormula is { } aboard)
+            _physics.Board(_craft, aboard.Raft, aboard.Place, aboard.Rotation);
+        if (world is not null)
+            PartAgain(world);
         OnFormula = false;
-        (_playingOut, AboardByFormula, _handedBack) = (_handedBack, false, false);
+        AboardUnderFormula = null;
         Refresh();
         // Its touches are judged from how it moves now, as one just woken is (see AfterPhysics).
         (_lastVelocity, _lastSpin) = (Velocity, _angularVelocity);
@@ -430,10 +555,8 @@ internal sealed class Vessel
             var (rotation, spin) = (change.Rotation(_rotation), change.Spin((Vector3Double)_angularVelocity).ToSingle());
             MoveByFormula(at, velocity, rotation, spin, orbitChanged: true);
             // Begun again from here, at the new body: on its orbit there if it can be, else stepped.
-            var held = _motion.Held;
             var onItsOrbit = State == FlightState.Flying && Formula.OnItsOrbitAt(this, _centreOfMass, Velocity) && !EngineLit;
             _motion = Formula.Begin(body, at, velocity, rotation, spin, now, onItsOrbit);
-            _motion.Held = held;
         }
         else if (!_craft.Removed)
         {
@@ -525,11 +648,12 @@ internal sealed class Vessel
     /// near upright, at its two ends only, the rest being higher. The few points, not the
     /// physics' many: the formula judges one touch, by its whole speed. Far from anything (its
     /// centre of mass more than four times its reach up, as <see cref="HullMayTouch"/> takes the
-    /// ground's steepest rise), it is that clear, read from that one point.
+    /// ground's steepest rise), it is that clear, read from that one point. With <paramref name="solid"/>,
+    /// above what is solid under it instead (<see cref="GroundBody.GroundAltitude"/>: the seabed under the water).
     /// </summary>
-    internal (float Clearance, Vector3 At) FormulaLowest(Vector3 centreOfMass, Quaternion rotation)
+    internal (float Clearance, Vector3 At) FormulaLowest(Vector3 centreOfMass, Quaternion rotation, bool solid = false)
     {
-        var clear = Body.SurfaceAltitude(centreOfMass);
+        var clear = solid ? Body.GroundAltitude(centreOfMass) : Body.SurfaceAltitude(centreOfMass);
         if (clear > 4f * Reach)
             return (clear - Reach, centreOfMass);
         var model = Matrix4x4.CreateFromQuaternion(rotation);
@@ -541,7 +665,7 @@ internal sealed class Vessel
         var (lowest, at) = (float.MaxValue, centreOfMass);
         void Try(Vector3 point, float below)
         {
-            var clearance = Body.SurfaceAltitude(point) - below;
+            var clearance = (solid ? Body.GroundAltitude(point) : Body.SurfaceAltitude(point)) - below;
             if (clearance < lowest)
                 (lowest, at) = (clearance, point);
         }
@@ -579,6 +703,8 @@ internal sealed class Vessel
     /// touches (this one at <paramref name="speed"/>, and any before it: a bounce in the physics
     /// before it left, or where it stood burning), its landing's touches over, and on target by the
     /// same test as the physics' (landed, within <see cref="Scene.LandingTargetRadius"/> of its landing site).
+    /// On a raft, it is aboard it (<see cref="AboardUnderFormula"/>), where it came down on it (one
+    /// that stood there burning, aboard already, stays so).
     /// </summary>
     internal void LandByFormula(Vector3 position, Quaternion rotation, float speed, FlightState state)
     {
@@ -587,7 +713,8 @@ internal sealed class Vessel
         (_touchedDown, _vesselTouch, _lowSounded, _hullSounded) = (false, null, false, false); // settled: its landing's touches are over
         (_settledFor, _floatingFor) = (0f, 0f);
         LandedOnTarget = state == FlightState.Landed && LandingSite is not null && DistanceToLandingSite <= Scene.LandingTargetRadius;
-        AboardByFormula = Body.HasSea && Rafts.Under(FormulaLowest(_centreOfMass, rotation).At) is not null;
+        if (AboardUnderFormula is null)
+            BoardUnderFormula();
     }
 
     /// <summary>
@@ -595,20 +722,24 @@ internal sealed class Vessel
     /// <see cref="FormulaMotion.Standing"/>): at rest with its origin at <paramref name="position"/>,
     /// turned <paramref name="rotation"/>, touching down at <paramref name="speed"/> (one of its
     /// landing's touches), but flying still (in the physics it lands only with its engine off).
-    /// Standing on a raft, it is aboard it as one landed there is: the raft moves under it, so it is
-    /// to be in the physics, burning or not (see <see cref="AboardByFormula"/>).
+    /// Standing on a raft, it is aboard it as one landed there is, and carried with it (see
+    /// <see cref="CarryByFormula"/>).
     /// </summary>
     internal void StandByFormula(Vector3 position, Quaternion rotation, float speed)
     {
         SetDownByFormula(position, rotation, speed, FlightState.Landed);
-        AboardByFormula = Body.HasSea && Rafts.Under(FormulaLowest(_centreOfMass, rotation).At) is not null;
+        BoardUnderFormula();
     }
 
     /// <summary>
     /// Lifting off under formula from where it stood (see <see cref="FormulaMotion.Rising"/>): off
-    /// the ground, though still in the same landing until it is clear of it.
+    /// the ground (or a raft's deck, aboard it no longer), though still in the same landing until it is clear of it.
     /// </summary>
-    internal void LiftOffByFormula() => (_wasTouching, _hullWasTouching) = (false, false);
+    internal void LiftOffByFormula()
+    {
+        (_wasTouching, _hullWasTouching) = (false, false);
+        AboardUnderFormula = null;
+    }
 
     /// <summary>
     /// Flown clear of the ground under its own power under formula (by <see cref="AirborneClearance"/>):
@@ -1913,10 +2044,6 @@ internal sealed class Vessel
         Timings.Lap(StepPart.Rules);
         var started = Timings.Start();
         CheckContact(dt, woken);
-        // Handed back by the formula, it has played out what the formula couldn't once it is
-        // landed, afloat or wrecked: flying again later (its engine relit), it is like any other.
-        if (State != FlightState.Flying)
-            _playingOut = false;
         Timings.Stop(StepDetail.Vessels, started);
         Timings.Lap(StepPart.Contact);
         // After the contact, so a vessel that has just come down is in the surface frame from that

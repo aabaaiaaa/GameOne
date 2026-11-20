@@ -247,7 +247,7 @@ public sealed class FormulaTests(ITestOutputHelper output)
     }
 
     /// <summary>Over the deep sea, out of every site's way.</summary>
-    private static Vector3 Sea => Planet.Centre + WaterTests.DeepWater.Value * Planet.SeaRadius;
+    internal static Vector3 Sea => Planet.Centre + WaterTests.DeepWater.Value * Planet.SeaRadius;
 
     /// <summary>
     /// A spot on the calm sea where the water is <paramref name="deep"/> metres deep (within a
@@ -285,7 +285,7 @@ public sealed class FormulaTests(ITestOutputHelper output)
     private static readonly Lazy<Vector3> EighteenMetres = new(() => WaterOf(18f));
 
     /// <summary>Level ground, out of every site's way (see <see cref="Drops.LevelGround"/>).</summary>
-    private static readonly Lazy<(Vector3 At, Vector3 Downhill)> Level = new(() =>
+    internal static readonly Lazy<(Vector3 At, Vector3 Downhill)> Level = new(() =>
     {
         var (at, downhill, _) = Drops.FindSlope(0f, 0.02f, from: Drops.LevelGround);
         return (at, downhill);
@@ -466,53 +466,23 @@ public sealed class FormulaTests(ITestOutputHelper output)
     [InlineData("too fast into shallow water", "Crashed")]
     [InlineData("gently into water 7.5 m deep", "Landed")]
     [InlineData("gently into water 10 m deep", "Landed")]
-    public void A_plunge_onto_a_shallow_seabed_is_handed_to_the_physics_and_ends_as_in_it(string flight, string ending)
+    public void A_plunge_onto_a_shallow_seabed_ends_by_formula_as_in_the_physics(string flight, string ending)
     {
-        // The seabed within its plunge's reach: the formula flies it down to the water, and hands it
-        // back to the physics there, which plays its plunge (see Formula's Judge). (In 10 m of
-        // water, past the 9.2 m a booster's hull floats in, its feet hanging under it reach the seabed.)
+        // Water shallower than it floats in: the formula brings it onto the seabed at a share of
+        // its speed into the water (Scene.FormulaSeabedSpeedShare), judged there by the ground's
+        // rules, under formula throughout (Outcome's Fly asserts it). (In 10 m of water, past the
+        // 9.2 m a booster's hull floats in, its feet hanging under it reach the seabed.)
         var outcome = Enum.Parse<FlightState>(ending);
         var state = Touching(flight);
         var jolt = Outcome(state, watched: true);
-        var (sim, v, watch) = Start(state, watched: false);
-        using var _ = sim;
-        var (backAt, lowestThen, outAgain) = (double.NaN, float.NaN, false);
-        FlyFreely(sim, watch, 90, () =>
-        {
-            if (double.IsNaN(backAt) && !v.OnFormula)
-                (backAt, lowestThen) = (sim.Time, v.FormulaLowest(v.CentreOfMass, Quaternion.CreateFromRotationMatrix(v.Model)).Clearance);
-            outAgain |= !double.IsNaN(backAt) && v.OnFormula && v.State == FlightState.Flying;
-            return v.State != FlightState.Flying;
-        });
-        output.WriteLine($"{flight}: Jolt {jolt.State} at {jolt.Touchdown:0.00} m/s ({jolt.Reason}); handed back at {backAt:0.00} s, its lowest point {lowestThen:0.00} m over the water, "
-            + $"then {v.State} at {v.TouchdownSpeed:0.00} m/s ({v.CrashReason})");
-        Assert.False(double.IsNaN(backAt), "it was never handed back");
-        Assert.InRange(lowestThen, -1f, 0.5f); // where it touched the water, not before
-        Assert.False(outAgain, "it left the physics again before its plunge ended");
+        var formula = Outcome(state, watched: false);
+        output.WriteLine($"{flight}: Jolt {jolt.State} at {jolt.Touchdown:0.00} m/s ({jolt.Reason}); the formula {formula.State} at {formula.Touchdown:0.00} m/s ({formula.Reason}), "
+            + $"lowest {Drops.Lowest(formula.Vessel):0.00} m over the seabed");
         Assert.Equal(outcome, jolt.State);
-        Assert.Equal(outcome, v.State);
-        Assert.Equal(Why(jolt.Reason), Why(v.CrashReason));
-    }
-
-    [Fact]
-    public void One_handed_back_that_has_landed_leaves_the_physics_again_once_it_flies_off()
-    {
-        // Handed back on touching 7.5 m of water, it lands on the seabed in the physics. Then flown
-        // up and away at full throttle, and left to fly on alone: it is a vessel like any other
-        // again, so once clear of the water and the ground, nobody watching, it leaves the physics.
-        var (sim, v, watch) = Start(Touching("gently into water 7.5 m deep"), watched: false);
-        using var _ = sim;
-        var far = sim.Flight.WorldVessels.Single(x => x.Id == 1);
-        Assert.True(sim.Run((_, _) => default, _ => v.State != FlightState.Flying, maxSeconds: 60), "it never came down");
-        Assert.Equal(FlightState.Landed, v.State);
-        Assert.False(v.OnFormula);
-        sim.Step(new FlightInput(SwitchTo: v, FullThrottle: true));
-        Assert.True(sim.Run((_, _) => default, _ => v.Ground > 30f, maxSeconds: 10), $"it never flew up: {v.State}, {v.Ground:0.0} m up");
-        sim.Step(new FlightInput(SwitchTo: far));
-        var start = sim.Time;
-        var left = sim.Run((_, _) => default, _ => v.OnFormula, maxSeconds: 5);
-        output.WriteLine($"flown off to {v.Ground:0} m, {v.State}; left alone, out of the physics after {sim.Time - start:0.00} s: {left}");
-        Assert.True(left, "it stayed in the physics, nobody watching it, flying clear of everything");
+        Assert.Equal(outcome, formula.State);
+        Assert.Equal(Why(jolt.Reason), Why(formula.Reason));
+        if (outcome == FlightState.Landed)
+            Assert.InRange(Drops.Lowest(formula.Vessel), -0.1f, Scene.LegStroke); // on the seabed, not the water's top
     }
 
     [Fact]
@@ -779,78 +749,115 @@ public sealed class FormulaTests(ITestOutputHelper output)
 
     /// <summary>
     /// <paramref name="state"/> coming down on <paramref name="raft"/>, once watched and once not:
-    /// both land on it, as the physics lands it; unwatched, it is judged by the formula, and comes
-    /// back into the physics on the frame it lands, aboard (the raft carries it from there), not
-    /// held behind the hand-ins' budget while the raft moves from under it.
+    /// both land on it, as the physics lands it; unwatched, it is judged by the formula and carried
+    /// by it aboard (<see cref="Vessel.AboardUnderFormula"/>), under formula throughout. Then 600 s
+    /// on at the top rate it is still where the deck's pose then puts its place on the deck, to
+    /// within a centimetre, and on the deck's top. The unwatched one, aboard, is returned.
     /// </summary>
-    private void LandsAboard(VesselState state, Raft raft)
+    private Vessel LandsAboard(Simulation sim, Vessel v, Vessel[]? watch, VesselState state, Raft raft)
     {
         var (jolt, joltOnTarget) = (FlightState.Flying, false);
         {
-            var (sim, v, watch) = Start(state, watched: true);
-            using var _ = sim;
-            FlyFreely(sim, watch, 60, () => v.State != FlightState.Flying);
-            (jolt, joltOnTarget) = (v.State, v.LandedOnTarget);
+            var (watched, w, on) = Start(state, watched: true);
+            using var _ = watched;
+            FlyFreely(watched, on, 60, () => w.State != FlightState.Flying);
+            (jolt, joltOnTarget) = (w.State, w.LandedOnTarget);
         }
-        {
-            var (sim, v, watch) = Start(state, watched: false);
-            using var _ = sim;
-            // The frame it touched (its landing begun: for one still burning, before it has
-            // landed), the frame it landed, and the frame it was back in the physics.
-            var (touchedAt, landedAt, backAt, frame, outUntilTouched) = (-1, -1, -1, 0, true);
-            FlyFreely(sim, watch, 60, () =>
-            {
-                frame++;
-                if (touchedAt < 0 && v.TouchdownSpeed > 0f)
-                    touchedAt = frame;
-                if (landedAt < 0 && v.State != FlightState.Flying)
-                    landedAt = frame;
-                if (touchedAt < 0)
-                    outUntilTouched &= v.OnFormula;
-                if (backAt < 0 && !v.OnFormula)
-                    backAt = frame;
-                return landedAt >= 0 && frame >= landedAt + 300; // and 5 s on, aboard
-            });
-            output.WriteLine($"Jolt: {jolt}, on target {joltOnTarget}; the formula: {v.State} {v.CrashReason}, touchdown {v.TouchdownSpeed:0.00} m/s, on target {v.LandedOnTarget}; "
-                + $"touched down on frame {touchedAt}, back in the physics on frame {backAt} ({backAt - touchedAt} waited), landed on frame {landedAt}; "
-                + $"aboard {v.Craft.Aboard?.Raft == raft}, frozen {v.Craft.Frozen}, {raft.HeightAbove(v.Position):0.00} m over its top");
-            Assert.Equal(FlightState.Landed, jolt);
-            Assert.True(outUntilTouched, "it was in the physics before it touched down: the formula didn't judge it");
-            Assert.Equal(FlightState.Landed, v.State);
-            Assert.Equal(joltOnTarget, v.LandedOnTarget);
-            Assert.Equal(touchedAt, backAt); // back at once, outside the budget, burning or not
-            Assert.False(v.OnFormula);
-            Assert.Same(raft, v.Craft.Aboard?.Raft);
-            Assert.InRange(raft.HeightAbove(v.Position) ?? float.NaN, -0.5f, 3f); // on its top, carried with it
-        }
+        Fly(sim, v, watch, 60, x => x.State != FlightState.Flying);
+        output.WriteLine($"Jolt: {jolt}, on target {joltOnTarget}; the formula: {v.State} {v.CrashReason}, touchdown {v.TouchdownSpeed:0.00} m/s, on target {v.LandedOnTarget}; "
+            + $"aboard {v.AboardUnderFormula?.Raft == raft}, {raft.HeightAbove(v.Position):0.00} m over its top");
+        Assert.Equal(FlightState.Landed, jolt);
+        Assert.Equal(FlightState.Landed, v.State);
+        Assert.Equal(joltOnTarget, v.LandedOnTarget);
+        Assert.Same(raft, v.AboardUnderFormula?.Raft);
+
+        var landed = v.Position;
+        FormulaRateTests.ToTheTop(sim.Flight);
+        var start = sim.Flight.WorldTime;
+        Fly(sim, v, watch, 600);
+        var time = sim.Flight.WorldTime;
+        var aboard = v.AboardUnderFormula!.Value;
+        var deck = raft.Pose(time);
+        var expected = deck.Position + Vector3.Transform(aboard.Place, deck.Rotation);
+        raft.Set(time);
+        output.WriteLine($"{time - start:0} s on at the top rate: {Vector3.Distance(v.Position, expected) * 100f:0.000} cm from where the deck puts it, "
+            + $"{Vector3.Distance(v.Position, landed):0.00} m from where it landed, {raft.HeightAbove(v.Position):0.00} m over the deck");
+        Assert.True(time - start >= 600.0);
+        Assert.Equal(FlightState.Landed, v.State);
+        Assert.InRange(Vector3.Distance(v.Position, expected), 0f, 0.01f);
+        Assert.InRange(raft.HeightAbove(v.Position) ?? float.NaN, -0.5f, 3f); // on its top, carried with it
+        return v;
+    }
+
+    /// <summary><see cref="LandsAboard(Simulation, Vessel, Vessel[], VesselState, Raft)"/> in a world of its own.</summary>
+    private void LandsAboard(VesselState state, Raft raft)
+    {
+        var (sim, v, watch) = Start(state, watched: false);
+        using var _ = sim;
+        LandsAboard(sim, v, watch, state, raft);
+    }
+
+    /// <summary>The Reach Orbit mission's booster over the middle of its drone ship's deck, coming down at <paramref name="speed"/>.</summary>
+    internal static VesselState OverTheDeck(float speed, float fuel = 0.3f)
+    {
+        Rafts.Ship.Set(0.0);
+        var at = Rafts.Ship.Current.Position + Rafts.Ship.Normal * Scene.DroneShipFreeboard;
+        return Drops.Placed(at, Planet.East(at), speed, Vehicle.TwoStage, first: 0, last: 0, mission: Mission.ReachOrbit, flight: 1, fuel: fuel);
     }
 
     [Fact]
-    public void A_vessel_under_formula_touching_down_on_the_deck_with_its_engine_lit_comes_back_aboard_and_lands_there()
+    public void A_vessel_under_formula_touching_down_on_the_deck_with_its_engine_lit_stands_there_and_lands_aboard_by_formula()
     {
         // As below, but coming down on its engine at nine tenths of its weight, with fuel for some
-        // 4 s more: it stands burning on the moving deck, in the physics, and lands there once dry.
-        Rafts.Ship.Set(0.0);
-        var at = Rafts.Ship.Current.Position + Rafts.Ship.Normal * Scene.DroneShipFreeboard;
-        LandsAboard(OnItsEngine(Drops.Placed(at, Planet.East(at), 2f, Vehicle.TwoStage, first: 0, last: 0, mission: Mission.ReachOrbit, flight: 1,
-            fuel: 0.02f), 0.9f), Rafts.Ship);
+        // 4 s more: it stands burning on the moving deck, carried by it, and lands there once dry.
+        LandsAboard(OnItsEngine(OverTheDeck(2f, fuel: 0.02f), 0.9f), Rafts.Ship);
     }
 
     [Fact]
-    public void A_vessel_under_formula_lands_on_the_drone_ships_moving_deck_and_comes_back_aboard()
+    public void A_vessel_under_formula_lands_on_the_drone_ships_moving_deck_and_is_carried_there_by_formula()
     {
         // The Reach Orbit mission's booster onto the middle of its drone ship's deck at 2 m/s.
-        Rafts.Ship.Set(0.0);
-        var at = Rafts.Ship.Current.Position + Rafts.Ship.Normal * Scene.DroneShipFreeboard;
-        LandsAboard(Drops.Placed(at, Planet.East(at), 2f, Vehicle.TwoStage, first: 0, last: 0, mission: Mission.ReachOrbit, flight: 1), Rafts.Ship);
+        LandsAboard(OverTheDeck(2f), Rafts.Ship);
     }
 
     [Fact]
-    public void A_vessel_under_formula_lands_on_a_floe_and_comes_back_aboard()
+    public void A_vessel_under_formula_lands_on_a_floe_and_is_carried_there_by_formula()
     {
         var floe = FloeTests.BigFloe();
         var at = FloeTests.Top(floe);
         LandsAboard(Drops.Placed(at, Planet.East(at), 1.5f), floe);
+    }
+
+    [Fact]
+    public void One_carried_aboard_by_formula_comes_back_into_the_physics_aboard()
+    {
+        // Landed on the deck by the formula and carried there a while, then switched to: back in
+        // the physics frozen aboard the deck (Craft.Aboard), where the formula had it on it, and
+        // kept on it 10 s on.
+        var state = OverTheDeck(2f);
+        var (sim, v, watch) = Start(state, watched: false);
+        using var _ = sim;
+        Fly(sim, v, watch, 60, x => x.State != FlightState.Flying);
+        Assert.Same(Rafts.Ship, v.AboardUnderFormula?.Raft);
+        Fly(sim, v, watch, 20);
+        var place = v.AboardUnderFormula!.Value.Place;
+        sim.Step(new FlightInput(SwitchTo: v));
+        Assert.False(v.OnFormula);
+        Assert.Same(Rafts.Ship, v.Craft.Aboard?.Raft);
+        output.WriteLine($"back aboard {Vector3.Distance(v.Craft.Aboard!.Value.Position, place) * 100f:0.000} cm from its place on the deck under formula");
+        Assert.InRange(Vector3.Distance(v.Craft.Aboard!.Value.Position, place), 0f, 0.01f);
+        var (lowest, highest) = (float.MaxValue, float.MinValue);
+        sim.Run((_, _) => default, _ =>
+        {
+            Assert.Same(Rafts.Ship, v.Craft.Aboard?.Raft);
+            var height = Rafts.Ship.HeightAbove(v.Position) ?? float.NaN;
+            (lowest, highest) = (MathF.Min(lowest, height), MathF.Max(highest, height));
+            return false;
+        }, maxSeconds: 10);
+        output.WriteLine($"10 s on in the physics: {v.State}, {lowest:0.00} to {highest:0.00} m over the deck");
+        Assert.Equal(FlightState.Landed, v.State);
+        Assert.InRange(lowest, -0.5f, 3f);
+        Assert.InRange(highest, -0.5f, 3f);
     }
 
     [Fact]
@@ -880,7 +887,7 @@ public sealed class FormulaTests(ITestOutputHelper output)
         // sound list as far as the touchdowns need), the twins apart (in the first step, in the
         // physics, one inside the other would keep both there): at 1,000 m/s 30 m over the sea (the
         // ground read at many points a step); touching down on more thrust than its weight
-        // (standing, then lifting off: Rising); and gently into 7.5 m of water (handed back).
+        // (standing, then lifting off: Rising); and gently into 7.5 m of water (onto the seabed).
         var (ground, downhill) = Level.Value;
         var sea = Sea;
         var fast = Drops.Placed(sea, Planet.East(sea), 0f, legsOut: false, clearance: 30f) with
@@ -888,7 +895,7 @@ public sealed class FormulaTests(ITestOutputHelper output)
             Rotation = UnwatchedTests.RotationTo(Planet.East(sea)), Aim = Planet.East(sea), Velocity = Planet.East(sea) * 1000f,
         };
         var lifting = OnItsEngine(Drops.Placed(ground, downhill, 2f, fuel: 0.02f), 1.2f);
-        var wet = Drops.Placed(SevenAndAHalfMetres.Value, Planet.East(SevenAndAHalfMetres.Value), 2f, legsOut: false);
+        var wet = Drops.Placed(SevenAndAHalfMetres.Value, Planet.East(SevenAndAHalfMetres.Value), 2f);
         VesselState Apart(VesselState s, int id, float metres) => s with { Id = id, Position = s.Position.ToSingle() + Planet.North(s.Position.ToSingle()) * metres };
         VesselState[] states = [Apart(fast, 0, 0f), Apart(fast, 1, 100f), Apart(lifting, 2, 0f), Apart(lifting, 3, 40f), Apart(wet, 4, -4f), Apart(wet, 5, 4f),
             FarFrom(sea, 6)];
@@ -911,9 +918,9 @@ public sealed class FormulaTests(ITestOutputHelper output)
         var before = GC.GetAllocatedBytesForCurrentThread();
         Fly(1, t);
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        output.WriteLine($"fast: {vessels[1].State}; lifting: {vessels[3].State}, rose {rose}; wet: {vessels[5].State}, handed back {vessels[5].NeedsPhysics}; {allocated} bytes");
+        output.WriteLine($"fast: {vessels[1].State}; lifting: {vessels[3].State}, rose {rose}; wet: {vessels[5].State}; {allocated} bytes");
         Assert.True(rose, "the lifting one never lifted off its stand: this shows nothing of it");
-        Assert.True(vessels[5].NeedsPhysics, "the wet one was never handed back: this shows nothing of it");
+        Assert.True(vessels[5].State == FlightState.Landed, $"the wet one is {vessels[5].State}, not on the seabed: this shows nothing of it");
         Assert.Equal(0L, allocated);
     }
 

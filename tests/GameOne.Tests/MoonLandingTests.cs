@@ -67,6 +67,7 @@ public sealed class MoonLandingTests(ITestOutputHelper output)
     {
         using var sim = new Simulation(world: new WorldState { Vessels = [Lander(0f)], NextVesselId = 1 }, body: Moon);
         var lander = sim.Flight.WorldVessels.First(v => v.Id == 0);
+        sim.Flight.BringIn(lander); // in the moon's physics from rest (at another body than the pad's, it loads under formula)
         var (from, up) = (lander.Position, Moon.Up(lander.Position));
 
         // A second of the physics' steps from rest, the first frame switching to it.

@@ -125,6 +125,7 @@ public sealed class LanderTests(ITestOutputHelper output)
         sim.ShowLinkUp = true;
         var pad = sim.Flight.Controlled;
         var lander = sim.Flight.WorldVessels.First(v => v.Id == 0);
+        sim.Flight.BringIn(lander); // in the moon's physics, as it touches down (at another body than the pad's, it loads under formula)
 
         sim.Step(new FlightInput(SwitchTo: lander));
         Assert.True(sim.Flight.LinkUp.Waiting);

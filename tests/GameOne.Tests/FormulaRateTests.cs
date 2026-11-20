@@ -460,4 +460,75 @@ public sealed class FormulaRateTests(ITestOutputHelper output)
         Assert.Equal(Scene.TopRate, flight.PlayerRate);
         Assert.Equal(Scene.TopRate, flight.TimeScale);
     }
+
+    [Fact]
+    public void At_the_top_rate_an_unwitnessed_vessel_settles_crashes_and_rides_a_raft_without_the_physics_or_the_warp_changing()
+    {
+        // Three boosters nobody watches: into the deep sea gently, onto level ground at 30 m/s, and
+        // onto the drone ship's deck; a satellite coasting far off flown. At the top rate the
+        // formula plays each out alone: afloat, wrecked, landed aboard (carried by the deck), with
+        // nothing ever in the physics and the warp never changed.
+        var (ground, downhill) = FormulaTests.Level.Value;
+        var sea = FormulaTests.Sea;
+        VesselState[] states =
+        [
+            Drops.Placed(sea, Planet.East(sea), 5f, legsOut: false, id: 0),
+            Drops.Placed(ground, downhill, 30f, clearance: 3f, id: 1),
+            FormulaTests.OverTheDeck(2f) with { Id = 2 },
+            PerfScenes.FarSatellite(ground, 3),
+        ];
+        using var sim = new Simulation(world: new WorldState { Vessels = states, NextVesselId = states.Length });
+        var flight = sim.Flight;
+        var (wet, hard, aboard) = (flight.WorldVessels.Single(v => v.Id == 0), flight.WorldVessels.Single(v => v.Id == 1), flight.WorldVessels.Single(v => v.Id == 2));
+        sim.Step(new FlightInput(SwitchTo: flight.WorldVessels.Single(v => v.Id == 3)));
+        ToTheTop(flight);
+        for (var i = 0; i < 5; i++)
+        {
+            sim.Step(default);
+            Assert.Equal(Scene.TopRate, flight.PlayerRate);
+            Assert.Equal(Scene.TopRate, flight.TimeScale);
+            Assert.All(sim.Worlds.All, w => Assert.Empty(w.Crafts));
+        }
+        Rafts.Ship.Set(flight.WorldTime);
+        output.WriteLine($"{flight.WorldTime:0} s: {wet.State}; {hard.State} ({hard.CrashReason}); {aboard.State}, aboard {aboard.AboardUnderFormula?.Raft == Rafts.Ship}, "
+            + $"{Rafts.Ship.HeightAbove(aboard.Position):0.00} m over the deck");
+        Assert.Equal(FlightState.Floating, wet.State);
+        Assert.Equal(FlightState.Crashed, hard.State);
+        Assert.StartsWith("Hit the ground", hard.CrashReason);
+        Assert.Equal(FlightState.Landed, aboard.State);
+        Assert.Same(Rafts.Ship, aboard.AboardUnderFormula?.Raft);
+        Assert.InRange(Rafts.Ship.HeightAbove(aboard.Position) ?? float.NaN, -0.5f, 3f);
+    }
+
+    [Theory]
+    [InlineData("afloat")]
+    [InlineData("aboard the drone ship")]
+    public void Afloat_or_aboard_a_raft_the_flown_vessel_lets_the_top_rate_in(string where)
+    {
+        // Flown down into the deep sea, or onto the drone ship's deck, and settled there: at rest,
+        // it holds no warp, and at the top rate it stays afloat, or on the deck as the deck moves.
+        var sea = FormulaTests.Sea;
+        var state = where == "afloat" ? Drops.Placed(sea, Planet.East(sea), 5f, legsOut: false) : FormulaTests.OverTheDeck(2f);
+        using var sim = new Simulation(world: new WorldState { Vessels = [state], NextVesselId = 1 });
+        var flight = sim.Flight;
+        var flown = flight.WorldVessels.Single(v => v.Id == 0);
+        sim.Step(new FlightInput(SwitchTo: flown));
+        var ending = where == "afloat" ? FlightState.Floating : FlightState.Landed;
+        Assert.True(sim.Run((_, _) => default, _ => flown.State == ending && flown.AtRest, maxSeconds: 90), $"it never settled: {flown.State}");
+        ToTheTop(flight);
+        Assert.Null(flight.WarpHeldBy);
+        for (var i = 0; i < 3; i++)
+            sim.Step(default);
+        Assert.Null(flight.WarpHeldBy);
+        Assert.Equal(Scene.TopRate, flight.PlayerRate);
+        Assert.True(flown.OnFormula);
+        Assert.Equal(ending, flown.State);
+        if (ending == FlightState.Landed)
+        {
+            Rafts.Ship.Set(flight.WorldTime);
+            output.WriteLine($"{flight.WorldTime:0} s: {Rafts.Ship.HeightAbove(flown.Position):0.00} m over the deck");
+            Assert.Same(Rafts.Ship, flown.AboardUnderFormula?.Raft);
+            Assert.InRange(Rafts.Ship.HeightAbove(flown.Position) ?? float.NaN, -0.5f, 3f);
+        }
+    }
 }

@@ -442,7 +442,7 @@ say) stalls frames and spoils the timing.
   metre, and one dipping 10 m into it for under 7 s, wholly between two of the frame's window ends,
   stepped through too (its apoapsis 1.3 m lower, as at normal speed); at the moon an orbit under its lowest ground coming down where it does at normal speed,
   for the same reason, within a metre; and a vessel past the solar system's edge in a top-rate frame
-  lost there and logged, the warp kept.
+  lost there and logged, the warp kept; three boosters nobody watches at the top rate, into the deep sea, onto level ground at 30 m/s and onto the drone ship's deck, afloat, wrecked and landed aboard (carried by the deck) with nothing in the physics in any frame and the warp unchanged; and the flown vessel afloat, or aboard the drone ship, letting the top rate in (nothing holds it), still afloat or on the deck there.
 - **`FormulaTests`:** a vessel out of the physics, moved by formula: one going straight up above the air rising to its top when its orbit says and falling back into the air, never standing still; a satellite on its
   orbit by Kepler (60 s; 600 s as a long test), coming back into the physics where the formula
   had it with no jump and flying on there on the same orbit (after 30 s out; 300 s as a long
@@ -452,7 +452,7 @@ say) stalls frames and spoils the timing.
   air ending within 5, 20 and 50 m of each other, and the attitude after a coast and a held burn
   within a degree or two; the touch ending alike (on its legs, on its bell, too fast onto the
   ground, a splashdown, too fast into the sea, and down with its engine lit, landing once its tank
-  is dry; coming down lying; lying down onto shallow water, afloat; and, handed to the physics where they hit the water, three plunges onto a seabed 3, 7.5 and 10 m down), as do touching down on more thrust than its weight (lifting off again, one touchdown sound), a booster at 1,000 m/s at a peak narrower than a step (wrecked by it within a step of where Jolt is), landings on the drone ship's deck (one with its engine lit) and on a floe (back in the physics on the frame they touch down, aboard), a fall onto Home's tower (wrecked by it, the physics' reason), onto a landing zone's light mast and onto one of the drone ship's, riding the waves (each "Hit a light mast.", within 5 m of where Jolt is), and onto its pad
+  is dry; coming down lying; lying down onto shallow water, afloat; and three plunges onto a seabed 3, 7.5 and 10 m down, by formula throughout: `Scene.FormulaSeabedSpeedShare`), as do touching down on more thrust than its weight (lifting off again, one touchdown sound), a booster at 1,000 m/s at a peak narrower than a step (wrecked by it within a step of where Jolt is), landings on the drone ship's deck (one with its engine lit) and on a floe (aboard by formula, carried there 600 s on at the top rate to within a centimetre of where the deck puts it, and one switched to back in the physics frozen aboard, kept on the deck), a fall onto Home's tower (wrecked by it, the physics' reason), onto a landing zone's light mast and onto one of the drone ship's, riding the waves (each "Hit a light mast.", within 5 m of where Jolt is), and onto its pad
   (landed on its deck, under formula throughout); a burn running out of fuel coasting on, a
   landed one not moving, no node flown nor stage dropped, and a step allocating nothing.
 - **`UnwatchedTests`:** who is in the physics (`Unwatched`): satellites nobody watches leaving
@@ -462,8 +462,8 @@ say) stalls frames and spoils the timing.
   (the hysteresis), and one the main view witnessed drawing off past its reach kept until past
   the hysteresis times it, then let go once; twenty due at once brought back four a flight step,
   and eight due one after another brought back the soonest needed first; choosing allocating
-  nothing; and a parting stage and a booster settling in the sea kept in the physics until
-  parted, or at rest afloat. Collisions between two under formula (`Unwatched.FindCollisions`), 5 km
+  nothing; a parting stage, a booster settling in the sea and a rocket on its pad, far from the witnessed, leaving the physics (the formula plays each out: settled afloat, waiting on its pad, and the stage back in the physics still parting from what it came off as it is switched to), and one afloat with an end over a floe loading under formula aboard it.
+  Collisions between two under formula (`Unwatched.FindCollisions`), 5 km
   over the far side of the planet, nobody near: head on at 500, 2,000 and 8,000 m/s (and at
   8,000 at the physics' top rate) and crossing at 5,657 m/s, both wrecked "Hit another vessel" within 50 m
   of where they collide, under formula throughout and the game never slowed (and two leaving the

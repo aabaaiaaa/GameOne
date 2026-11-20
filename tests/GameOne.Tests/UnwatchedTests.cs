@@ -321,10 +321,13 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void A_parting_stage_and_a_settling_landing_stay_in_the_physics()
+    public void A_parting_stage_far_from_the_witnessed_leaves_the_physics_and_comes_back_parting()
     {
         // A whole rocket in orbit, flown, drops its booster; then a satellite far off is flown,
-        // leaving the two unwatched while they part.
+        // leaving the two unwatched while still inside each other: both leave the physics (nobody
+        // near them), and switched back to at once, each comes back still parting from the other
+        // (in the parting layer until clear: see Craft.PartingFrom), never pushed apart as two
+        // vessels inside each other would be, nor wrecked.
         const float Altitude = 9000f;
         var vehicle = Vehicle.ThreeStage;
         var (position, centre, velocity) = WorldPresets.CircularOrbit(Altitude, 0f, float.DegreesToRadians(60f),
@@ -336,61 +339,83 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
             Fuel = [.. vehicle.Stages.Select(s => s.FuelMass * 0.1f)],
             CentreOfMassOffset = RocketGeometry.CentreOfMassOffset(vehicle, 0, vehicle.Stages.Length - 1),
         };
-        using (var sim = new Simulation(world: new WorldState { Vessels = [rocket, FarAway(1)], NextVesselId = 2 }))
-        {
-            var (stack, far) = (Get(sim, 0), Get(sim, 1));
-            sim.Step(new FlightInput(SwitchTo: stack));
-            sim.Step(new FlightInput(Stage: true));
-            var dropped = sim.Flight.WorldVessels[^1]; // the newest: the booster that came away
-            Assert.NotNull(dropped.Craft.PartingFrom);
-            sim.Step(new FlightInput(SwitchTo: far));
-            var parted = sim.Run(Nobody, _ =>
-            {
-                if (dropped.Craft.PartingFrom is null)
-                    return true;
-                Assert.True(sim.Flight.Unwatched.ShouldBeInPhysics(dropped));
-                Assert.False(dropped.OnFormula, "it left the physics while still parting");
-                return false;
-            }, maxSeconds: 30);
-            output.WriteLine($"parted after {sim.Time:0.0} s");
-            Assert.True(parted, "it never finished parting");
-            // Parted and nobody near: both go.
-            Assert.True(sim.Run(Nobody, _ => dropped.OnFormula && stack.OnFormula, maxSeconds: 2), "they stayed in the physics once parted");
-        }
+        using var sim = new Simulation(world: new WorldState { Vessels = [rocket, FarAway(1)], NextVesselId = 2 });
+        var (stack, far) = (Get(sim, 0), Get(sim, 1));
+        sim.Step(new FlightInput(SwitchTo: stack));
+        sim.Step(new FlightInput(Stage: true));
+        var dropped = sim.Flight.WorldVessels[^1]; // the newest: the booster that came away
+        Assert.NotNull(dropped.Craft.PartingFrom);
+        sim.Step(new FlightInput(SwitchTo: far));
+        Assert.True(sim.Run(Nobody, _ => dropped.OnFormula && stack.OnFormula, maxSeconds: 0.1), "they stayed in the physics while parting, nobody near");
 
+        sim.Step(new FlightInput(SwitchTo: stack));
+        Assert.True(sim.Run(Nobody, _ => !dropped.OnFormula, maxSeconds: 1), "the dropped stage never came back by the flown stack");
+        var parting = dropped.Craft.PartingFrom == stack.Craft || stack.Craft.PartingFrom == dropped.Craft;
+        output.WriteLine($"back {Vector3.Distance(dropped.CentreOfMass, stack.CentreOfMass):0.00} m apart, parting {parting}");
+        Assert.True(parting, "it came back inside the stack, not parting from it");
+        var (startApart, startSpeed) = (Vector3.Distance(dropped.CentreOfMass, stack.CentreOfMass), (dropped.Velocity - stack.Velocity).Length());
+        var parted = sim.Run(Nobody, _ => dropped.Craft.PartingFrom is null && stack.Craft.PartingFrom is null, maxSeconds: 30);
+        output.WriteLine($"parted after {sim.Time:0.0} s: {stack.State}, {dropped.State}; moving apart at {(dropped.Velocity - stack.Velocity).Length():0.00} m/s (at {startSpeed:0.00} back in the physics)");
+        Assert.True(parted, "they never finished parting");
+        Assert.Equal(FlightState.Flying, stack.State);
+        Assert.Equal(FlightState.Flying, dropped.State);
+        Assert.InRange((dropped.Velocity - stack.Velocity).Length(), 0f, startSpeed + 1f); // not thrown apart
+        Assert.True(Vector3.Distance(dropped.CentreOfMass, stack.CentreOfMass) >= startApart);
+    }
+
+    [Fact]
+    public void A_settling_landing_far_from_the_witnessed_leaves_the_physics_and_settles_by_formula()
+    {
         // A booster coming down in the deep sea, a satellite far off flown: watched until it is in
-        // the water (nobody watching it, the formula would splash it down itself, never settling
-        // it in the physics), then left alone while it settles.
+        // the water and settling in the physics, then left alone: it leaves the physics at once,
+        // still settling, and the formula settles it afloat, never bringing it back.
         var water = Planet.Centre + WaterTests.DeepWater.Value * Planet.SeaRadius;
         var booster = Drops.Placed(water, Planet.East(water), 2f);
-        using (var sim = new Simulation(world: new WorldState { Vessels = [booster, FarAway(1)], NextVesselId = 2 }))
+        using var sim = new Simulation(world: new WorldState { Vessels = [booster, FarAway(1)], NextVesselId = 2 });
+        var (landing, far) = (Get(sim, 0), Get(sim, 1));
+        var watched = new[] { landing };
+        sim.Step(new FlightInput(SwitchTo: far, Watched: watched));
+        Assert.True(sim.Run((_, _) => new FlightInput(Watched: watched), _ => landing.Craft.Settling, maxSeconds: 5), "it never came down in the water");
+        Assert.False(landing.OnFormula);
+        Assert.Equal(FlightState.Flying, landing.State);
+        sim.Step(default);
+        Assert.True(landing.OnFormula, "it stayed in the physics while settling, nobody near");
+        var settled = sim.Run(Nobody, _ =>
         {
-            var (landing, far) = (Get(sim, 0), Get(sim, 1));
-            var watched = new[] { landing };
-            sim.Step(new FlightInput(SwitchTo: far, Watched: watched));
-            Assert.True(sim.Run((_, _) => new FlightInput(Watched: watched), _ => landing.Craft.Settling, maxSeconds: 5), "it never came down in the water");
-            Assert.False(landing.OnFormula);
-            var (settled, sawSettling) = (false, false);
-            settled = sim.Run(Nobody, _ =>
-            {
-                if (landing.Craft.Settling)
-                {
-                    sawSettling = true;
-                    Assert.True(sim.Flight.Unwatched.ShouldBeInPhysics(landing));
-                    Assert.False(landing.OnFormula, "it left the physics while still settling");
-                }
-                return landing.State != FlightState.Flying;
-            }, maxSeconds: 90);
-            output.WriteLine($"{landing.State} after {sim.Time:0.0} s");
-            Assert.True(sawSettling, "it never settled in the water");
-            Assert.True(settled, $"still {landing.State}");
-            Assert.Equal(FlightState.Floating, landing.State);
-            // Settled afloat and at rest (frozen, as one afloat far from the flown one is), and nobody near: it goes.
-            var start = sim.Time;
-            Assert.True(sim.Run(Nobody, _ => landing.OnFormula, maxSeconds: 30), "it stayed in the physics once afloat");
-            output.WriteLine($"out of the physics {sim.Time - start:0.0} s after it floated");
-            Assert.True(landing.Craft.Frozen, "it left the physics before it was at rest");
-        }
+            Assert.True(landing.OnFormula, $"it came back into the physics ({landing.State})");
+            return landing.State != FlightState.Flying;
+        }, maxSeconds: 10);
+        output.WriteLine($"{landing.State} after {sim.Time:0.0} s, under formula");
+        Assert.True(settled, $"still {landing.State}");
+        Assert.Equal(FlightState.Floating, landing.State);
+    }
+
+    [Fact]
+    public void A_rocket_left_on_a_pad_nobody_watches_waits_there_under_formula()
+    {
+        // The new rocket on Home's pad, and a satellite far off flown: the rocket leaves the
+        // physics, waits on its pad under formula, and comes back there as it is switched to,
+        // standing where it stood, ready to launch.
+        using var sim = new Simulation(world: new WorldState { Vessels = [FarAway(0)], NextVesselId = 1 });
+        sim.Step(default);
+        var rocket = sim.Flight.Controlled;
+        Assert.Equal(FlightState.Ready, rocket.State);
+        var stood = rocket.Position;
+        sim.Step(new FlightInput(SwitchTo: Get(sim, 0)));
+        Assert.True(sim.Run(Nobody, _ =>
+        {
+            Assert.Equal(FlightState.Ready, rocket.State);
+            return false;
+        }, maxSeconds: 30) || true);
+        Assert.True(rocket.OnFormula, "the rocket on the pad stayed in the physics, nobody watching it");
+        Assert.True(Vector3.Distance(rocket.Position, stood) < 0.01f, $"{Vector3.Distance(rocket.Position, stood):0.000} m from where it stood");
+        sim.Step(new FlightInput(SwitchTo: rocket));
+        Assert.False(rocket.OnFormula);
+        sim.Run(Nobody, _ => false, maxSeconds: 2);
+        Assert.Equal(FlightState.Ready, rocket.State);
+        Assert.True(Vector3.Distance(rocket.Position, stood) < 0.05f, $"{Vector3.Distance(rocket.Position, stood):0.000} m from where it stood, back in the physics");
+        sim.Step(new FlightInput(Launch: true, FullThrottle: true));
+        Assert.True(sim.Run((_, _) => new FlightInput(FullThrottle: true), _ => Vector3.Distance(rocket.Position, stood) > 1f, maxSeconds: 5), "it never lifted off");
     }
 
     // ---- Collisions under formula: part 1's and 2's collisions, nobody watching ----
@@ -789,8 +814,8 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
 
     /// <summary>
     /// Who the rule wants in the physics, by brute force (every vessel against every one kept, pass
-    /// after pass, as <see cref="Unwatched"/>'s doc says, with none of its grid): the flown one, one
-    /// waiting on the pad or landed but not yet at rest, and whatever is within reach of one of
+    /// after pass, as <see cref="Unwatched"/>'s doc says, with none of its grid): the flown one, and
+    /// whatever is within reach of one of
     /// those kept (the handover distance plus their closing among the stars times the lead; that
     /// times the hysteresis for one in the physics, as <paramref name="inPhysics"/> had it as the
     /// step began). The main view's camera is kept far off by the tests that ask this.
@@ -798,8 +823,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
     private static HashSet<Vessel> Wanted(Flight flight, IReadOnlySet<Vessel> inPhysics)
     {
         var world = flight.WorldVessels.Where(v => v.State != FlightState.Crashed).ToArray();
-        var kept = world.Where(v => v == flight.Controlled || v.State == FlightState.Ready
-            || (inPhysics.Contains(v) && v.State == FlightState.Landed && !v.Craft.Frozen)).ToHashSet();
+        var kept = world.Where(v => v == flight.Controlled).ToHashSet();
         for (var grew = true; grew;)
         {
             grew = false;
@@ -1026,7 +1050,7 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
         Assert.True(far.Length >= 50, $"only {far.Length} loaded under formula");
         Assert.All(far, v => Assert.True(v.Craft.Removed, $"{v.Id} has a body"));
         Assert.All(flight.WorldVessels.Where(v => v.Id < world.Vessels.Count), v =>
-            Assert.Equal(Unwatched.MayLoadOnFormula(world.Vessels.Single(s => s.Id == v.Id), GroundBody.Planet, LaunchSites.Home.Pad, new HashSet<int>()), v.OnFormula));
+            Assert.Equal(Unwatched.MayLoadOnFormula(world.Vessels.Single(s => s.Id == v.Id), GroundBody.Planet, LaunchSites.Home.Pad), v.OnFormula));
         output.WriteLine($"the nearest under formula {far.Min(v => Vector3.Distance(v.CentreOfMass, LaunchSites.Home.Pad)) / 1000f:0.0} km from the pad, "
             + $"the furthest in the physics {flight.WorldVessels.Where(v => !v.OnFormula).Max(v => Vector3.Distance(v.CentreOfMass, LaunchSites.Home.Pad)) / 1000f:0.0} km");
 
@@ -1042,11 +1066,12 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void One_afloat_with_an_end_over_a_floe_loads_in_the_physics_not_under_formula()
+    public void One_afloat_with_an_end_over_a_floe_loads_under_formula_aboard_it()
     {
         // Afloat beside a floe (the one furthest from the pad), lying with its top end over the
-        // floe's edge: restored, the floe would board it (and carry it), so it may not load under
-        // formula. The same afloat drawn away along its way, clear of every floe, may.
+        // floe's edge: it loads under formula (nothing holds it in the physics), aboard the floe,
+        // which carries it as the physics would once it is restored there (RocketPhysics.Restore).
+        // The same afloat drawn away along its way, clear of every floe, is aboard nothing.
         Rafts.Time = 0.0;
         var floe = Floes.All.MaxBy(f => Vector3.Distance(f.Centre, LaunchSites.Home.Pad))!;
         floe.Set(0.0);
@@ -1060,12 +1085,16 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
         var at = top - nose * height;
         at += up * Vector3.Dot(water - at, up);
         var afloat = Drops.Placed(floe.Centre, floe.Heading, 0f, legsOut: false) with { State = FlightState.Floating, Position = at, Rotation = lying, Velocity = Vector3.Zero };
-        Assert.False(Unwatched.MayLoadOnFormula(afloat, GroundBody.Planet, LaunchSites.Home.Pad, new HashSet<int>()), "afloat with an end over a floe, it may load under formula");
-
-        var clear = false;
-        for (var away = 10f; away <= 400f && !clear; away += 10f)
-            clear = Unwatched.MayLoadOnFormula(afloat with { Position = afloat.Position - nose * away }, GroundBody.Planet, LaunchSites.Home.Pad, new HashSet<int>());
-        Assert.True(clear, "drawn away from the floe, clear of every raft, it still may not load under formula");
+        Assert.True(Unwatched.MayLoadOnFormula(afloat, GroundBody.Planet, LaunchSites.Home.Pad), "afloat by a floe far from the pad, it may not load under formula");
+        Vessel Loaded(VesselState state)
+        {
+            using var sim = new Simulation(world: new WorldState { Vessels = [state with { Id = 0 }], NextVesselId = 1 });
+            var v = Get(sim, 0);
+            Assert.True(v.OnFormula);
+            return v;
+        }
+        Assert.Same(floe, Loaded(afloat).AboardUnderFormula?.Raft);
+        Assert.Null(Loaded(afloat with { Position = afloat.Position - nose * 400f }).AboardUnderFormula);
     }
 
     [Fact]

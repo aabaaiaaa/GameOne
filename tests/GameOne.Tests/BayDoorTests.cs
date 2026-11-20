@@ -387,11 +387,12 @@ public sealed class BayDoorTests(ITestOutputHelper output)
             output.WriteLine($"door {door}: stopped at {float.RadiansToDegrees(lander.Craft.DoorStops[door]):0.0}°, its ramp's tip {tip:0.000} m over the ground");
             Assert.True(tip > -0.01f, "a ramp is in the ground"); // the formula sets it down upright (it never tips): over a slope, the upslope ramp rests on it, the other hangs over it
         }
-        // Woken in the physics, it settles onto the slope on its legs, and lands again: each ramp
+        // Woken in the physics (watched, so it stays there), it settles onto the slope on its legs, and lands again: each ramp
         // is on the ground, none in it.
         sim.Physics.Wake(lander.Craft);
         var swung = Swings(lander);
-        sim.Run((_, _) => { swung.Next(); return default; }, _ => lander.State == FlightState.Crashed || lander.Craft.Frozen && lander.Craft.DoorsOpen, maxSeconds: 20);
+        Vessel[] watched = [lander];
+        sim.Run((_, _) => { swung.Next(); return new FlightInput(Watched: watched); }, _ => lander.State == FlightState.Crashed || lander.Craft.Frozen && lander.Craft.DoorsOpen, maxSeconds: 20);
         output.WriteLine($"woken: {lander.State}, moved {Vector3.Distance(at, lander.Position) * 100:0.00} cm, leaning {lander.TiltDegrees:0.00}°; its doors swung at most {swung.Most:0.0000} rad a frame");
         Assert.Equal(FlightState.Landed, lander.State);
         Assert.True(lander.Craft.DoorsOpen);

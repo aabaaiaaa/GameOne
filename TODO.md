@@ -370,15 +370,6 @@ frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
   and knowing when one in the physics has changed its orbit (its float noise every step). Measured
   first: in Release, with a thousand satellites under formula, the map takes about 0.6 ms a frame
   at the 16 km zoom and 0.1 ms all the way out. To discuss before building.
-- **To try: a plunge into shallow water by formula** (a performance idea, from collisions part
-  3, 2026-11-08). A vessel under formula coming down into water shallower than its plunge's
-  reach (`Formula.PlungeReach`, 1.5, times its draft and feet) is handed back to the physics at
-  the surface, as a 1-D plunge with the formula's drag missed Jolt's (feet on the seabed at
-  10 m): it costs a body, its tiles and the water's slices until it settles and freezes, though
-  nobody watches it. And `PlungeReach` was tuned on the booster alone. Would gain: no body for
-  it at all. Costs or risks: the plunge must end as Jolt's does (afloat, or landed or wrecked on
-  the seabed) for every vessel's draft; until then the hand-back is the safe outcome. To discuss
-  before building.
 - **To try: the formula's ground read low and fast** (a performance idea, from collisions part
   3, 2026-11-08). Under formula, a vessel low over the ground or the sea reads what is under it
   along each step at points no more than 8 m apart (the smallest floe's width), each of its

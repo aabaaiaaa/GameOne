@@ -888,17 +888,20 @@ internal sealed partial class Flight : IDisposable
         _nextId = world.NextVesselId;
         var kept = world.Vessels.Where(s => !goes.Contains(s)).ToArray();
         var (focusBody, focus) = flightStarts || flown is null ? (SitesBody, Site.Pad) : (Bodies.Named(flown.Body), flown.CentreOfMass.ToSingle());
-        var partedFrom = world.Vessels.Where(s => s.PartingFrom is not null).Select(s => s.PartingFrom!.Value).ToHashSet();
         foreach (var state in kept)
             _world.Add(new Vessel(_worlds, _sounds, state, WorldTime,
-                (flightStarts || !ReferenceEquals(state, flown)) && Unwatched.MayLoadOnFormula(state, focusBody, focus, partedFrom) ? WorldTime : null));
+                (flightStarts || !ReferenceEquals(state, flown)) && Unwatched.MayLoadOnFormula(state, focusBody, focus) ? WorldTime : null));
         _worldChanges++;
-        // Parts saved still parting from each other go on parting, once both are back (in the one
-        // physics: parts still parting are never loaded under formula, and are at one body).
+        // Parts saved still parting from each other go on parting: at once if both are back in one
+        // physics, else as both are (one loaded under formula: see Vessel.PartingWith).
         foreach (var state in kept)
-            if (state.PartingFrom is { } from && _world.FirstOrDefault(v => v.Id == from) is { Physics: { } physics } other
-                && _world.First(v => v.Id == state.Id) is { } part && part.Physics == physics)
-                physics.Part(part.Craft, other.Craft);
+            if (state.PartingFrom is { } from && _world.FirstOrDefault(v => v.Id == from) is { } other && _world.First(v => v.Id == state.Id) is { } part)
+            {
+                if (other.Physics is { } physics && part.Physics == physics)
+                    physics.Part(part.Craft, other.Craft);
+                else
+                    (part.PartingWith, other.PartingWith) = (other, part);
+            }
         _nextId = Math.Max(_nextId, _world.Count == 0 ? 0 : _world.Max(v => v.Id) + 1);
         // Each vessel's landing lights start as its own place and time have them (nothing saved).
         for (var i = 0; i < _world.Count; i++)

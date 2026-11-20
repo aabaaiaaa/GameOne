@@ -522,8 +522,12 @@ public sealed class DeckLandingTests(ITestOutputHelper output)
         state = state with { Position = state.Position - along * (length / 2f) };
         using var sim = new Simulation(Mission.ReachOrbit, world: new WorldState { Vessels = [state], NextVesselId = 1 });
         var booster = Dropped(sim);
+        // Watched, so it is in the physics (far from the pad, it loads under formula), whose
+        // judging against the hull's side this is.
+        sim.Flight.BringIn(booster);
+        Pilot watching = (_, _) => new FlightInput(Watched: [booster]);
         var (against, grounded) = (0, 0);
-        sim.Run(Nobody, _ =>
+        sim.Run(watching, _ =>
         {
             var gap = Vector3.Dot(booster.CentreOfMass - Rafts.Ship.Current.Position, across) - Scene.DroneShipHalfBeam - radius;
             if (booster.State == FlightState.Flying && booster.Craft.Submerged > 0f && gap < 0.12f)
@@ -538,7 +542,7 @@ public sealed class DeckLandingTests(ITestOutputHelper output)
         Assert.True(against > 10, "it was never afloat against the side: this shows nothing");
         Assert.Equal(0, grounded);
         Assert.Equal(FlightState.Floating, booster.State);
-        Assert.True(sim.Run(Nobody, _ => booster.Craft.Frozen, maxSeconds: 30), "it never froze afloat");
+        Assert.True(sim.Run(watching, _ => booster.Craft.Frozen, maxSeconds: 30), "it never froze afloat");
     }
 
     [Fact]
@@ -615,8 +619,12 @@ public sealed class DeckLandingTests(ITestOutputHelper output)
         state = state with { Position = state.Position - along * (length / 2f) };
         using var sim = new Simulation(Mission.ReachOrbit, world: new WorldState { Vessels = [state], NextVesselId = 1 });
         var booster = Dropped(sim);
+        // Watched, so it is in the physics (far from the pad, it loads under formula), whose
+        // judging against the hull's side this is.
+        sim.Flight.BringIn(booster);
+        Pilot watching = (_, _) => new FlightInput(Watched: [booster]);
         var afloat = false;
-        sim.Run(Nobody, _ =>
+        sim.Run(watching, _ =>
         {
             afloat |= booster.Craft.Submerged > 0f;
             return booster.State != FlightState.Flying;

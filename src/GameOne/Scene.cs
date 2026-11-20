@@ -472,6 +472,13 @@ internal static class Scene
     // (on its feet, or its bell), judged by their limits; leaning further, by its hull's, and it lies down.
     public const float FormulaStepSeconds = 0.1f;
     public const float FormulaUprightDegrees = 15f;
+    // Under formula, a vessel splashing down into water too shallow for its plunge to stop it short
+    // of the seabed comes onto the seabed at this share of its speed into the water, and is judged
+    // there by the ground's rules (see Formula's Judge). Its hull is still sinking faster until it
+    // floats, so the share is over 1: the physics brings a booster in at 2 m/s onto the seabed
+    // 7.5 m down at 5.6 m/s and 10 m down at 2.6, and one in at 10.8 m/s 3 m down at 12.2 (the
+    // formula's tests), and any share from 0.6 to 3 gives each the physics' outcome.
+    public const float FormulaSeabedSpeedShare = 1.2f;
     // Two vessels under formula colliding (see Unwatched.FindCollisions) are looked for this often
     // (game seconds), each check over the interval ahead to the next: a few times a game second
     // at most, and short enough that their paths over it are near enough

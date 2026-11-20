@@ -393,7 +393,7 @@ public sealed class HitTests(ITestOutputHelper output)
         var settled = sim.Run(Nobody, _ =>
         {
             woken |= !first.Craft.Frozen || !second.Craft.Frozen;
-            return woken && vessels.All(v => v.Craft.Frozen);
+            return woken && first.Craft.Frozen && second.Craft.Frozen && upper.Craft.Frozen;
         }, maxSeconds: 30);
         output.WriteLine($"woken {woken}, all frozen again {settled}: upper {upper.State} {upper.CrashReason}, {upper.Ground:0.00} m up; "
             + $"under it {first.State} and {second.State}, moved {Vector3.Distance(first.Position, a.Position.ToSingle()):0.000} and {Vector3.Distance(second.Position, b.Position.ToSingle()):0.000} m");

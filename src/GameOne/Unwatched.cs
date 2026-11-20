@@ -6,9 +6,9 @@ namespace GameOne;
 /// Who is in the physics, decided each flight step (<see cref="Update"/>): the witnessed (the
 /// flown vessel, the small views', the main view's near its camera), and whatever could come within
 /// <see cref="Scene.HandoverDistance"/> of something in the physics, or of the main view's camera,
-/// within <see cref="Scene.HandoverSeconds"/> at their closing speed now. Always in the physics
-/// too: one still parting from another, one still settling in the water, and one the formula
-/// can't move yet. Every other vessel leaves it (<see cref="Vessel.LeavePhysics"/>), to be moved by
+/// within <see cref="Scene.HandoverSeconds"/> at their closing speed now. Nothing else: whatever one
+/// nobody watches is doing (parting, settling in the water, on its pad, landed, aboard a raft), the
+/// formula plays it out. Every other vessel leaves it (<see cref="Vessel.LeavePhysics"/>), to be moved by
 /// formula (<see cref="Formula.Advance"/>) at no cost to Jolt, and comes back
 /// (<see cref="Vessel.ReturnToPhysics"/>) where the formula has it, before anything in the
 /// physics could hit it or the camera come on it. Chosen per body: each vessel is at its own
@@ -39,8 +39,8 @@ internal sealed class Unwatched(Flight flight)
     private readonly Flight _flight = flight;
 
     // This step's choice, by each vessel's place in the world's list: whether it is to be in the
-    // physics, how soon it is needed there (game seconds; 0 for one witnessed or the formula can't
-    // move), and its velocity among the stars (what a pair's closing is measured by). Sized for a
+    // physics, how soon it is needed there (game seconds; 0 for one witnessed), and its velocity
+    // among the stars (what a pair's closing is measured by). Sized for a
     // full world and grown only past it, so a step allocates nothing.
     private bool[] _wanted = new bool[Flight.Capacity + 1];
     private float[] _due = new float[Flight.Capacity + 1];
@@ -120,75 +120,26 @@ internal sealed class Unwatched(Flight flight)
     /// under formula, with no body (see <see cref="Vessel"/>'s restoring constructor):
     /// it would leave the physics in the world's first step anyway, and making its body only to
     /// take it out then would cost that step, for a world of a thousand, far over a frame's budget.
-    /// So only one that nothing would hold in the physics (<see cref="MustStay"/>'s cases, judged
-    /// from what was saved): flying clear of the ground and the water, or landed or afloat (it
-    /// comes back still, as one restored frozen does), but not landed over the sea, nor afloat with
-    /// any of it over a raft (either may be aboard one, which carries it), not parting from another or another parting from it
-    /// (<paramref name="partedFrom"/>), and at another body than the pad's or further from the pad
-    /// than the first step's reach, the camera's view's hold and the handover's from what is there
-    /// (as far as their closing could take it in the lead), with room. Anything the first step wants
-    /// after all (one near something brought in) comes back as any wanted one does. Its body is its
-    /// own (<see cref="VesselState.Body"/>), whose ground and sea it is judged by.
+    /// So any but a wreck that the first step wouldn't hold in the physics by what is near it: at
+    /// another body than the pad's, or further from the pad than the first step's reach, the
+    /// camera's view's hold and the handover's from what is there (as far as their closing could
+    /// take it in the lead), with room. Whatever it is doing, the formula plays it out from there
+    /// (on its pad, landed, afloat or aboard a raft, settling in the water, parting from another:
+    /// see <see cref="Formula"/>). Anything the first step wants after all (one near something
+    /// brought in) comes back as any wanted one does. Its body is its own
+    /// (<see cref="VesselState.Body"/>).
     /// </summary>
-    internal static bool MayLoadOnFormula(VesselState state, GroundBody padBody, Vector3 pad, IReadOnlySet<int> partedFrom)
+    internal static bool MayLoadOnFormula(VesselState state, GroundBody padBody, Vector3 pad)
     {
-        var body = GameOne.Bodies.Named(state.Body);
-        if (state.PartingFrom is not null || partedFrom.Contains(state.Id))
+        if (state.State == FlightState.Crashed)
             return false;
-        var at = state.CentreOfMass.ToSingle();
-        switch (state.State)
-        {
-            case FlightState.Landed when body.IsSea(body.Up(at)):
-                return false;
-            case FlightState.Floating when body.HasSea && OverARaft(state):
-                return false; // restored, a raft would board it (and the physics carry it): see RocketPhysics.Restore
-            case FlightState.Landed or FlightState.Floating:
-                break;
-            case FlightState.Flying:
-                // Clear of the ground and the water by its own length and more, so neither touching
-                // nor settling in the water (both of which the physics plays out).
-                if (body.SurfaceAltitude(at) < 2f * RocketGeometry.StackHeight(state.Vehicle, state.First, state.Last) + 50f)
-                    return false;
-                break;
-            default:
-                return false; // on the pad, waiting to launch
-        }
+        var body = GameOne.Bodies.Named(state.Body);
         if (body != padBody)
             return true; // nothing is near it in the first step: the new rocket is at another body
+        var at = state.CentreOfMass.ToSingle();
         var closing = (body.AmongStars(at, state.Velocity.ToSingle()) - body.AmongStars(pad, Vector3.Zero)).Length();
         var reach = Scene.HandoverHysteresis * (Scene.NearByDistance + Scene.HandoverDistance + closing * Scene.HandoverSeconds);
         return Vector3.DistanceSquared(at, pad) > 4f * reach * reach; // twice it: room for a chain of a few near each other
-    }
-
-    /// <summary>
-    /// Whether any of <paramref name="state"/>'s body is over a raft (the drone ship's deck or a
-    /// floe, as the rafts are at the world's time: Flight's Load sets the waves first): points
-    /// down its axis, from its bell's bottom to its top, and round each as far out as its widest
-    /// reaches (its feet's, its legs out), a few metres apart, so one lying in the water with only
-    /// an end or a side over a floe's edge is found, as the physics' own low points would find it.
-    /// </summary>
-    private static bool OverARaft(VesselState state)
-    {
-        var (vehicle, first, last) = (state.Vehicle, state.First, state.Last);
-        var bottom = -vehicle.Stages[first].BellHeight;
-        var top = RocketGeometry.StackHeight(vehicle, first, last);
-        var widest = 0f;
-        for (var i = first; i <= last; i++)
-            widest = MathF.Max(widest, MathF.Max(vehicle.Stages[i].Radius, vehicle.Stages[i].BellRadius));
-        if (vehicle.Stages[first].Legs && state.LegDeploy > 0f)
-        {
-            var foot = RocketGeometry.Foot(vehicle.Stages[first].LegGeometry, 0);
-            widest = MathF.Max(widest, MathF.Sqrt(foot.X * foot.X + foot.Z * foot.Z));
-        }
-        const int Along = 6;
-        for (var k = 0; k <= Along; k++)
-        {
-            var y = bottom + (top - bottom) * k / Along;
-            foreach (var (x, z) in (ReadOnlySpan<(float, float)>)[(0f, 0f), (1f, 0f), (-1f, 0f), (0f, 1f), (0f, -1f)])
-                if (Rafts.Under(state.Position.ToSingle() + Vector3.Transform(new Vector3(x * widest, y, z * widest), state.Rotation)) is not null)
-                    return true;
-        }
-        return false;
     }
 
     /// <summary>
@@ -202,13 +153,13 @@ internal sealed class Unwatched(Flight flight)
     {
         if (!v.OnFormula)
             return;
-        v.ReturnToPhysics(now);
+        v.ReturnToPhysics(now, _flight.WorldVessels);
         for (var k = 0; k < _collisionCount; k++)
         {
             var other = _collisions[k].A == v ? _collisions[k].B : _collisions[k].B == v ? _collisions[k].A : null;
             if (other is not null && Whole(other))
             {
-                other.ReturnToPhysics(now);
+                other.ReturnToPhysics(now, _flight.WorldVessels);
                 return; // each in one at most
             }
         }
@@ -263,7 +214,8 @@ internal sealed class Unwatched(Flight flight)
         _update++;
         (_keptCount, _fastCount) = (0, 0);
 
-        // Those that must be in the physics, whatever is near them.
+        // The witnessed: in the physics whatever is near them. Nothing else is, but for what is near
+        // them (below): whatever one nobody watches is doing, the formula plays it out.
         var flown = _flight.Controlled;
         var atBody = cameraBody ?? flown.Body; // the camera's
         var inView = _flight.InViewVessels;
@@ -283,7 +235,7 @@ internal sealed class Unwatched(Flight flight)
                 || (!v.OnFormula && v.Body == atBody && Vector3.DistanceSquared(v.CentreOfMass, camera) <= ViewHold * ViewHold && WasViewHeld(v));
             if (viewed)
                 _viewHeldNow[_viewHeldNowCount++] = v;
-            if (viewed || v == flown || Flight.IsWatched(v, watched) || MustStay(v))
+            if (viewed || v == flown || Flight.IsWatched(v, watched))
                 Keep(i, v, 0f);
         }
         (_viewHeld, _viewHeldNow, _viewHeldCount) = (_viewHeldNow, _viewHeld, _viewHeldNowCount);
@@ -317,21 +269,18 @@ internal sealed class Unwatched(Flight flight)
         for (var i = 0; i < count; i++)
             if (!_wanted[i] && !world[i].OnFormula && world[i].State != FlightState.Crashed)
             {
-                world[i].LeavePhysics(now);
+                world[i].LeavePhysics(now, world);
                 _joined |= world[i].OnFormula;
             }
 
         // In, each into its own body's physics (made for it if that has none): the flown one and
         // the watched at once (a view of it, or flying it, can't wait). Both
         // are brought in as they are switched to or given a view (Flight.BringIn); this is the
-        // backstop for any watched another way (the tests' FlightInput.Watched). So does one the
-        // formula needs the physics for (Vessel.NeedsPhysics): come down on a raft (the deck
-        // heaves and the floe drifts from under it from that step, so behind the queue it would be
-        // restored off the deck, not on it), or handed back where it stands. The rest a few
+        // backstop for any watched another way (the tests' FlightInput.Watched). The rest a few
         // a step, soonest needed first. Each brings the other of a collision under formula it is in
         // with it (see Return). The few a step are every body's together, soonest first.
         for (var i = 0; i < count; i++)
-            if (_wanted[i] && world[i].OnFormula && (world[i] == flown || Flight.IsWatched(world[i], watched) || world[i].NeedsPhysics))
+            if (_wanted[i] && world[i].OnFormula && (world[i] == flown || Flight.IsWatched(world[i], watched)))
                 Return(world[i], now);
         for (var n = 0; n < Scene.HandoversInPerStep; n++)
         {
@@ -684,37 +633,6 @@ internal sealed class Unwatched(Flight flight)
             if (_viewHeld[k] == v)
                 return true;
         return false;
-    }
-
-    /// <summary>
-    /// Whether <paramref name="v"/> must stay in the physics whoever is near: still parting from
-    /// what it came off (the two are told apart only by their bodies: see Craft.PartingFrom),
-    /// handed back by the formula and still playing that out (Vessel.PlayingOut),
-    /// still settling in the water, or doing what the formula doesn't move: on the pad, on the
-    /// ground (or another vessel) but not yet at rest (landed and frozen), aboard a raft (which
-    /// carries it). The formula flies the rest (Formula.Advance): on its orbit with its engine off, in the air, burning,
-    /// and its touch, judged itself. Under formula its stand-in body's flags are as it left
-    /// (flying: aboard nothing, parting from nothing), so only one the formula itself hands
-    /// back must come back (Vessel.NeedsPhysics): come down on a raft, for the raft to carry it, or
-    /// one whose plunge onto a shallow seabed the physics is to play.
-    /// </summary>
-    private static bool MustStay(Vessel v)
-    {
-        if (v.OnFormula)
-            return v.NeedsPhysics;
-        if (v.Craft.PartingFrom is not null || v.Craft.Settling || v.PlayingOut)
-            return true;
-        return v.State switch
-        {
-            // Flying clear of everything, the formula flies it; on something (its feet, bell or
-            // body on the ground, or touching another vessel), the physics settles it there.
-            FlightState.Flying => v.Grounded || v.Touching,
-            // Landed or afloat it stays where it is in the ground's frame: once the physics has it
-            // at rest (frozen), so it goes as it would stay, and not on a raft, which moves. (A raft
-            // carries only one frozen aboard it, but one landed on it may not be frozen yet.)
-            FlightState.Landed or FlightState.Floating => !v.Craft.Frozen || v.Craft.Aboard is not null,
-            _ => true, // on the pad, waiting to launch
-        };
     }
 
     /// <summary>

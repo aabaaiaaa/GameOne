@@ -381,7 +381,7 @@ internal sealed partial class Flight
     /// </summary>
     private void DropCut(Vessel v, double from, ref double to)
     {
-        if (!v.OnFormula || v.State != FlightState.Flying || v.Motion.Stepping || v.Motion.Held || v.EngineLit)
+        if (!v.OnFormula || v.State != FlightState.Flying || v.Motion.Stepping || v.EngineLit)
             return; // stepped (in the air, or burning) it holds the warp at the frame's start: no way on its orbit to cut at
         if (Formula.ComesDownAt(v.Motion.OnOrbit, Formula.FloorRadius(v)) is not { } down)
             return;
@@ -462,7 +462,11 @@ internal sealed partial class Flight
         _bodiesAt = WorldTime; // nothing in the physics is behind: it isn't stepped
         TakeChoices(input);
         RunVessels(dt, input);
-        Rafts.Time = WorldTime; // the rafts' poses, which the physics sets as it steps, at the window's end
+        // The rafts' poses at the window's end, which the physics sets as it steps: the floes as each
+        // is asked of (Rafts.Now), the ships here, so a touch on a deck is judged as the deck is then.
+        Rafts.Time = WorldTime;
+        for (var i = 0; i < Rafts.Ships.Count; i++) // by index: a foreach over the interface would box its enumerator
+            Rafts.Now(Rafts.Ships[i]);
         FormulaCollisions.Begin(from);
         Unwatched.Move();
         FormulaCollisions.Judge(from, WorldTime);
@@ -493,7 +497,7 @@ internal sealed partial class Flight
         var at = WorldTime - _worlds.Lag;
         _worlds.FlushWrecks();
         for (var i = 0; i < _world.Count; i++)
-            _world[i].LeavePhysics(at);
+            _world[i].LeavePhysics(at, _world);
         _worlds.ResetLag();
         _underFormula = true;
     }
