@@ -1552,20 +1552,20 @@ internal sealed partial class Flight : IDisposable
         _frames++;
         _realTime += realSeconds;
         // A vessel switched to (or carried on) last frame: its body's physics made now if it isn't
-        // (behind the link-up drawn since), and the vessel flown in it.
+        // (behind the link-up drawn since), and the vessel flown in it; at a formula's rate, once
+        // its body's physics made ahead is ready (see MadeFor).
         var given = input;
         if (LinkUp.Due(_frames))
         {
             var vessel = LinkUp.Vessel!;
-            if (CanFly(vessel) && _world.Contains(vessel))
+            if (!CanFly(vessel) || !_world.Contains(vessel))
+                LinkUp.Cancel();
+            else if (MadeFor(vessel.Body))
             {
-                MakeFor(vessel.Body);
                 Fly(vessel);
                 LinkUp.Ready(_realTime);
                 given = ForTheVesselLeft(input);
             }
-            else
-                LinkUp.Cancel();
         }
         // And each small view given to a vessel at a body with no physics, once drawn with its
         // link-up (the frame after it was opened: see OpenView): that body's physics made now,
@@ -1574,14 +1574,13 @@ internal sealed partial class Flight : IDisposable
             if (link.Due(_frames))
             {
                 var vessel = link.Vessel!;
-                if (vessel.State != FlightState.Crashed && _world.Contains(vessel))
+                if (vessel.State == FlightState.Crashed || !_world.Contains(vessel))
+                    link.Cancel();
+                else if (MadeFor(vessel.Body))
                 {
-                    MakeFor(vessel.Body);
                     BringIn(vessel);
                     link.Ready(_realTime);
                 }
-                else
-                    link.Cancel();
             }
         // The main camera put on another vessel since the last frame, or taken off one (its link-up
         // let go before it is due: nothing made for it); one no longer in the world, left over from
@@ -1592,28 +1591,27 @@ internal sealed partial class Flight : IDisposable
         if (WatchLink.Due(_frames))
         {
             var vessel = WatchLink.Vessel!;
-            if (vessel.State != FlightState.Crashed && _world.Contains(vessel))
+            if (vessel.State == FlightState.Crashed || !_world.Contains(vessel))
+                WatchLink.Cancel();
+            else if (MadeFor(vessel.Body))
             {
-                MakeFor(vessel.Body);
                 BringIn(vessel);
                 WatchLink.Ready(_realTime);
             }
-            else
-                WatchLink.Cancel();
         }
         // Who holds the warp to the physics' top rate, and what drops it there, before the keys
         // are taken (see Gate, DropFor): dropped, the frame runs in the physics, its input taken there.
         ForgetNodesDropped();
         ForgetWarpWarned();
-        Gate(input.Watched, watching);
+        Gate(WarpWitnessed(input.Watched, watching));
         var drop = DropFor(given);
         if (drop is { } reason)
-            DropToPhysics(reason, WarpHeldBy ?? Controlled);
+            DropToPhysics(reason.Reason, reason.Of);
         // Slowed, the game's rate is the slow-down's, not the player's to change. Warping to a
-        // point, either key ends it, at normal speed. Held, or with a drop's input in the frame
-        // (so it is taken in the physics, at whatever rate it was asked from), faster goes no
-        // further than the physics' top rate, nor does a warp to a point begin past it.
-        var held = drop is not null; // WarpHeldBy holding it is a drop too (see DropFor)
+        // point, either key ends it, at normal speed. Held, with a fast collision coming, or with
+        // a drop's input in the frame (so it is taken in the physics, at whatever rate it was asked
+        // from), faster goes no further than the physics' top rate, nor does a warp to a point begin past it.
+        var held = drop is not null || _collisionHolds; // WarpHeldBy holding it is a drop too (see DropFor)
         if ((input.Slower || input.Faster) && _warpTo is not null)
             DropWarp();
         else
@@ -2007,12 +2005,23 @@ internal sealed partial class Flight : IDisposable
     /// </summary>
     private void SwitchToNext()
     {
+        if (NextToFly() is { } next)
+            SwitchTo(next);
+    }
+
+    /// <summary>The next of the flown vessel's flight's vessels after it that can be flown (<see cref="Flyable"/>), if there is one: what <see cref="FlightInput.SwitchVessel"/> flies.</summary>
+    private Vessel? NextToFly()
+    {
         var vessels = FlownFlight;
         var at = vessels.IndexOf(Controlled);
         for (var step = 1; step <= vessels.Count; step++)
-            if (SwitchTo(vessels[(at + step) % vessels.Count]))
-                return;
+            if (vessels[(at + step) % vessels.Count] is var next && Flyable(next))
+                return next;
+        return null;
     }
+
+    /// <summary>Whether <paramref name="vessel"/> may be switched to (<see cref="SwitchTo"/>): another vessel in the world that can be flown.</summary>
+    private bool Flyable(Vessel vessel) => vessel != Controlled && CanFly(vessel) && _world.Contains(vessel);
 
     /// <summary>
     /// Hands the controls to <paramref name="vessel"/>, if it is another one in the world that can
@@ -2023,7 +2032,7 @@ internal sealed partial class Flight : IDisposable
     /// </summary>
     private bool SwitchTo(Vessel vessel)
     {
-        if (vessel == Controlled || !CanFly(vessel) || !_world.Contains(vessel))
+        if (!Flyable(vessel))
             return false;
         if (LinkUp.Waiting && LinkUp.Vessel == vessel)
             return true; // already being linked to: its link-up goes on as it began, no longer for a second click
@@ -2249,16 +2258,23 @@ internal sealed partial class Flight : IDisposable
     }
 
     /// <summary>
-    /// <paramref name="body"/>'s physics for a link-up due (a vessel flown, or given a view or the
-    /// main camera): made now, behind the link-up's static; but at a formula's rate, where nothing
-    /// is brought into it until the rate drops, only asked ahead (<see cref="Worlds.Ahead"/>).
+    /// Whether <paramref name="body"/>'s physics is ready for a link-up due (a vessel flown, or given
+    /// a view or the main camera): made now if it isn't, behind the link-up's static; but at a
+    /// formula's rate, where nothing is brought into it until the rate drops, only asked ahead
+    /// (<see cref="Worlds.Ahead"/>), and the link-up waits on it (false) until it is ready, so the
+    /// drop that brings the vessel into it never makes it in the frame.
     /// </summary>
-    private void MakeFor(GroundBody body)
+    private bool MadeFor(GroundBody body)
     {
-        if (ByFormula)
-            _worlds.Ahead(body);
-        else
+        if (!ByFormula)
+        {
             _worlds.Need(body);
+            return true;
+        }
+        if (_worlds.At(body) is not null)
+            return true;
+        _worlds.Ahead(body);
+        return false;
     }
 
     /// <summary>Who is in the physics, and who is moved by formula (see <see cref="GameOne.Unwatched"/>).</summary>

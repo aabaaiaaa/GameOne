@@ -102,23 +102,45 @@ public sealed class WarpWarningTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Raised_again_after_the_drop_the_same_vessel_does_not_drop_it_again()
+    public void A_collision_dropped_for_holds_the_warp_at_the_physics_top_rate_until_it_has_hit()
     {
         var (sim, flown, other) = HeadOn();
         using var _ = sim;
         var flight = sim.Flight;
         Assert.True(UntilDropped(sim));
+        // Faster pressed at once, and every few frames after: never past the physics' top rate
+        // while the collision is coming, so its slow-down plays out in full.
+        var (least, frames, highest) = (1f, 0, 0f);
+        Assert.True(sim.Run((_, _) => new FlightInput(Faster: frames++ % 10 == 0), f =>
+        {
+            highest = MathF.Max(highest, f.PlayerRate);
+            if (f.Slowed is { } slowed)
+                least = MathF.Min(least, slowed.Scale);
+            return flown.State == FlightState.Crashed && other.State == FlightState.Crashed;
+        }, maxSeconds: 60));
+        output.WriteLine($"at most {highest}x; slowed to {least:0.0000} (least {Slowdown.Least(Closing):0.0000}); {flown.CrashReason}");
+        Assert.True(highest <= Scene.PhysicsTopRate, $"warped at {highest}x with the collision coming");
+        Assert.True(least <= Slowdown.Least(Closing), "slowed down to its least scale as it hit");
+    }
+
+    [Fact]
+    public void Raised_again_after_a_near_miss_s_drop_the_same_vessel_does_not_drop_it_again()
+    {
+        var (sim, flown, other) = HeadOn(sideways: 2f * FastCollisionTests.BoosterSize + 1f);
+        using var _ = sim;
+        var flight = sim.Flight;
+        Assert.True(UntilDropped(sim, nearMisses: true));
         var drop = flight.LastDrop!.Value;
+        Assert.Equal(WarpDrop.NearMiss, drop.Reason);
         FormulaRateTests.ToTheTop(flight);
         for (var i = 0; i < 3; i++)
-            sim.Step(default);
-        output.WriteLine($"{flight.WorldTime - MeetIn:0.0} s past the meeting at {flight.PlayerRate}x; {flown.State} {flown.CrashReason}");
+            sim.Step(new FlightInput(NearMisses: true));
+        output.WriteLine($"{flight.WorldTime - MeetIn:0.0} s past the pass at {flight.PlayerRate}x; {flown.State}");
         Assert.Equal(drop, flight.LastDrop);
         Assert.Equal(Scene.TopRate, flight.PlayerRate);
-        Assert.True(flight.WorldTime > MeetIn, "the warp ran on past the meeting");
-        // Under formula, the collision judged as the formula judges it.
-        Assert.Equal(FlightState.Crashed, flown.State);
-        Assert.Equal(FlightState.Crashed, other.State);
+        Assert.True(flight.WorldTime > MeetIn, "the warp ran on past the pass");
+        Assert.Equal(FlightState.Flying, flown.State);
+        Assert.Equal(FlightState.Flying, other.State);
     }
 
     [Fact]
