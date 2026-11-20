@@ -403,8 +403,8 @@ internal sealed partial class Flight
                 (to, _cutFor) = (cut, (why, v, null, null));
             return;
         }
-        if (v.Motion.Stepping)
-            return; // stepped unlit (in the air) it holds the warp at the frame's start: no way on its orbit to cut at
+        if (v.Motion.Stepping || v.Motion.Standing)
+            return; // stepped unlit (in the air), or standing, it holds the warp at the frame's start: no way on its orbit to cut at
         if (Formula.ComesDownAt(v.Motion.OnOrbit, Formula.FloorRadius(v)) is not { } down)
             return;
         var at = Math.Max(from, down - Scene.WarpDropLeadSeconds);
@@ -524,7 +524,8 @@ internal sealed partial class Flight
     /// <summary>
     /// Moves witnessed <paramref name="v"/> (see <see cref="RuledApart"/>) by formula to world time
     /// <paramref name="to"/>, the window's end, with its rules (<see cref="Vessel.Run"/>: its holds,
-    /// the rings, the flown one's nodes and <paramref name="held"/>'s ring drag) run after each move,
+    /// the rings, its nodes, and for the flown one <paramref name="held"/>'s ring drag, its target
+    /// located as it is then: <see cref="LocateTargetAt"/>) run after each move,
     /// for the time it moved, so its aim is turned as from where it now is: burning, every formula
     /// step (<see cref="Formula.StepFor"/>), the step after each pointed as the rules last left it,
     /// so neither the thrust nor the aim is carried past what they were; coasting (on its orbit, its
@@ -532,8 +533,10 @@ internal sealed partial class Flight
     /// (see <see cref="Formula"/>), and the last at <paramref name="to"/>, so nothing is owed past
     /// the window. Its attitude is then shown as the rules left its aim. In a window of no time its
     /// rules still run, once, of no time (an engine cut there is judged against its node, as in the
-    /// physics). A vessel that can't be steered, or isn't flying under formula, is left to
-    /// <see cref="Unwatched.Move"/>.
+    /// physics). Standing where it came down burning (<see cref="FormulaMotion.Standing"/>: never at
+    /// a formula's rate while witnessed, as the gate holds the warp for it, but kept safe), it is
+    /// moved to <paramref name="to"/> at once, and its rules run once. A vessel that can't be
+    /// steered, or isn't flying under formula, is left to <see cref="Unwatched.Move"/>.
     /// </summary>
     private void BurnByFormula(Vessel v, double to, in FlightInput held)
     {
@@ -551,12 +554,39 @@ internal sealed partial class Flight
                 return;
             var dt = (float)Math.Max(0.0, end - at);
             if (flown)
-                v.Run(dt, held.Lean, held.Hold, end, FrameVelocity, HoldFloor, flown: true);
+            {
+                LocateTargetAt(end); // so a hold in the target's frame steers by the target as it is then
+                v.Run(dt, held.Lean, held.Hold, end, FrameVelocity, HoldFloor, witnessed: true);
+            }
             else
-                v.Run(dt, Vector3.Zero, null, end, Frames.VelocityIn(v.Body, v.AutoFrame, v.CentreOfMass, v.Velocity), Scene.HoldFloorSpeed);
+                v.Run(dt, Vector3.Zero, null, end, Frames.VelocityIn(v.Body, v.AutoFrame, v.CentreOfMass, v.Velocity), Scene.HoldFloorSpeed, witnessed: true);
             Formula.Advance(v, 0f, end); // shown turned to the aim its rules left (no time on)
         }
         while (to - v.Motion.Shown > LeftOverSeconds);
+    }
+
+    /// <summary>
+    /// The flown vessel's target as it is at world time <paramref name="time"/> within the window
+    /// (<see cref="TargetAt"/>, as <see cref="ResolveTarget"/> has it at each step's end): a vessel
+    /// where the formula has it then (<see cref="Formula.StateAt"/>, not moving it), a body's centre
+    /// where it is then; a place on the ground stays as it was. For the rules run along the flown
+    /// vessel's moves (<see cref="BurnByFormula"/>), so a hold in the target's frame
+    /// (<see cref="FrameVelocity"/>, <see cref="HoldFloor"/>) isn't a window behind.
+    /// </summary>
+    private void LocateTargetAt(double time)
+    {
+        if (_target is not { } target)
+            return;
+        var (vessel, index, found) = Find(target, null);
+        if (!found)
+            return;
+        if (vessel is not null)
+        {
+            var (at, moving) = Formula.StateAt(vessel, time);
+            _targetAt = Across(vessel.Body, at, moving, vessel.State == FlightState.Flying, time);
+        }
+        else if (target.Kind == TargetKind.Body)
+            _targetAt = Across(Bodies.All[index], Bodies.All[index].Centre, Vector3.Zero, true, time);
     }
 
     /// <summary>

@@ -841,8 +841,15 @@ say) stalls frames and spoils the timing.
   normal speed in the physics; a ring's click 90° off the nose turned to within a frame, and a
   ring's drag, neither dropping the warp; the fuel running out dropping it (`FuelOut`) with
   `Scene.WarpDropLeadSeconds` of burning left; a retrograde burn taking it down dropping it
-  (`Air`) that lead before it reaches the air; and a burning vessel in a small view above the air
-  holding nothing.
+  (`Air`) that lead before it reaches the air; a burning vessel in a small view above the air
+  holding nothing; a full-throttle burn of 10 s held north by the rings matching normal speed
+  (apoapsis and fuel within 0.5%, the velocity within 0.5%); a retrograde burn held in the target's
+  frame against a vessel crossing its orbit matching normal speed within 0.3 m/s (the target
+  located at each burn step: `Flight.LocateTargetAt`); a small view's vessel flying its own node
+  at the top rate (turned along the burn left, the burn counted against it); a lander standing
+  on its engine on the moon holding the warp at the physics' top rate, standing on; and a burn
+  past a node on a moon transfer at the top rate, its frames timed beside the same burn held
+  prograde (the path after the node worked out once, `Vessel.Late`).
 - **`WarpDropTests`:** the warp's drops from a formula's rate to the physics' top rate
   (`Flight.LastDrop`, a `WarpDrop`): `Scene.WarpDropLeadSeconds` ahead of an orbit coming down
   into the planet's air (`Air`) and into reach of the moon's ground (`Ground`), still above it

@@ -16,7 +16,7 @@ namespace GameOne.Tests;
 public sealed class FormulaRateTests(ITestOutputHelper output)
 {
     /// <summary>The rate key pressed <paramref name="times"/> times, each in a frame of no time (so no rate on the way runs a step of any length).</summary>
-    private static void Press(Flight flight, int times, IReadOnlyList<Vessel>? watched = null)
+    internal static void Press(Flight flight, int times, IReadOnlyList<Vessel>? watched = null)
     {
         for (var i = 0; i < times; i++)
             flight.RunFrame(0f, new FlightInput(Faster: true, Watched: watched));

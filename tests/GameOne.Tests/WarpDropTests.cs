@@ -136,7 +136,7 @@ public sealed class WarpDropTests(ITestOutputHelper output)
     }
 
     /// <summary>The lander launcher's lander alone, landed on its legs at the moon's landing spot, its bay shut (as <see cref="OnTheMoon.Lander"/> lands the upper stage).</summary>
-    private static VesselState LanderLanded()
+    internal static VesselState LanderLanded()
     {
         var vehicle = Vehicle.LanderLauncher;
         const int Lander = 2;

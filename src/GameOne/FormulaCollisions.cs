@@ -13,8 +13,9 @@ namespace GameOne;
 /// <para>Each vessel's way across the window is the cubic Hermite through its place and velocity
 /// at the window's two ends (<see cref="Begin"/>, then <see cref="Judge"/>), among the stars as its
 /// body's ground was at the window's start: good to a few centimetres over a window of orbit,
-/// whatever moved it there (Kepler, or the formula's steps), and for a burn whose thrust is the
-/// same across the window (a cubic holds a steady push's way exactly): its throttle is set as a
+/// whatever moved it there (Kepler, or the formula's steps), and for a burn kept up across the
+/// window (a cubic follows its way to millimetres over a window, though a hold turns its push each
+/// second and the push grows as the mass falls): its throttle is set as a
 /// window begins, and a window is cut where any burn runs out of fuel (Flight's NextCut), so no
 /// way across one bends inside it. Each is boxed (its two ends, padded by
 /// its reach and the most its pull bows its way off the chord, a T²/8), the boxes sorted along X

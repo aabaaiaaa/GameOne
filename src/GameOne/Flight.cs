@@ -1876,7 +1876,7 @@ internal sealed partial class Flight : IDisposable
                 if (vessel.State != FlightState.Flying)
                     continue;
                 if (!RuledApart(vessel, witnessed))
-                    vessel.Run(dt, input.Lean, input.Hold, WorldTime, FrameVelocity, HoldFloor, flown: true);
+                    vessel.Run(dt, input.Lean, input.Hold, WorldTime, FrameVelocity, HoldFloor, witnessed: true);
             }
             else if (vessel.State == FlightState.Flying && !RuledApart(vessel, witnessed))
                 vessel.Run(dt, Vector3.Zero, null, WorldTime, Frames.VelocityIn(vessel.Body, vessel.AutoFrame, vessel.CentreOfMass, vessel.Velocity), Scene.HoldFloorSpeed);
@@ -2567,16 +2567,16 @@ internal sealed partial class Flight : IDisposable
 
     /// <summary>
     /// A target's place and velocity over the ground of <paramref name="body"/> (the body it is at,
-    /// or a body's own centre), in the flown vessel's body's frame now: changed across the bodies
+    /// or a body's own centre), in the flown vessel's body's frame now (or at world time <paramref name="at"/>): changed across the bodies
     /// (<see cref="Bodies.Change"/>, in double), so the distance to it, the speed relative to it
     /// and the way to it are measured as for one at the same body.
     /// </summary>
-    private TargetPlace Across(GroundBody body, Vector3 position, Vector3 velocity, bool flying)
+    private TargetPlace Across(GroundBody body, Vector3 position, Vector3 velocity, bool flying, double? at = null)
     {
         var view = Controlled.Body;
         if (body == view)
             return new(position, velocity, flying, body, position, velocity);
-        var change = Bodies.Change(body, view, WorldTime);
+        var change = Bodies.Change(body, view, at ?? WorldTime);
         return new(change.Point(position).ToSingle(), change.Velocity(position, velocity).ToSingle(), flying, body, position, velocity);
     }
 

@@ -131,7 +131,8 @@ test covers.
   the tile worker, below normal priority too; and the two crossings into and out of the moon's
   sphere in the physics (`CrossingTests`), whose crossing frame's time is weighed against its
   neighbours' in real time; and six worlds stepped at six bodies (`BodiesInPlayTests`), whose
-  bound is on the process's private memory (Jolt's worlds are native), which the other shards move.
+  bound is on the process's private memory (Jolt's worlds are native), which the other shards move; and a burn past a node on a moon transfer at the top rate
+  (`WarpBurnTests`), whose frames are timed in real time against the same burn's without the node.
 
 ## Soak tests
 

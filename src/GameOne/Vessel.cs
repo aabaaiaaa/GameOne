@@ -62,12 +62,15 @@ internal sealed class Vessel
     private Vector3Double _trueCentre, _trueVelocity;
     private Vector3? _burnAim;                         // the next node's burn once it has begun, among the stars (as the ground was then)
     private Vector3 _burned;                           // and how much of it the engine has given since, the same way
+    private float _pushedByFormula;                    // the delta-v the formula's steps have given it since its rules last ran (see PushedByFormula)
     private double _burnStart;                         // the world time it began: how far the ground has turned from that since
     private bool _wasLit;
     private List<PathLeg>? _toNode;                    // the patched path from the anchor to the next node, kept for Planned (made with its first node)
     private (double Now, ManoeuvreChain Chain, GroundBody Body, Vector3 Burn)? _planned; // Planned's last answer, and what it was asked
     private List<PathLeg>? _afterNode;                 // the planned path on from the next node's burn, kept for Late (made once past its time)
-    private (double Now, ManoeuvreChain Chain, double At, double Until)? _afterNodeFor; // what _afterNode was worked out for, and the stretch of it looked along
+    private (double Now, ManoeuvreChain Chain, double At, double Until, bool Closed)? _afterNodeFor; // what _afterNode was worked out for (and when), and how far on it was
+    private (ManoeuvreChain Chain, double Searched, double Now, int Leg, double T)? _lateNearest; // where on _afterNode Late last found the vessel nearest, and when it last looked along the whole of it
+    private (double Now, ManoeuvreChain Chain, Vector3 At, Vector3 Moving, Vector3 Left)? _lateAnswer; // Late's last answer, and what it was asked
     private bool _matchHeld;                           // the next node matched in the last step with the engine lit (see Matched); saved, as a cut just after loading goes by it
     private bool _nodeTouching;                        // touching anything as FollowNodes last looked: the step after a touch is judged too
     private (ManoeuvreChain? Chain, bool Past) _judged; // the chain last judged with the engine off, and whether its node's time had come (see FollowNodes)
@@ -1281,44 +1284,99 @@ internal sealed class Vessel
     /// second), as one late by some time is near where the plan was that long after its burn. Along
     /// each stretch the nearest of <see cref="Scene.NodeNearestSamples"/> points is homed in on by
     /// Newton's steps, which go round a whole lap rather than stop at its ends. The path is worked out
-    /// once a step (it depends on the chain and the time alone); the nearest point every time it is
-    /// asked, as the vessel moves between.
+    /// once for the chain (it depends on the chain alone, but for the frame it is given in, its
+    /// bodies' grounds as they were when it was worked out, into which the vessel is turned), an
+    /// open one's again only once the stretch looked along has grown past it
+    /// (<see cref="LateRoomSeconds"/> more each time), so a burn stepped every second at a
+    /// formula's rate doesn't patch it afresh at every step; the nearest point every time it is
+    /// asked, as the vessel moves between, homed in on from where it last was but for a search
+    /// along the whole path every <see cref="LateSearchSeconds"/>.
     /// </remarks>
     private Vector3 Late(ManoeuvreChain chain, double now)
     {
+        // Asked twice a step (its match, then the hold) and the same until it moves: worked out once.
+        if (_lateAnswer is { } kept && kept.Now == now && ReferenceEquals(kept.Chain, chain) && kept.At == CentreOfMass && kept.Moving == Velocity)
+            return kept.Left;
+        var left = LateAfresh(chain, now);
+        _lateAnswer = (now, chain, CentreOfMass, Velocity, left);
+        return left;
+    }
+
+    private Vector3 LateAfresh(ManoeuvreChain chain, double now)
+    {
         var legs = _afterNode ??= new List<PathLeg>(Scene.PatchedLegs);
-        if (_afterNodeFor is not { } kept || kept.Now != now || !ReferenceEquals(kept.Chain, chain))
+        if (_afterNodeFor is not { } kept || !ReferenceEquals(kept.Chain, chain) || !kept.Closed && now + (now - kept.At) + 1.0 > kept.Until)
         {
             var (body, position, velocity, at) = AtNode(chain, now);
             velocity += chain.Nodes[0].DeltaV(body, position, velocity);
             // A closed orbit comes round to every point of it within a lap; any other path is
-            // looked along as far past the node again as now is.
+            // looked along as far past the node again as now is, worked out with room to grow.
             var orbit = new Orbit(body, position, velocity, findEnd: false, from: at - now);
-            var until = orbit.Closed ? at + orbit.Period : now + (now - at) + 1.0;
+            var until = orbit.Closed ? at + orbit.Period : now + 2.0 * (now - at) + LateRoomSeconds;
             Patched.Legs(body, position, velocity, now, legs, horizon: until, from: at - now);
-            kept = (now, chain, at, until);
+            kept = (now, chain, at, until, orbit.Closed);
             _afterNodeFor = kept;
+            _lateNearest = null;
+        }
+        var reach = kept.Closed ? kept.Until : now + (now - kept.At) + 1.0;
+        // The ground's turn since the path was worked out: it is among the stars as each body's
+        // ground was then, so the vessel is turned on into that, and what is left turned back.
+        var turned = now - kept.Now;
+
+        // Homed in on from where it was last found, by Newton's steps alone, while that was a
+        // full search's within LateSearchSeconds, and the steps settle inside its stretch.
+        if (_lateNearest is { } seed && ReferenceEquals(seed.Chain, chain) && seed.Leg < legs.Count && Math.Abs(now - seed.Searched) < LateSearchSeconds
+            && NearestOn(legs[seed.Leg], kept.At, reach, now, turned, seed.T) is { Settled: true } found)
+        {
+            _lateNearest = seed with { Now = now, T = found.T };
+            return found.Left;
         }
 
-        var (nearest, left) = (double.PositiveInfinity, Vector3.Zero);
+        var (nearest, left, best, bestT) = (double.PositiveInfinity, Vector3.Zero, -1, 0.0);
         for (var i = 0; i < legs.Count; i++)
         {
-            var leg = legs[i];
-            var (from, to) = (Math.Max(leg.Start, kept.At), Math.Min(leg.End, kept.Until));
-            if (to < from)
+            if (NearestOn(legs[i], kept.At, reach, now, turned, null) is not { } on || on.Distance >= nearest)
                 continue;
-            // The vessel in the frame of the body this stretch is round.
-            var (place, moving) = (CentreOfMass, Velocity);
-            if (leg.Body != Body)
-            {
-                var change = Bodies.Change(Body, leg.Body, now);
-                (place, moving) = (change.Point((Vector3Double)CentreOfMass).ToSingle(), change.Velocity((Vector3Double)CentreOfMass, (Vector3Double)Velocity).ToSingle());
-            }
-            var stars = leg.Body.AmongStars(place, moving);
-            // A stretch that is a whole lap of a closed orbit has no ends: Newton's steps go round it.
-            var lap = leg.Orbit.Closed && to - from >= leg.Orbit.Period * (1 - 1e-9) ? leg.Orbit.Period : 0.0;
+            (nearest, left, best, bestT) = (on.Distance, on.Left, i, on.T);
+        }
+        _lateNearest = best >= 0 ? (chain, now, now, best, bestT) : null;
+        return left;
+    }
+
+    /// <summary>
+    /// On <paramref name="leg"/> of the path after the next node (its stretch from
+    /// <paramref name="after"/> to <paramref name="reach"/>; worked out <paramref name="turned"/>
+    /// seconds of its body's turn ago), the point nearest the vessel at world time
+    /// <paramref name="now"/>: from <paramref name="seed"/> by Newton's steps, or with none, from the
+    /// nearest of <see cref="Scene.NodeNearestSamples"/> along it. Its time, how far it is, the burn
+    /// left there (changed into the vessel's own body's frame), and whether the steps settled
+    /// short of the stretch's ends (or anywhere round a whole lap); null for no stretch.
+    /// </summary>
+    private (double T, double Distance, Vector3 Left, bool Settled)? NearestOn(PathLeg leg, double after, double reach, double now, double turned, double? seed)
+    {
+        var (from, to) = (Math.Max(leg.Start, after), Math.Min(leg.End, reach));
+        if (to < from)
+            return null;
+        // The vessel in the frame of the body this stretch is round.
+        var (place, moving) = (CentreOfMass, Velocity);
+        if (leg.Body != Body)
+        {
+            var change = Bodies.Change(Body, leg.Body, now);
+            (place, moving) = (change.Point((Vector3Double)CentreOfMass).ToSingle(), change.Velocity((Vector3Double)CentreOfMass, (Vector3Double)Velocity).ToSingle());
+        }
+        var stars = leg.Body.AmongStars(place, moving);
+        if (turned != 0)
+            (place, stars) = (leg.Body.Turned(place, turned), leg.Body.TurnedDirection(stars, turned));
+        // A stretch that is a whole lap of a closed orbit has no ends: Newton's steps go round it.
+        var lap = leg.Orbit.Closed && to - from >= leg.Orbit.Period * (1 - 1e-9) ? leg.Orbit.Period : 0.0;
+        double t;
+        if (seed is { } s0)
+            t = lap > 0 ? from + ((s0 - from) % lap + lap) % lap : s0;
+        else
+        {
             var samples = Scene.NodeNearestSamples;
-            var (t, closest) = (from, float.PositiveInfinity);
+            var closest = float.PositiveInfinity;
+            t = from;
             for (var k = 0; k < samples; k++)
             {
                 var s = from + (to - from) * k / (lap > 0 ? samples : samples - 1);
@@ -1326,26 +1384,44 @@ internal sealed class Vessel
                 if (d < closest)
                     (t, closest) = (s, d);
             }
-            for (var step = 0; step < 8; step++)
-            {
-                var (p, v) = leg.Orbit.StateAfter(t - leg.Start);
-                var speed = v.LengthSquared();
-                if (speed < 1e-6f)
-                    break;
-                var move = Vector3.Dot(place - p, v) / speed;
-                t = lap > 0 ? from + ((t + move - from) % lap + lap) % lap : Math.Clamp(t + move, from, to);
-                if (Math.Abs(move) < 1e-6)
-                    break;
-            }
-            var (on, planned) = leg.Orbit.StateAfter(t - leg.Start);
-            var distance = Vector3.Distance(on, place);
-            if (distance >= nearest)
-                continue;
-            nearest = distance;
-            left = leg.Body == Body ? planned - stars : Bodies.Change(leg.Body, Body, now).Direction((Vector3Double)(planned - stars)).ToSingle();
         }
-        return left;
+        if (lap == 0 && (t < from || t > to))
+            return seed is null ? null : (t, double.PositiveInfinity, Vector3.Zero, false);
+        var (settled, last) = (false, double.PositiveInfinity);
+        for (var step = 0; step < 8; step++)
+        {
+            var (p, v) = leg.Orbit.StateAfter(t - leg.Start);
+            var speed = v.LengthSquared();
+            if (speed < 1e-6f)
+                break;
+            var move = Vector3.Dot(place - p, v) / speed;
+            var was = t;
+            t = lap > 0 ? from + ((t + move - from) % lap + lap) % lap : Math.Clamp(t + move, from, to);
+            last = Math.Abs(move);
+            if (last < 1e-6 || t == was) // there, or held at an end of the stretch the nearest lies past
+            {
+                settled = true;
+                break;
+            }
+        }
+        settled |= last < 1e-3; // within a thousandth of a second along it: the burn left there is as good
+        settled &= seed is null || lap > 0 || t > from && t < to || t == from && from == after; // held at its stretch's end, only the node's own: past any other, the next stretch's
+        var (on, planned) = leg.Orbit.StateAfter(t - leg.Start);
+        var off = turned != 0 ? leg.Body.TurnedDirection(planned - stars, -turned) : planned - stars;
+        var left = leg.Body == Body ? off : Bodies.Change(leg.Body, Body, now).Direction((Vector3Double)off).ToSingle();
+        return (t, Vector3.Distance(on, place), left, settled);
     }
+
+    /// <summary>How much further on than it is asked for an open path after a node is worked out (<see cref="Late"/>), so a burn past it patches it seldom.</summary>
+    private const double LateRoomSeconds = 60.0;
+
+    /// <summary>
+    /// How long (game seconds) the nearest point on the path after a node is homed in on from where
+    /// it was last found (<see cref="Late"/>), before it is looked for along the whole path again, so
+    /// one nearer on another stretch, or another lap, is found: every step for a burn stepped every
+    /// second at a formula's rate would be a full search every second.
+    /// </summary>
+    private const double LateSearchSeconds = 30.0;
 
     /// <summary>
     /// The next node, as the engine runs: lighting it begins the burn (fixing it among the stars),
@@ -1376,8 +1452,12 @@ internal sealed class Vessel
             _nodeTouching = touching;
             if (lit && !_wasLit && _burnAim is null)
                 (_burnAim, _burnStart) = (Planned(chain, now), now);
-            if (lit && _burnAim is not null)
-                _burned += Body.TurnedDirection(Up, now - _burnStart) * (Throttle * MaxAcceleration * dt);
+            // What the engine gave: in the physics its thrust over the step; under formula what the
+            // formula's steps since the last rules pushed it by (each at its own mean mass, cut where
+            // the fuel ran out: see Formula), the thrust read after a step of a second would read high.
+            var push = OnFormula ? _pushedByFormula : lit ? Throttle * MaxAcceleration * dt : 0f;
+            if (push > 0f && _burnAim is not null)
+                _burned += Body.TurnedDirection(Up, now - _burnStart) * push;
             var mayMatch = MayMatch(chain, now);
             if (lit)
                 _matchHeld = mayMatch && BurnLeft(now) is { } left && Matched(chain, left, now, _matchHeld);
@@ -1675,26 +1755,35 @@ internal sealed class Vessel
     /// none if it isn't being flown). <paramref name="now"/> is the world's time. The holds steer by
     /// <paramref name="holdVelocity"/>, its velocity in the frame in use (see <see cref="GameOne.Flight.FrameVelocity"/>),
     /// and leave the nose be below <paramref name="holdFloor"/> (see <see cref="GameOne.Flight.HoldFloor"/>).
-    /// The vessel <paramref name="flown"/> flies its nodes under formula too (at a formula's rate).
+    /// The <paramref name="witnessed"/> (the flown vessel, a small view's, the main camera's: their
+    /// rules run along their moves at a formula's rate) fly their nodes under formula too, as they
+    /// do in the physics.
     /// </summary>
-    internal void Run(float dt, Vector3 lean, Vector3? hold, double now, Vector3 holdVelocity, float holdFloor, bool flown = false)
+    internal void Run(float dt, Vector3 lean, Vector3? hold, double now, Vector3 holdVelocity, float holdFloor, bool witnessed = false)
     {
         _ignitionDelay = MathF.Max(0f, _ignitionDelay - dt);
-        // Under formula, a vessel nobody flies flies no node, nor passes one and lets it go: they
-        // wait for its pilot, as its throttle and holds go on as they were. The one flown flies its
+        // Under formula, a vessel nobody watches flies no node, nor passes one and lets it go: they
+        // wait for its pilot, as its throttle and holds go on as they were. One watched flies its
         // own, at a formula's rate as at the physics'.
-        var nodes = !OnFormula || flown;
+        var nodes = !OnFormula || witnessed;
         if (nodes)
             FollowNodes(dt, now);
+        _pushedByFormula = 0f; // counted by its nodes, if it flies them (see FollowNodes): from here on afresh
         // (Under formula the formula burns it, with its thrust: see BurnByFormula.)
         if (EngineLit && !OnFormula)
             _fuel[Stage] = MathF.Max(0f, _fuel[Stage] - Throttle * CurrentStage.FuelFlow * dt);
         // The manoeuvre hold lets go once no node is left to steer by.
         if (Hold == HoldMode.Manoeuvre && Chain is null)
             Hold = HoldMode.None;
-        // (Nor does one nobody flies steer by a node under formula: the burn left isn't worked out for it.)
+        // (Nor does one nobody watches steer by a node under formula: the burn left isn't worked out for it.)
         Steer(dt, lean, hold, holdVelocity, holdFloor, Hold == HoldMode.Manoeuvre && nodes ? BurnLeft(now) : null);
     }
+
+    /// <summary>
+    /// Under formula, the delta-v <paramref name="deltaV"/> (m/s) a formula step's thrust has just
+    /// given it, kept for its nodes to count as given (see <see cref="FollowNodes"/>).
+    /// </summary>
+    internal void PushedByFormula(float deltaV) => _pushedByFormula += deltaV;
 
     /// <summary>
     /// Under formula, burns the fuel <paramref name="seconds"/> of its engine at its throttle takes,

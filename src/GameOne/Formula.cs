@@ -227,8 +227,9 @@ internal static class Formula
     /// <paramref name="horizon"/> seconds of <paramref name="now"/> (its state's time); null if not.
     /// A look ahead, not its flight: from where it is, among the stars as its body's ground is now,
     /// its thrust kept on at its throttle while its fuel lasts (<see cref="Vessel.FuelSeconds"/>), along
-    /// its velocity held prograde, against it retrograde, else along its aim as it is (the rings', a
-    /// node's: neither turns far in a few seconds), stepped every <see cref="Scene.FormulaBurnStepSeconds"/>
+    /// its velocity among the stars held prograde, against it retrograde (whatever frame the hold is
+    /// in: the target's or the surface's velocity isn't asked), else along its aim as it is (the rings', a
+    /// node's), pointed there at once with no turning time, stepped every <see cref="Scene.FormulaBurnStepSeconds"/>
     /// by its body's pull alone (above its air there is nothing else), which is near enough over the
     /// seconds a drop's lead looks ahead.
     /// </summary>
@@ -443,6 +444,27 @@ internal static class Formula
     private static bool Held(GroundBody body, Vector3 at, Vector3Double velocity) =>
         velocity.LengthSquared() > (double)Scene.GroundTopSpeed * Scene.GroundTopSpeed && body.LowOverTheGround(at);
 
+    /// <summary>
+    /// Where the formula has <paramref name="v"/>'s centre of mass and how it moves at world time
+    /// <paramref name="time"/>, near its last move (within a window), without moving it: on its orbit
+    /// by Kepler, stepped moved on from its last step as its moves between steps are (see
+    /// <see cref="Advance"/>); landed, afloat, standing or in the physics, where it is now.
+    /// </summary>
+    internal static (Vector3 At, Vector3 Velocity) StateAt(Vessel v, double time)
+    {
+        ref var m = ref v.Motion;
+        if (!v.OnFormula || v.State != FlightState.Flying || m.Standing)
+            return (v.CentreOfMass, v.Velocity);
+        if (!m.Stepping)
+        {
+            var (at, velocity) = Along(m.OnOrbit, time);
+            return (at.ToSingle(), velocity.ToSingle());
+        }
+        var r = time - m.Time;
+        Vector3Double change = m.Change;
+        return ((m.At + m.Velocity * r + change * (r * r / 2)).ToSingle(), (m.Velocity + change * r).ToSingle());
+    }
+
     /// <summary>Where <paramref name="orbit"/> has its centre of mass and velocity at world time <paramref name="time"/>, in its body's ground's frame then.</summary>
     private static (Vector3Double At, Vector3Double Velocity) Along(in FormulaOrbit orbit, double time)
     {
@@ -542,7 +564,9 @@ internal static class Formula
             // Pushed at the step's mean mass, for as much of it as the fuel lasts.
             var (thrust, before) = (v.Throttle * v.CurrentStage.Thrust, v.Mass);
             var lasted = v.BurnByFormula(seconds);
-            next += (Vector3Double)v.Aim * (thrust / ((before + v.Mass) / 2f) * seconds * lasted);
+            var pushed = thrust / ((before + v.Mass) / 2f) * seconds * lasted;
+            next += (Vector3Double)v.Aim * pushed;
+            v.PushedByFormula(pushed);
         }
         var read = p + u * Lead(seconds);
         var drag = Scene.DragRate * v.Body.AirDensity(v.Body.Altitude(read.ToSingle()));

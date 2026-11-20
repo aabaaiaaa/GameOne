@@ -24,6 +24,14 @@ public sealed class WarpBurnTests(ITestOutputHelper output)
     {
         var com = state.CentreOfMass.ToSingle();
         var way = Vector3.Normalize(Planet.AmongStars(com, state.Velocity.ToSingle())) * (hold == HoldMode.Retrograde ? -1f : 1f);
+        return Burning(state, throttle, hold, way, fuel);
+    }
+
+    /// <summary><paramref name="state"/> burning at <paramref name="throttle"/>, its nose along <paramref name="way"/>, holding <paramref name="hold"/>.</summary>
+    private static VesselState Burning(VesselState state, float throttle, HoldMode hold, Vector3 way, float? fuel = null)
+    {
+        var com = state.CentreOfMass.ToSingle();
+        way = Vector3.Normalize(way);
         var rotation = UnwatchedTests.RotationTo(way);
         var tanks = (float[])state.Fuel.Clone();
         if (fuel is { } kg)
@@ -233,5 +241,189 @@ public sealed class WarpBurnTests(ITestOutputHelper output)
         Assert.True(burner.OnFormula && flown.OnFormula);
         Assert.True(burner.EngineLit);
         Assert.True(Tank(burner) < fuel, "it should have burnt fuel");
+    }
+
+    /// <summary>The satellite launcher's upper stage numbered <paramref name="id"/> on a round polar orbit <see cref="WarpScenes.LowOrbitHeight"/> over the air, <paramref name="degrees"/> east of where <see cref="InOrbit.Round"/> puts one, going north.</summary>
+    private static VesselState Polar(int id, float degrees)
+    {
+        var state = InOrbit.Round(Planet, id, WarpScenes.LowOrbitHeight);
+        var turn = Quaternion.CreateFromAxisAngle(Planet.NorthPole, float.DegreesToRadians(degrees));
+        var com = Planet.Centre + Vector3.Transform(state.CentreOfMass.ToSingle() - Planet.Centre, turn);
+        var stars = Planet.North(com) * Planet.CircularSpeed(Planet.OrbitFloor + WarpScenes.LowOrbitHeight);
+        var rotation = Planet.UprightAt(com);
+        return state with
+        {
+            Rotation = rotation, Aim = Vector3.Transform(Vector3.UnitY, rotation),
+            Position = com - Vector3.Transform(state.CentreOfMassOffset, rotation), Velocity = Planet.OverGround(com, stars),
+        };
+    }
+
+    [Fact]
+    public void A_burn_held_against_its_target_at_the_top_rate_matches_the_same_burn_at_normal_speed()
+    {
+        // The target on a polar orbit 20° ahead (some 370 m/s across it), the burn held retrograde
+        // in the target's frame: the hold steers by the target as it is at each of its steps.
+        var target = Polar(1, 20f);
+        var flownState = InOrbit.Round(Planet, 0, WarpScenes.LowOrbitHeight);
+        var (com, targetCom) = (flownState.CentreOfMass.ToSingle(), target.CentreOfMass.ToSingle());
+        var relative = Planet.AmongStars(com, flownState.Velocity.ToSingle()) - Planet.AmongStars(targetCom, target.Velocity.ToSingle());
+        (Vector3 Velocity, Vector3 Relative, double Time) Burnt(bool top)
+        {
+            var (sim, flown) = WarpScenes.Flying(Burning(flownState, 0.05f, HoldMode.Retrograde, -relative), target);
+            using var _ = sim;
+            var flight = sim.Flight;
+            var other = flight.WorldVessels.Single(v => v.Id == 1);
+            flight.RunFrame(0f, new FlightInput(SetTarget: NavTarget.OfVessel(other)));
+            flight.RunFrame(0f, new FlightInput(ChooseFrame: FrameChoice.Target));
+            Assert.Equal(Frame.Target, flight.Frame);
+            Assert.Equal(HoldMode.Retrograde, flown.Hold);
+            var time = Burn(sim, 24.0, top, frames: 3);
+            return (flown.Body.AmongStars(flown.CentreOfMass, flown.Velocity), flight.FrameVelocity, time);
+        }
+
+        var (physics, formula) = (Burnt(top: false), Burnt(top: true));
+        var off = Vector3.Distance(physics.Velocity, formula.Velocity);
+        output.WriteLine($"{off:0.000} m/s apart among the stars; relative speed {physics.Relative.Length():0.00} m/s at 1x, {formula.Relative.Length():0.00} m/s at the top rate (from {relative.Length():0.00})");
+        Assert.True(relative.Length() - physics.Relative.Length() > 20f, "the burn should have slowed it against its target");
+        Assert.InRange(off, 0f, 0.3f);
+        Assert.Equal(physics.Time, formula.Time, 3);
+    }
+
+    [Fact]
+    public void A_full_throttle_burn_at_the_top_rate_matches_the_same_burn_at_normal_speed()
+    {
+        // Full throttle for 10 s (its tank full: 44 s of it, so its fuel isn't about to run out),
+        // the rings holding its nose north, across its orbit: some 160 m/s, still a closed orbit.
+        var state = InOrbit.Round(Planet, 0, WarpScenes.LowOrbitHeight);
+        var north = Planet.North(state.CentreOfMass.ToSingle());
+        var full = state.Vehicle.Stages[state.First].FuelMass;
+        (double Apoapsis, Vector3 Velocity, float Used, double Time) Burnt(bool top)
+        {
+            var (sim, flown) = WarpScenes.Flying(Burning(state, 1f, HoldMode.Rings, north, fuel: full) with { RingHeading = 0f, RingPitch = 0f });
+            using var _ = sim;
+            var fuel = Tank(flown);
+            var time = Burn(sim, 10.0, top, frames: 2);
+            Assert.Equal(top, flown.OnFormula);
+            return (Apoapsis(flown), flown.Body.AmongStars(flown.CentreOfMass, flown.Velocity), fuel - Tank(flown), time);
+        }
+
+        var (physics, formula) = (Burnt(top: false), Burnt(top: true));
+        var off = Vector3.Distance(physics.Velocity, formula.Velocity);
+        output.WriteLine($"apoapsis {physics.Apoapsis:0.0} m at 1x, {formula.Apoapsis:0.0} m at the top rate; {off:0.000} m/s apart; fuel used {physics.Used:0.0} kg, {formula.Used:0.0} kg");
+        Assert.True(physics.Used > 1000f, "it should have burnt hard");
+        Assert.InRange(formula.Apoapsis, physics.Apoapsis * 0.995, physics.Apoapsis * 1.005);
+        Assert.InRange(off, 0f, 0.005f * physics.Velocity.Length());
+        Assert.InRange(formula.Used, physics.Used * 0.995f, physics.Used * 1.005f);
+        Assert.Equal(physics.Time, formula.Time, 3);
+    }
+
+    [Fact]
+    public void A_small_view_s_vessel_flies_its_node_at_the_top_rate()
+    {
+        // Vessel 1, its nose straight up, burning gently with a 20 m/s node where it is now and the
+        // manoeuvre hold on, given a small view while vessel 0 is flown: at the top rate its hold
+        // turns it along the burn left and its burn counts against the node, as in the physics.
+        var (sim, burner) = WarpScenes.Flying(new WorldState
+        {
+            Time = 0.0, NextVesselId = 2, Flights = 1,
+            Vessels = [InOrbit.Round(Planet, 0, WarpScenes.LowOrbitHeight), InOrbit.Round(Planet, 1, WarpScenes.LowOrbitHeight + 2000f) with { Throttle = 0.05f }],
+        }, 1);
+        using var _ = sim;
+        var flight = sim.Flight;
+        flight.RunFrame(0f, new FlightInput(Plan: ManoeuvreChain.AnchoredOn(burner, flight.WorldTime, [new ManoeuvreNode(0.0, Prograde: 20f)], flight.WorldTime)));
+        flight.RunFrame(0f, new FlightInput(ChooseHold: HoldMode.Manoeuvre));
+        Assert.Equal(HoldMode.Manoeuvre, burner.Hold);
+        var flown = flight.WorldVessels.Single(v => v.Id == 0);
+        sim.Step(new FlightInput(SwitchTo: flown));
+        Assert.Same(flown, flight.Controlled);
+        flight.OpenView(burner);
+        IReadOnlyList<Vessel> watched = [burner];
+        FormulaRateTests.ToTheTop(flight, watched);
+        var before = burner.BurnLeft(flight.WorldTime)!.Value.Length();
+        sim.RealFrame = (float)(8.0 / Scene.TopRate);
+        sim.Step(new FlightInput(Watched: watched));
+        var left = burner.BurnLeft(flight.WorldTime)!.Value;
+        output.WriteLine($"{flight.PlayerRate}x; {Vector3.Dot(burner.Aim, Vector3.Normalize(left)):0.0000} along the burn left, {before:0.00} m/s left, then {left.Length():0.00} m/s");
+        Assert.Equal(Scene.TopRate, flight.PlayerRate);
+        Assert.True(burner.OnFormula);
+        Assert.Equal(HoldMode.Manoeuvre, burner.Hold);
+        Assert.True(Vector3.Dot(burner.Aim, Vector3.Normalize(left)) > 0.99f);
+        Assert.True(left.Length() < before - 2f, "its burn should have counted against the node");
+    }
+
+    [Fact]
+    public void A_vessel_standing_on_its_engine_on_the_moon_holds_the_warp_and_stands_on()
+    {
+        // The lander landed at the moon's landing spot, its engine pushing up at about half its
+        // weight: standing there burning, it isn't at rest, so it holds the warp at the physics'
+        // top rate (never flown at a formula's), and stands on, burning, frame after frame.
+        var (sim, flown) = WarpScenes.Flying(new WorldState
+        {
+            Time = 0.0, NextVesselId = 1, Flights = 1, Vessels = [WarpDropTests.LanderLanded() with { Throttle = 0.25f }],
+        }, 0);
+        using var _ = sim;
+        var flight = sim.Flight;
+        Assert.Same(GroundBody.Moon, flown.Body);
+        sim.Step(default);
+        Assert.Equal(FlightState.Flying, flown.State);
+        Assert.True(flown.EngineLit);
+        var (stood, fuel) = (flown.CentreOfMass, Tank(flown));
+        FormulaRateTests.Press(flight, Flight.Rates.Length);
+        Assert.Same(flown, flight.WarpHeldBy);
+        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
+        for (var i = 0; i < 30; i++)
+            sim.Step(default);
+        output.WriteLine($"{flight.PlayerRate}x, held by {(flight.WarpHeldBy is { } h ? WorldLog.Named(h) : "none")}; {Vector3.Distance(stood, flown.CentreOfMass):0.000} m from where it stood, {fuel - Tank(flown):0.0} kg burnt");
+        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
+        Assert.False(flown.OnFormula);
+        Assert.Equal(FlightState.Flying, flown.State);
+        Assert.True(Vector3.Distance(stood, flown.CentreOfMass) < 0.1f, "it should stand where it was");
+        Assert.True(Tank(flown) < fuel, "it should have burnt fuel");
+    }
+
+    [Fact]
+    [Trait("Run", "Alone")] // timed in real time, the node's frames against the same burn's without it: beside the other shards' tests both move with theirs
+    public void Burning_past_a_node_on_a_moon_transfer_at_the_top_rate_keeps_its_frames_short()
+    {
+        // The upper stage on its way to the moon, its tank full, burning gently (some 2,000 s of
+        // it), a 20 m/s node's time now: every second's step at the top rate asks the burn left
+        // along the plan's path past the node (patched into the moon's sphere), which is worked out
+        // once, not at every step, and homed in on from where it was. Timed beside the same burn
+        // held prograde with no node, so what the node costs a frame shows; a frame is 273 s.
+        (List<double> Times, string Said) Frames(bool node)
+        {
+            var (state, time) = MoonTrip.Transferring(0, WarpScenes.TransferSeconds);
+            var (sim, flown) = WarpScenes.Flying(MoonTrip.World(time, state with { Throttle = 0.02f, Hold = node ? HoldMode.None : HoldMode.Prograde, Fuel = [.. state.Vehicle.Stages.Select(s => s.FuelMass)] }), state.Id);
+            using var _ = sim;
+            var flight = sim.Flight;
+            if (node)
+            {
+                flight.RunFrame(0f, new FlightInput(Plan: ManoeuvreChain.AnchoredOn(flown, flight.WorldTime, [new ManoeuvreNode(0.0, Prograde: 20f)], flight.WorldTime)));
+                flight.RunFrame(0f, new FlightInput(ChooseHold: HoldMode.Manoeuvre));
+                Assert.Equal(HoldMode.Manoeuvre, flown.Hold);
+            }
+            FormulaRateTests.ToTheTop(flight);
+            sim.Step(default); // the first, untimed (its JIT), as each frame is 273 s of game time
+            var times = new List<double>();
+            for (var i = 0; i < 5 && flight.PlayerRate == Scene.TopRate && flown.EngineLit; i++)
+            {
+                var start = System.Diagnostics.Stopwatch.GetTimestamp();
+                sim.Step(default);
+                if (flight.PlayerRate == Scene.TopRate)
+                    times.Add(System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+            }
+            times.Sort();
+            return (times, $"{times.Count} frames at the top rate: {string.Join(", ", times.Select(t => $"{t:0.0}"))} ms; "
+                + $"{flown.BurnLeft(flight.WorldTime)?.Length() ?? 0f:0.0} m/s left, on {flown.Body.Name}, dropped for {flight.LastDrop?.Why ?? "nothing"}");
+        }
+
+        var (alone, along) = (Frames(node: false), Frames(node: true));
+        output.WriteLine($"held prograde: {alone.Said}");
+        output.WriteLine($"along the node: {along.Said}");
+        Assert.True(along.Times.Count >= 3 && alone.Times.Count >= 3, "it should have burnt at the top rate for frames");
+        var (median, without) = (along.Times[along.Times.Count / 2], alone.Times[alone.Times.Count / 2]);
+        // A frame along the node no more than three times one without (patching the path afresh at
+        // every step makes it some seven times).
+        Assert.InRange(median, 0.0, 3.0 * without);
     }
 }
