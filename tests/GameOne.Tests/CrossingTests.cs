@@ -847,7 +847,7 @@ public sealed class CrossingTests(ITestOutputHelper output)
             flight.Worlds.Step(Dt, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(controls), flown.Body, flown.Position, t);
             (jolt, steps) = (jolt + GC.GetAllocatedBytesForCurrentThread() - before, steps + 1);
             for (var k = 0; k < world.Count; k++)
-                Formula.Advance(world[k], Dt, t);
+                Formula.Advance(world[k], t);
             for (var k = 0; k < world.Count; k++)
                 world[k].AfterPhysics(Dt, t);
             flight.Cross(t);
@@ -1056,6 +1056,35 @@ public sealed class CrossingTests(ITestOutputHelper output)
         Assert.Same(Moon, transfer.Body);
         Assert.Equal(Scene.TopRate, flight.TimeScale);
         AssertOnTheLeg(sim, transfer, leg, since);
+    }
+
+    [Fact]
+    public void One_going_on_its_orbit_within_a_top_rate_window_and_crossing_in_it_is_handed_across_at_its_moment()
+    {
+        // The upper stage 20 m over the moon's ground, nobody watching it, going straight out at
+        // 1.5 km/s: stepped (under its floor, the moon's highest ground) as the window begins, it
+        // goes on its orbit within the first second, and out of the moon's sphere some seconds
+        // later, in the same window, which couldn't be cut there.
+        var (out_, _) = Ways();
+        var probe = Moon.Centre + out_ * (Moon.SeaRadius + Moon.MaxHeight + 100f);
+        var at = probe - out_ * (Moon.SurfaceAltitude(probe) - 20f);
+        var velocity = Moon.OverGround(at, out_ * 1500f);
+        var (sim, _) = WarpScenes.Flying(World(InOrbit.Round(Home, 1, WarpScenes.LowOrbitHeight), Craft(0, Moon, at, velocity, out_)), 1);
+        using var _s = sim;
+        var flight = sim.Flight;
+        var v = Get(sim, 0);
+        Assert.True(v.OnFormula && v.Motion.Stepping);
+        var legs = new List<PathLeg>(Scene.PatchedLegs);
+        Patched.Legs(Moon, at, Moon.AmongStars(at, velocity), flight.WorldTime, legs);
+        Assert.True(legs.Count > 1 && legs[1].Body == Home, "its path should go out of the moon's sphere");
+        var crosses = legs[0].End;
+        output.WriteLine($"crosses {crosses - flight.WorldTime:0.000} s on");
+        Assert.InRange(crosses - flight.WorldTime, 1.0, Scene.FormulaWindowSeconds - 1.0); // within the first window
+        FormulaRateTests.ToTheTop(flight);
+        sim.Step(default);
+        Assert.Same(Home, v.Body);
+        output.WriteLine($"handed across {v.FormulaOrbit.Since - flight.WorldTime:0.000} s before the frame's end, {v.FormulaOrbit.Since - crosses:0.000} s from the path's crossing");
+        Assert.InRange(v.FormulaOrbit.Since - crosses, -0.05, 0.05);
     }
 
     [Fact]

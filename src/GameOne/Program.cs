@@ -192,8 +192,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
         }
         hud.TimeScale = flight.TimeScale;
         // Who holds the warp to the physics' top rate, and why it last dropped there, for the time line.
-        hud.WarpHeldBy = flight.WarpHeldBy is { } held ? WorldLog.Named(held) : null;
-        hud.WarpHeldAirless = flight.WarpHeldBy is { Body.HasAir: false };
+        hud.WarpHeldBy = flight.WarpHeld;
         hud.WarpDropped = flight.LastDrop;
         hud.RealTime = flight.RealTime;
         time += dt;

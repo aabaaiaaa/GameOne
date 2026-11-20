@@ -364,19 +364,27 @@ internal sealed class Vessel
     /// Under formula, aboard a raft (<see cref="AboardUnderFormula"/>), moves it where the raft has
     /// carried it at world time <paramref name="time"/> (its pose then, <see cref="Raft.Pose"/>),
     /// moving with the deck there (its centre of mass's velocity over the last
-    /// <see cref="CarrySeconds"/> of the deck's way).
+    /// <see cref="CarrySeconds"/> of the deck's way, or since it was last carried if that is
+    /// sooner: each step's at the physics' rates, so a step poses its raft once, not twice).
     /// </summary>
     internal void CarryByFormula(double time)
     {
         if (AboardUnderFormula is not { } aboard)
             return;
         var (centre, rotation) = Carried(aboard, time);
-        var (before, _) = Carried(aboard, time - CarrySeconds);
-        MoveByFormula(centre, (Vector3Double)((centre - before) / CarrySeconds), rotation, Vector3.Zero, orbitChanged: false);
+        var since = time - _carried.Time;
+        var before = _carried.Raft == aboard.Raft && _carried.Place == aboard.Place && since > 0.0 && since <= CarrySeconds
+            ? _carried.Centre
+            : Carried(aboard, time - (since = CarrySeconds)).Centre;
+        _carried = (aboard.Raft, aboard.Place, time, centre);
+        MoveByFormula(centre, (Vector3Double)((centre - before) / (float)since), rotation, Vector3.Zero, orbitChanged: false);
     }
 
     /// <summary>How far back a deck's way is read for the velocity it carries one aboard with (see <see cref="CarryByFormula"/>): far shorter than its waves.</summary>
     private const float CarrySeconds = 0.05f;
+
+    /// <summary>Where it was last carried to (<see cref="CarryByFormula"/>), by which raft from where on it, and when.</summary>
+    private (Raft? Raft, Vector3 Place, double Time, Vector3 Centre) _carried = (null, default, double.NaN, default);
 
     /// <summary>Where <paramref name="aboard"/> puts its centre of mass, and how it turns it, as the raft is at world time <paramref name="time"/>.</summary>
     private (Vector3 Centre, Quaternion Rotation) Carried((Raft Raft, Vector3 Place, Quaternion Rotation) aboard, double time)
@@ -509,7 +517,7 @@ internal sealed class Vessel
     {
         if (!OnFormula || State == FlightState.Crashed)
             return;
-        Formula.Advance(this, 0f, now);
+        Formula.Advance(this, now);
         if (State == FlightState.Crashed)
             return; // brought to now, it touched something on the way, and is gone
         BurnOwed(now); // the stretch since its last formula step, which its place is already moved on by
@@ -1295,10 +1303,10 @@ internal sealed class Vessel
     /// once for the chain (it depends on the chain alone, but for the frame it is given in, its
     /// bodies' grounds as they were when it was worked out, into which the vessel is turned), an
     /// open one's again only once the stretch looked along has grown past it
-    /// (<see cref="LateRoomSeconds"/> more each time), so a burn stepped every second at a
+    /// (<see cref="Scene.LateRoomSeconds"/> more each time), so a burn stepped every second at a
     /// formula's rate doesn't patch it afresh at every step; the nearest point every time it is
     /// asked, as the vessel moves between, homed in on from where it last was but for a search
-    /// along the whole path every <see cref="LateSearchSeconds"/>.
+    /// along the whole path every <see cref="Scene.LateSearchSeconds"/>.
     /// </remarks>
     private Vector3 Late(ManoeuvreChain chain, double now)
     {
@@ -1320,7 +1328,7 @@ internal sealed class Vessel
             // A closed orbit comes round to every point of it within a lap; any other path is
             // looked along as far past the node again as now is, worked out with room to grow.
             var orbit = new Orbit(body, position, velocity, findEnd: false, from: at - now);
-            var until = orbit.Closed ? at + orbit.Period : now + 2.0 * (now - at) + LateRoomSeconds;
+            var until = orbit.Closed ? at + orbit.Period : now + 2.0 * (now - at) + Scene.LateRoomSeconds;
             Patched.Legs(body, position, velocity, now, legs, horizon: until, from: at - now);
             kept = (now, chain, at, until, orbit.Closed);
             _afterNodeFor = kept;
@@ -1332,8 +1340,8 @@ internal sealed class Vessel
         var turned = now - kept.Now;
 
         // Homed in on from where it was last found, by Newton's steps alone, while that was a
-        // full search's within LateSearchSeconds, and the steps settle inside its stretch.
-        if (_lateNearest is { } seed && ReferenceEquals(seed.Chain, chain) && seed.Leg < legs.Count && Math.Abs(now - seed.Searched) < LateSearchSeconds
+        // full search's within Scene.LateSearchSeconds, and the steps settle inside its stretch.
+        if (_lateNearest is { } seed && ReferenceEquals(seed.Chain, chain) && seed.Leg < legs.Count && Math.Abs(now - seed.Searched) < Scene.LateSearchSeconds
             && NearestOn(legs[seed.Leg], kept.At, reach, now, turned, seed.T) is { Settled: true } found)
         {
             _lateNearest = seed with { Now = now, T = found.T };
@@ -1419,17 +1427,6 @@ internal sealed class Vessel
         var left = leg.Body == Body ? off : Bodies.Change(leg.Body, Body, now).Direction((Vector3Double)off).ToSingle();
         return (t, Vector3.Distance(on, place), left, settled);
     }
-
-    /// <summary>How much further on than it is asked for an open path after a node is worked out (<see cref="Late"/>), so a burn past it patches it seldom.</summary>
-    private const double LateRoomSeconds = 60.0;
-
-    /// <summary>
-    /// How long (game seconds) the nearest point on the path after a node is homed in on from where
-    /// it was last found (<see cref="Late"/>), before it is looked for along the whole path again, so
-    /// one nearer on another stretch, or another lap, is found: every step for a burn stepped every
-    /// second at a formula's rate would be a full search every second.
-    /// </summary>
-    private const double LateSearchSeconds = 30.0;
 
     /// <summary>
     /// The next node, as the engine runs: lighting it begins the burn (fixing it among the stars),
@@ -1878,7 +1875,7 @@ internal sealed class Vessel
     }
 
     /// <summary>Whether any of it is in the water (as it was after the last physics step).</summary>
-    private bool InWater => _wetParts != 0 || _craft.Submerged > 0f;
+    internal bool InWater => _wetParts != 0 || _craft.Submerged > 0f;
 
     /// <summary>What it asks of the physics this frame, if anything (a vessel that can't be flown asks nothing).</summary>
     internal RocketControl? Control

@@ -102,7 +102,13 @@ internal static class Scene
     /// <summary>Real seconds the light takes to ease fully to its average, or back to the true light as the warp drops.</summary>
     public const float AveragedLightEaseSeconds = 0.5f;
 
-    /// <summary>The averaged light's sun, on a face turned straight up: its day's mean on a level face (about 1/π of its full strength) as a share of it.</summary>
+    /// <summary>
+    /// The averaged light's sun, on a face turned straight up: its day's mean on a level face at the
+    /// equator, outside the air (about 1/π of its full strength), as a share of it. The same
+    /// everywhere: it leaves out the latitude (a day's mean falls towards the poles) and the air's
+    /// dimming of a low sun, so the ground off the equator, and at dusk through the air, is shown a
+    /// little brighter than its true mean.
+    /// </summary>
     public const float AveragedSunStrength = 0.32f;
 
     /// <summary>How high over each view's horizon the averaged light's sky has its sun (degrees): a dusk sky, the same all day.</summary>
@@ -504,6 +510,14 @@ internal static class Scene
     // changes fast (no air, nothing to touch), so a burn of minutes at a formula's rate is a few
     // hundred steps a frame, not thousands; a witnessed one's rules (its holds, its node) run every step.
     public const float FormulaBurnStepSeconds = 1f;
+    // The path after a manoeuvre node, worked out for a burn past the node (Vessel.Late): an open
+    // one is worked out this much further on (game seconds) than asked, so a burn stepped every
+    // second at a formula's rate patches it seldom; and the nearest point on it is homed in on from
+    // where it was last found for this long, before it is looked for along the whole path again (so
+    // one nearer on another stretch, or another lap, is found). Longer is cheaper and slower to see
+    // a nearer point elsewhere.
+    public const double LateRoomSeconds = 60.0;
+    public const double LateSearchSeconds = 30.0;
     // Under formula, a vessel splashing down into water too shallow for its plunge to stop it short
     // of the seabed comes onto the seabed at this share of its speed into the water, and is judged
     // there by the ground's rules (see Formula's Judge). Its hull is still sinking faster until it

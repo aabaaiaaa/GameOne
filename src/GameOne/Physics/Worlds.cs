@@ -4,16 +4,16 @@ namespace GameOne.Physics;
 
 /// <summary>
 /// The physics at each body in use: one world (<see cref="RocketPhysics"/>) a body, in that body's
-/// frame, made as a vessel there first needs one (<see cref="Need"/>, or ahead of need off the step:
-/// <see cref="Ahead"/>) and stepped while a craft is in it (<see cref="Step"/>). A world left with no
-/// craft in it for <see cref="Scene.PhysicsIdleSeconds"/> of the world's time is released to the
-/// pool, and the next body to need one takes it, rebuilt for that body
+/// frame, made as a vessel there first needs one (<see cref="Need"/>, or ahead of need off the
+/// step: <see cref="Ahead"/>) and stepped while a craft is in it (<see cref="Step"/>). A world left
+/// with no craft in it for <see cref="Scene.PhysicsIdleSeconds"/> of the world's time is released
+/// to the pool, and the next body to need one takes it, rebuilt for that body
 /// (<see cref="RocketPhysics.Rebuild"/>): Jolt's world is kept, so that costs less than a new one.
-/// So a body nothing is in has no physics, and costs nothing; the witnessed (the flown vessel and
-/// the small views, <see cref="Scene.MaxSmallViews"/>, and the one the main camera is on) are at
-/// seven bodies at most, though an emptied world is kept a while: nothing nobody watches keeps one
-/// running (the formula plays out whatever it is doing). Nothing here is written for any number of bodies: a world is found by its body, never
-/// as "the other one".
+/// So a body nothing is in has no physics, and costs nothing; the witnessed (the flown vessel and the
+/// small views, <see cref="Scene.MaxSmallViews"/>, and the one the main camera is on) are at seven
+/// bodies at most, though an emptied world is kept a while: nothing nobody watches keeps one
+/// running (the formula plays out whatever it is doing). Nothing here is written for any number of
+/// bodies: a world is found by its body, never as "the other one".
 /// </summary>
 /// <remarks>
 /// Everything is asked on the main thread, but a world made ahead, which the tile worker makes in
@@ -192,6 +192,7 @@ internal sealed class Worlds : IDisposable
     public void Step(float dt, ReadOnlySpan<RocketControl> controls, GroundBody flown, Vector3? player, double worldTime)
     {
         TakeMadeAhead();
+        SeaStepped = false;
         // Every world stepped from the same leftover of a step, so each is at the same moment after
         // (one that had no craft, or was put in use since, taken up to it), and a craft taken from
         // one into another is at the same moment in both.
@@ -206,6 +207,7 @@ internal sealed class Worlds : IDisposable
                 world.Lag = lag;
                 world.Update(dt, controls, world.Body == flown ? player : null, worldTime);
                 _lag = world.Lag;
+                SeaStepped |= world.Body.HasSea;
                 continue;
             }
             if (double.IsNaN(_emptySince[i]) || worldTime < _emptySince[i])
@@ -221,6 +223,9 @@ internal sealed class Worlds : IDisposable
             }
         }
     }
+
+    /// <summary>Whether the last <see cref="Step"/> stepped a world at a body with a sea, which sets the rafts' time and poses (<see cref="Rafts.Time"/>) as it steps.</summary>
+    public bool SeaStepped { get; private set; }
 
     /// <summary>
     /// Puts every world in use at the world time itself, no leftover of a step behind it

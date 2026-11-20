@@ -26,8 +26,8 @@ internal enum WarpDrop
 }
 
 /// <summary>
-/// The warp dropped (<see cref="Flight.LastDrop"/>): why, for which vessel (as the log names it;
-/// empty for a drop that is no vessel's), to what rate, and when, in the flight's real seconds,
+/// The warp dropped (<see cref="Flight.LastDrop"/>): why, for which vessel (as the log names it),
+/// to what rate, and when, in the flight's real seconds,
 /// so the HUD says so for <see cref="Scene.WarpDropShownSeconds"/>.
 /// </summary>
 internal readonly record struct WarpDropped(WarpDrop Reason, string Vessel, float Rate, double RealTime)

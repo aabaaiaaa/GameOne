@@ -34,12 +34,10 @@ public sealed class FormulaTests(ITestOutputHelper output)
     /// </summary>
     private static void Coast(Simulation sim, Vessel v, double seconds)
     {
-        var last = sim.Flight.WorldTime;
         var others = Others(sim, v);
         sim.Run((_, _) => new FlightInput(Watched: others), f =>
         {
-            Formula.Advance(v, (float)(f.WorldTime - last), f.WorldTime);
-            last = f.WorldTime;
+            Formula.Advance(v, f.WorldTime);
             return false;
         }, seconds);
     }
@@ -532,15 +530,15 @@ public sealed class FormulaTests(ITestOutputHelper output)
         while (t < start + 30.0 && (touched is null || t < touched + 1.0))
         {
             t += RocketPhysics.StepSeconds;
-            Formula.Advance(often, RocketPhysics.StepSeconds, t);
+            Formula.Advance(often, t);
             if (touched is null && often.Motion.Standing)
                 touched = t;
         }
         Assert.NotNull(touched);
         Assert.True(often.Motion.Standing && often.EngineLit, "it should still stand burning");
-        Formula.Advance(seldom, (float)(t - start), t); // stops at its touch
+        Formula.Advance(seldom, t); // stops at its touch
         Assert.True(seldom.Motion.Standing);
-        Formula.Advance(seldom, 0f, t);
+        Formula.Advance(seldom, t);
         var tank = state.Vehicle.Stages[state.First].FuelMass;
         var (left, leftSeldom) = (often.Fuel * tank, seldom.Fuel * tank);
         output.WriteLine($"touched down {touched - start:0.00} s on; {t - start:0.00} s on, {left:0.000} kg left asked often, {leftSeldom:0.000} kg asked twice");
@@ -559,7 +557,7 @@ public sealed class FormulaTests(ITestOutputHelper output)
         using var _s = sim;
         Assert.True(v.OnFormula && v.EngineLit);
         var stepped = v.Motion.Time;
-        Formula.Advance(v, 0f, stepped);
+        Formula.Advance(v, stepped);
         Assert.True(v.Motion.Stepping);
         var stage = v.CurrentStage;
         var before = v.Fuel * stage.FuelMass;
@@ -931,10 +929,10 @@ public sealed class FormulaTests(ITestOutputHelper output)
         using var _ = sim;
         Assert.True(v.OnFormula && v.EngineLit);
         var t = sim.Flight.WorldTime;
-        Formula.Advance(v, 0.1f, t += 0.1); // warmed up
+        Formula.Advance(v, t += 0.1); // warmed up
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var i = 0; i < 30; i++)
-            Formula.Advance(v, 0.1f, t += 0.1);
+            Formula.Advance(v, t += 0.1);
         Assert.Equal(0L, GC.GetAllocatedBytesForCurrentThread() - before);
         Assert.Equal(FlightState.Flying, v.State);
         Assert.True(v.Ground < 70f, $"it is still {v.Ground:0} m up: it never came near the ground");
@@ -970,7 +968,7 @@ public sealed class FormulaTests(ITestOutputHelper output)
             for (var i = 1; i <= 30; i++)
                 for (var k = first; k < vessels.Length; k += 2)
                 {
-                    Formula.Advance(vessels[k], 0.1f, from + 0.1 * i);
+                    Formula.Advance(vessels[k], from + 0.1 * i);
                     rose |= k == 3 && vessels[k].Motion.Rising;
                 }
         }

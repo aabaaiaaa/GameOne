@@ -90,6 +90,28 @@ public sealed class AveragedLightTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Half_eased_in_a_pad_s_lights_are_half_way_between_their_fade_and_their_dark_share()
+    {
+        // The same frames twice: once true (averaged 0, their own fade on and off) and once half
+        // eased into the average: each place's lights half way between the two.
+        var (truly, half) = (new PlaceLights(), new PlaceLights());
+        var start = HomeAt(600);
+        truly.Reset(start);
+        half.Reset(start);
+        for (var f = 1; f <= 60; f++)
+        {
+            var time = start + f * Frame * Scene.TopRate;
+            truly.Step(time, Frame);
+            half.Step(time, Frame, averaged: 0.5f);
+            for (var i = 0; i < PadLights.All.Count; i++)
+            {
+                var share = Sun.DarkShare(GroundBody.Planet, PadLights.All[i].Origin, time);
+                Assert.Equal((truly.Lit[i] + share) / 2f, half.Lit[i], 1e-3f);
+            }
+        }
+    }
+
+    [Fact]
     public void A_landing_light_holds_at_its_dark_share_near_the_ground_while_averaged()
     {
         var zone = Scene.LandingZoneCentre;

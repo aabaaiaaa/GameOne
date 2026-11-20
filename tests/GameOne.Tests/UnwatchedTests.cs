@@ -391,6 +391,18 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Flown_at_the_moon_the_rafts_are_kept_at_the_world_s_time()
+    {
+        // Nothing in the planet's physics, so nothing steps the rafts there: a landing on a deck
+        // under formula is still judged against the deck as it is now.
+        var (sim, _) = WarpScenes.Flying(InOrbit.Round(GroundBody.Moon, 0, 400f));
+        using var _s = sim;
+        sim.Run(Nobody, _ => false, maxSeconds: 5);
+        output.WriteLine($"rafts at {Rafts.Time:0.000} s, the world at {sim.Flight.WorldTime:0.000} s");
+        Assert.Equal(sim.Flight.WorldTime, Rafts.Time, 6);
+    }
+
+    [Fact]
     public void A_rocket_left_on_a_pad_nobody_watches_waits_there_under_formula()
     {
         // The new rocket on Home's pad, and a satellite far off flown: the rocket leaves the
@@ -402,11 +414,11 @@ public sealed class UnwatchedTests(ITestOutputHelper output)
         Assert.Equal(FlightState.Ready, rocket.State);
         var stood = rocket.Position;
         sim.Step(new FlightInput(SwitchTo: Get(sim, 0)));
-        Assert.True(sim.Run(Nobody, _ =>
+        Assert.False(sim.Run(Nobody, _ =>
         {
             Assert.Equal(FlightState.Ready, rocket.State);
             return false;
-        }, maxSeconds: 30) || true);
+        }, maxSeconds: 30)); // the whole 30 s, ready on its pad all along
         Assert.True(rocket.OnFormula, "the rocket on the pad stayed in the physics, nobody watching it");
         Assert.True(Vector3.Distance(rocket.Position, stood) < 0.01f, $"{Vector3.Distance(rocket.Position, stood):0.000} m from where it stood");
         sim.Step(new FlightInput(SwitchTo: rocket));

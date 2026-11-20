@@ -15,11 +15,13 @@ namespace GameOne;
 /// never carried on. <paramref name="CrossesAt"/> is the world time it crosses a sphere of
 /// influence's edge (<see cref="Patched.NextCrossing"/>, a hair past it, so its place then is over
 /// the edge as <see cref="Bodies.Choose(GroundBody, Vector3, double)"/> reads it), infinity for none
-/// before <paramref name="LookedTo"/>, the world time it was looked for up to.
+/// before <paramref name="LookedTo"/>, the world time it was looked for up to; and
+/// <paramref name="LeavesAt"/> the world time it reaches the solar system's edge before that
+/// (<see cref="Patched.LeavesAt"/>, a hair past it, so its place then is past it), infinity for none.
 /// </summary>
 internal readonly record struct FormulaOrbit(Orbit Orbit, double Since, Quaternion Attitude, Vector3 Spin,
     Vector3Double At, Vector3Double Velocity, Vector3 OrbitAt, Vector3 OrbitVelocity,
-    double CrossesAt = double.PositiveInfinity, double LookedTo = double.PositiveInfinity);
+    double CrossesAt = double.PositiveInfinity, double LookedTo = double.PositiveInfinity, double LeavesAt = double.PositiveInfinity);
 
 /// <summary>
 /// How the formula is moving a vessel (<see cref="Vessel.Motion"/>): on its orbit by Kepler, its
@@ -41,11 +43,23 @@ internal struct FormulaMotion
     public FormulaOrbit OnOrbit;
 
     /// <summary>
+    /// Whether it is shown short of the time it was last asked for, at the moment it crosses a
+    /// sphere's edge on the orbit it went on from its steps (<see cref="Formula.Advance"/>): the
+    /// frame couldn't be cut there, as that orbit wasn't known as the window began, so
+    /// <see cref="Flight.Cross"/> hands it across at that moment, then moves it on to now.
+    /// Nothing moves it meanwhile, and the window's collisions under formula leave it out.
+    /// </summary>
+    public bool Behind;
+
+    /// <summary>
     /// The world time it crosses a sphere of influence's edge on its orbit (<see cref="FormulaOrbit.CrossesAt"/>),
     /// for a frame at a formula's rate to be cut at, so it is handed across at that moment;
     /// infinity while it is stepped (its crossing is asked at each window's end, as each step's is).
     /// </summary>
     public readonly double CrossesAt => Stepping ? double.PositiveInfinity : OnOrbit.CrossesAt;
+
+    /// <summary>The world time it reaches the solar system's edge on its orbit (<see cref="FormulaOrbit.LeavesAt"/>), for a frame to be cut at likewise; infinity while it is stepped (asked at each window's end).</summary>
+    public readonly double LeavesAt => Stepping ? double.PositiveInfinity : OnOrbit.LeavesAt;
 
     /// <summary>
     /// The stepped state: its centre of mass and velocity over the ground at world time
@@ -185,20 +199,25 @@ internal static class Formula
         var stars = body.AmongStars(at, moving);
         var orbit = new Orbit(body, at, stars, findEnd: false);
         var (orbitAt, orbitVelocity) = OnOrbitAfter(orbit, 0);
-        var (crossesAt, lookedTo) = crossings ? Crossing(body, at, stars, now) : (double.PositiveInfinity, double.PositiveInfinity);
-        return new(orbit, now, rotation, angularVelocity + body.Spin, centreOfMass, velocity, orbitAt, orbitVelocity, crossesAt, lookedTo);
+        var (crossesAt, lookedTo, leavesAt) = crossings ? Crossing(body, at, stars, now) : (double.PositiveInfinity, double.PositiveInfinity, double.PositiveInfinity);
+        return new(orbit, now, rotation, angularVelocity + body.Spin, centreOfMass, velocity, orbitAt, orbitVelocity, crossesAt, lookedTo, leavesAt);
     }
 
     /// <summary>
     /// When the orbit from <paramref name="at"/> moving <paramref name="stars"/> among its body's stars
     /// at world time <paramref name="now"/> crosses a sphere's edge (<see cref="Patched.NextCrossing"/>,
     /// <see cref="CrossingMargin"/> past it), looked for <see cref="Scene.MapCollisionHorizonSeconds"/>
-    /// ahead (the map's own look ahead: an hour, so a long coast is asked again seldom), and to when.
+    /// ahead (the map's own look ahead: an hour, so a long coast is asked again seldom), and to when;
+    /// and when it reaches the solar system's edge before either (<see cref="Patched.LeavesAt"/>, as
+    /// far past it), so a frame at a formula's rate is cut there and it is lost at its moment.
     /// </summary>
-    private static (double CrossesAt, double LookedTo) Crossing(GroundBody body, Vector3 at, Vector3 stars, double now)
+    private static (double CrossesAt, double LookedTo, double LeavesAt) Crossing(GroundBody body, Vector3 at, Vector3 stars, double now)
     {
         var lookedTo = now + Scene.MapCollisionHorizonSeconds;
-        return (Patched.NextCrossing(body, at, stars, now, lookedTo) + CrossingMargin, lookedTo);
+        var crosses = Patched.NextCrossing(body, at, stars, now, lookedTo);
+        var leg = new PathLeg(body, new Orbit(body, at, stars, findEnd: false), now, Math.Min(crosses, lookedTo));
+        var leaves = Patched.LeavesAt(leg) is { } edge ? edge + CrossingMargin : double.PositiveInfinity;
+        return (crosses + CrossingMargin, lookedTo, leaves);
     }
 
     /// <summary>
@@ -296,18 +315,20 @@ internal static class Formula
 
     /// <summary>
     /// Moves <paramref name="v"/> to where the formula has it at world time
-    /// <paramref name="worldTime"/>, <paramref name="dt"/> on from the last time it was asked (0
-    /// only brings it to that time), judging its touch on the way. Nothing is done for a vessel in
+    /// <paramref name="worldTime"/>, on from the last time it was asked, judging its touch on the
+    /// way. Nothing is done for a vessel in
     /// the physics, or for one wrecked; one landed or afloat is only carried by a raft it is aboard.
     /// <paramref name="toTheEnd"/> (a window's end at a formula's rate), a stepped one's last step
     /// is cut short to end at <paramref name="worldTime"/>, so nothing of its burn is owed past it
     /// and the window's rules (a throttle or an aim changed) take effect from there exactly.
     /// </summary>
-    public static void Advance(Vessel v, float dt, double worldTime, bool toTheEnd = false)
+    public static void Advance(Vessel v, double worldTime, bool toTheEnd = false)
     {
         if (!v.OnFormula || v.State == FlightState.Crashed)
             return; // a wreck is gone
         ref var m = ref v.Motion;
+        if (m.Behind)
+            return; // shown at its crossing: handed across then, and moved on from there (Flight.Cross)
         // Aboard a raft (landed, afloat or standing on it burning), carried with it.
         if (v.State is FlightState.Landed or FlightState.Floating || m.Standing)
             v.CarryByFormula(worldTime);
@@ -341,8 +362,8 @@ internal static class Formula
                         if (worldTime > m.OnOrbit.CrossesAt || m.OnOrbit.LookedTo - worldTime < Scene.FormulaWindowSeconds)
                         {
                             var place = at.ToSingle();
-                            var (crossesAt, lookedTo) = Crossing(v.Body, place, v.Body.AmongStars(place, velocity.ToSingle()), worldTime);
-                            m.OnOrbit = m.OnOrbit with { CrossesAt = crossesAt, LookedTo = lookedTo };
+                            var (crossesAt, lookedTo, leavesAt) = Crossing(v.Body, place, v.Body.AmongStars(place, velocity.ToSingle()), worldTime);
+                            m.OnOrbit = m.OnOrbit with { CrossesAt = crossesAt, LookedTo = lookedTo, LeavesAt = leavesAt };
                         }
                         return;
                     }
@@ -376,8 +397,12 @@ internal static class Formula
             if (!v.EngineLit && OnItsOrbitAt(v, m.At.ToSingle(), m.Velocity.ToSingle()) && OnItsOrbitAt(v, (m.At + m.Velocity * StepAt(v, m.At.ToSingle(), m.Velocity.ToSingle())).ToSingle(), m.Velocity.ToSingle()))
             {
                 (m.Stepping, m.OnOrbit) = (false, Start(v.Body, m.At, m.Velocity, v.FormulaRotation, v.FormulaSpin, m.Time));
-                var (at, velocity) = Along(m.OnOrbit, worldTime);
-                ShowOnOrbit(v, ref m, at, velocity, worldTime, orbitChanged: true);
+                // Crossing a sphere's edge on it before the time asked: shown at that moment, to be
+                // handed across then (see FormulaMotion.Behind), not up to a window late.
+                var until = Math.Min(worldTime, m.OnOrbit.CrossesAt);
+                var (at, velocity) = Along(m.OnOrbit, until);
+                ShowOnOrbit(v, ref m, at, velocity, until, orbitChanged: true);
+                m.Behind = until < worldTime;
                 return;
             }
         }

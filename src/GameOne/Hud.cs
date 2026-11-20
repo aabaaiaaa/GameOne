@@ -614,11 +614,8 @@ internal sealed class Hud : IDisposable
         set => _running += (value - _running) * 0.1f;
     }
 
-    /// <summary>The witnessed vessel holding the warp to the physics' top rate (the flight's <see cref="Flight.WarpHeldBy"/>, as the log names it), given each frame, or none.</summary>
+    /// <summary>The witnessed vessel holding the warp to the physics' top rate and what it is doing (the flight's <see cref="Flight.WarpHeld"/>), given each frame, or none.</summary>
     public string? WarpHeldBy { get; set; }
-
-    /// <summary>Whether <see cref="WarpHeldBy"/>'s vessel is at a body with no air, so it is held low over the ground rather than in the air.</summary>
-    public bool WarpHeldAirless { get; set; }
 
     /// <summary>The warp's last drop (the flight's <see cref="Flight.LastDrop"/>), given each frame: said on the time line for <see cref="Scene.WarpDropShownSeconds"/>.</summary>
     public WarpDropped? WarpDropped { get; set; }
@@ -2224,7 +2221,7 @@ internal sealed class Hud : IDisposable
             // one that is that fast collision too: see Flight.NearMissShown).
             if (flight.NearMissShown is { } m)
                 ImGui.TextColored(Warning, Escape(NearMissLine(m)));
-            if (TimeLine(flight.Slowed, flight.PlayerRate, TimeScale, _running, WarpHeldBy, WarpDropped, RealTime, WarpHeldAirless) is { } time)
+            if (TimeLine(flight.Slowed, flight.PlayerRate, TimeScale, _running, WarpHeldBy, WarpDropped, RealTime) is { } time)
                 ImGui.TextColored(time.Good ? Good : Warning, Escape(time.Text));
             // The clocks, in every frame: the world's (Home's day and time of day) and the time of
             // day where the vessel is (by its longitude), each in minutes and seconds of the day.
@@ -3457,12 +3454,12 @@ internal sealed class Hud : IDisposable
     /// <summary>
     /// The time line, under the vessel's name, and whether it is good news (a steady warp) rather
     /// than a warning; none at normal speed. Held to the physics' top rate by a witnessed vessel
-    /// (<paramref name="heldBy"/>, named as the log names it; <paramref name="airless"/> for one
-    /// low over a body with no air), it says by which; for <see cref="Scene.WarpDropShownSeconds"/>
+    /// (<paramref name="heldBy"/>, named as the log names it, with what it is doing:
+    /// <see cref="Flight.WarpHeld"/>), it says by which and why; for <see cref="Scene.WarpDropShownSeconds"/>
     /// after the warp dropped there (<paramref name="dropped"/>, timed by <paramref name="realNow"/>,
     /// the flight's real seconds), why. Information, never a prompt.
     /// </summary>
-    internal static (string Text, bool Good)? TimeLine(Slowdown? slowed, float playerRate, float timeScale, float running, string? heldBy, WarpDropped? dropped, double realNow, bool airless = false)
+    internal static (string Text, bool Good)? TimeLine(Slowdown? slowed, float playerRate, float timeScale, float running, string? heldBy, WarpDropped? dropped, double realNow)
     {
         // Slowed for a fast collision, the time line says so and why, whatever the player's own
         // rate (with it, if slower): never the rate keys' hint, as they do nothing then.
@@ -3472,8 +3469,8 @@ internal sealed class Hud : IDisposable
             return ($"SLOW MOTION  1/{1f / timeScale:0}x   ( , and . )", false);
         if (dropped is { } d && d.ShownAt(realNow, playerRate))
             return ($"WARP DROPPED to {d.Rate:0}x: {d.Why}", false);
-        if (timeScale > 1f && heldBy is not null && timeScale >= Scene.PhysicsTopRate)
-            return ($"WARP {timeScale:0}x  (held: {heldBy} {(airless ? "flying low over the ground" : "flying in the air")})   ( , and . )", false);
+        if (heldBy is not null && timeScale >= Scene.PhysicsTopRate)
+            return ($"WARP {timeScale:0}x  (held: {heldBy})   ( , and . )", false);
         if (timeScale > 1f && running < timeScale * 0.9f)
             return ($"WARP {timeScale:0}x  (running {running:0}x)   ( , and . )", false);
         if (timeScale > 1f)

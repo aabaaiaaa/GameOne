@@ -120,6 +120,63 @@ public sealed class FormulaStagingTests(ITestOutputHelper output)
         Assert.All(sim.Worlds.All, w => Assert.Empty(w.Crafts));
     }
 
+    /// <summary>
+    /// The two-stage rocket far out, both tanks full, burning at full throttle under formula, moved
+    /// half a burn step past its last whole one (<see cref="FormulaMotion.Time"/>), so the stretch
+    /// since is owed: its place moved on by it, its fuel not yet burnt. Returns it, and the fuel its
+    /// firing stage should show by the flow since (the raw tank, less the owed stretch's burn).
+    /// </summary>
+    private static (Simulation Sim, Vessel Burner, float Shown) BurningMidStep()
+    {
+        var state = Coasting(1, Vehicle.TwoStage, 0, 1, 300_000f, MathF.PI, throttle: 1f);
+        state = state with { Fuel = [.. Vehicle.TwoStage.Stages.Select(s => s.FuelMass)] };
+        var (sim, burner) = Staged(state, top: false); // a moment on, at normal speed: still burning its first stage
+        Assert.True(burner.EngineLit && burner.Motion.Stepping);
+        var at = burner.Motion.Time + Scene.FormulaBurnStepSeconds / 2;
+        Formula.Advance(burner, at);
+        Assert.Equal(at, burner.Motion.Shown, 9);
+        Assert.True(burner.Motion.Time < at, "a whole step not yet taken");
+        var raw = burner.Fuel * burner.CurrentStage.FuelMass;
+        return (sim, burner, raw - burner.Throttle * burner.CurrentStage.FuelFlow * (float)(at - burner.Motion.Time));
+    }
+
+    [Fact]
+    public void Saved_mid_step_a_burning_vessel_under_formula_keeps_the_fuel_its_burn_has_used()
+    {
+        var (sim, burner, shown) = BurningMidStep();
+        using var _ = sim;
+        var saved = burner.Capture(sim.Flight.WorldVessels).Fuel[burner.Stage];
+        output.WriteLine($"saved {saved:0.000} kg, by its flow {shown:0.000} kg");
+        Assert.Equal(shown, saved, 1e-3);
+    }
+
+    [Fact]
+    public void Crossing_mid_step_a_burning_vessel_under_formula_burns_what_it_owes_first()
+    {
+        var (sim, burner, shown) = BurningMidStep();
+        using var _ = sim;
+        var at = burner.Motion.Shown;
+        burner.CrossTo(GroundBody.Moon, Bodies.Change(GroundBody.Planet, GroundBody.Moon, at), at);
+        var tank = burner.Fuel * burner.CurrentStage.FuelMass;
+        output.WriteLine($"{tank:0.000} kg in its tank after the crossing, by its flow {shown:0.000} kg");
+        Assert.Same(GroundBody.Moon, burner.Body);
+        Assert.Equal(shown, tank, 1e-3);
+        Assert.Equal(at, burner.Motion.Time, 9); // begun again from here: nothing owed
+    }
+
+    [Fact]
+    public void Staged_mid_step_a_burning_vessel_under_formula_burns_what_it_owes_first()
+    {
+        var (sim, burner, shown) = BurningMidStep();
+        using var _ = sim;
+        Assert.Equal(1, sim.Flight.StageVessel(burner));
+        var dropped = sim.Flight.WorldVessels.Single(v => v.Vehicle == Vehicle.TwoStage && v != burner);
+        var tank = dropped.Fuel * dropped.CurrentStage.FuelMass;
+        output.WriteLine($"{tank:0.000} kg left in the dropped stage, by its flow {shown:0.000} kg");
+        Assert.Equal(shown, tank, 1e-3);
+        Assert.Equal(Vehicle.TwoStage.Stages[1].FuelMass, burner.Fuel * burner.CurrentStage.FuelMass, 1e-3); // the upper stage's, untouched
+    }
+
     [Fact]
     public void A_burn_after_staging_under_formula_gives_the_delta_v_the_numbers_say()
     {

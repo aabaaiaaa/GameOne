@@ -191,7 +191,7 @@ internal sealed class Unwatched(Flight flight)
         var now = _flight.WorldTime;
         for (var i = 0; i < world.Count; i++)
             if (world[i].OnFormula)
-                Formula.Advance(world[i], 0f, now, toTheEnd); // at its own body, by that body's ground, air and pull
+                Formula.Advance(world[i], now, toTheEnd); // at its own body, by that body's ground, air and pull
         Timings.Stop(StepDetail.Formula, started);
     }
 

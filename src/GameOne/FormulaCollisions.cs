@@ -14,12 +14,16 @@ namespace GameOne;
 /// at the window's two ends (<see cref="Begin"/>, then <see cref="Judge"/>), among the stars as its
 /// body's ground was at the window's start: good to a few centimetres over a window of orbit
 /// (some 14 cm at worst on a round orbit just over the planet's air, 4 times that on a
-/// near-parabolic one grazing it: see Scene.FormulaWindowSeconds),
-/// whatever moved it there (Kepler, or the formula's steps), and for a burn kept up across the
+/// near-parabolic one grazing it: see Scene.FormulaWindowSeconds) above the air, whatever moved
+/// it there (Kepler, or the formula's steps), and for a burn kept up across the
 /// window (a cubic follows its way to millimetres over a window, though a hold turns its push each
 /// second and the push grows as the mass falls): its throttle is set as a
 /// window begins, and a window is cut where any burn runs out of fuel (Flight's NextCut), so no
-/// way across one bends inside it. Each is boxed (its two ends, padded by
+/// way across one bends inside it. In the air it is not so good: a way stepped deep in the
+/// air over a window, its drag strong and changing, is not near a cubic, and two passing within
+/// their reach there may be solved a little off, or missed, past <see cref="FormulaContact.Slack"/>'s
+/// metre (the witnessed are never in the air at a formula's rate, which the gate holds for them,
+/// so this is between vessels nobody watches). Each is boxed (its two ends, padded by
 /// its reach and the most its pull bows its way off the chord, a T²/8), the boxes sorted along X
 /// (sweep and prune), and for each overlapping pair at one body, not both held where they stand,
 /// the closest approach of their two ways: golden-section on the gap's square, seeded at the
@@ -29,10 +33,16 @@ namespace GameOne;
 /// meet and on to where they part, if further, so a slow touch, begun long before the middles are
 /// closest, is found where it begins), from each one's Hermite state at that stretch's start.</para>
 /// <para>A vessel whose motion was remade inside the window (it landed or touched, was wrecked,
-/// crossed into another body's sphere, or wasn't there as it began: one staged off) is left out of
+/// crossed into another body's sphere or is shown at its crossing short of the window's end, or
+/// wasn't there as it began: one staged off) is left out of
 /// that window's pairs: its way across it isn't one curve. Each vessel's earliest collision is
 /// judged, soonest first, as <see cref="Unwatched"/> judges one (<see cref="FormulaContact.Wreck"/>),
-/// at its place then. Nothing here is witnessed, so nothing here slows the game or drops the warp.</para>
+/// at its place then. Nothing here slows the game or drops the warp. At a formula's rate the
+/// witnessed are under formula and among the pairs too: a collision coming at one drops the warp
+/// ahead of it (Flight's ComingCut), and a fast one holds it at the physics' top rate until it
+/// is over (Flight's CollisionHolds), so its slow-down plays out in the physics; what is judged
+/// here with one is a touch too slow to be slowed for, warped past by hand, judged as at the
+/// physics' rates.</para>
 /// <para>Allocation-free: sized for a full world (<see cref="Flight.Capacity"/>), grown only past it.</para>
 /// </remarks>
 internal sealed class FormulaCollisions(Flight flight)
@@ -152,8 +162,8 @@ internal sealed class FormulaCollisions(Flight flight)
             _vessel[k] = null; // nothing kept past the window
             var body = _body[k]!;
             var held = Collisions.Held(v);
-            if (!v.OnFormula || v.State == FlightState.Crashed || v.State != _state[k] || v.Body != body || held != _held[k] || v.Motion.Standing != _standing[k])
-                continue; // its motion remade inside the window: its way across it isn't one curve
+            if (!v.OnFormula || v.State == FlightState.Crashed || v.State != _state[k] || v.Body != body || held != _held[k] || v.Motion.Standing != _standing[k] || v.Motion.Behind)
+                continue; // its motion remade inside the window (or shown at a crossing short of its end): its way across it isn't one curve
             // As it ends, among the stars as the ground was as it began: turned on by the window's turn.
             var (turn, turned) = (_turn[body.Index], _turnFloat[body.Index]);
             var centre = (Vector3Double)body.Centre;
@@ -252,7 +262,12 @@ internal sealed class FormulaCollisions(Flight flight)
         if (Gap(d0, v0, d1, v1, high).LengthSquared() <= reach2)
             high = Edge(d0, v0, d1, v1, reach2, 1, high);
 
-        // Their bodies over it, from each one's Hermite state at its start, and their pulls there.
+        // Their bodies over it, from each one's Hermite state at its start, and their pulls there,
+        // held over the stretch: within each other's reach the pull between them is the tide across
+        // their gap (some 2g/R, two thousandths of a metre a second squared per metre of gap at the
+        // planet's surface, less higher up and at the moon), and the gap changes over the stretch by
+        // at most their reaches either way, so the pull's change moves the gap by a five-hundredth of
+        // their reaches over a second of it, far under FormulaContact.Slack.
         var r = Gap(d0, v0, d1, v1, low).ToSingle();
         var u = (Rate(d0, v0, d1, v1, low) / span).ToSingle();
         var a = Vector3.Lerp(_pull0[j], _pull1[j], (float)low) - Vector3.Lerp(_pull0[i], _pull1[i], (float)low);

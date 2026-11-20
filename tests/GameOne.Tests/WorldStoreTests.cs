@@ -544,12 +544,10 @@ public sealed class WorldStoreTests(ITestOutputHelper output) : IDisposable
             var left = flight.WorldVessels.Where(v => v.Id is 0 or 2).ToArray();
             foreach (var v in left)
                 v.LeavePhysics(flight.WorldTime);
-            var last = flight.WorldTime;
             sim.Run((_, _) => default, f =>
             {
                 foreach (var v in left)
-                    Formula.Advance(v, (float)(f.WorldTime - last), f.WorldTime);
-                last = f.WorldTime;
+                    Formula.Advance(v, f.WorldTime);
                 return false;
             }, maxSeconds: 30);
             Assert.All(left, v => Assert.True(v.OnFormula));

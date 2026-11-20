@@ -107,6 +107,27 @@ public sealed class WarpGateTests(ITestOutputHelper output)
         Press(sim.Flight, 20);
         Assert.Equal(Scene.PhysicsTopRate, sim.Flight.PlayerRate);
         Assert.Same(flown, sim.Flight.WarpHeldBy);
+        Assert.Equal($"{WorldLog.Named(flown)} not yet at rest", sim.Flight.WarpHeld);
+    }
+
+    [Fact]
+    public void A_vessel_settling_in_the_water_holds_it()
+    {
+        // A booster just over the deep sea, coming down at 2 m/s: in the water and settling, not
+        // yet afloat, so not yet at rest.
+        var water = Planet.Centre + WaterTests.DeepWater.Value * Planet.SeaRadius;
+        var (sim, flown) = WarpScenes.Flying(Drops.Placed(water, Planet.East(water), 2f, mission: Mission.FreePlay));
+        using var _ = sim;
+        Assert.True(sim.Run((_, _) => default, _ => flown.Craft.Settling, maxSeconds: 5), "it never came down in the water");
+        Press(sim.Flight, 20);
+        Assert.Equal(Scene.PhysicsTopRate, sim.Flight.PlayerRate);
+        Assert.Same(flown, sim.Flight.WarpHeldBy);
+        Assert.Equal($"{WorldLog.Named(flown)} not yet at rest", sim.Flight.WarpHeld);
+        // Settled afloat (and no longer settling), at rest: it holds nothing.
+        Assert.True(sim.Run((_, _) => default, _ => flown.State == FlightState.Floating && !flown.Craft.Settling, maxSeconds: 60), $"still {flown.State}");
+        Press(sim.Flight, 20);
+        Assert.Null(sim.Flight.WarpHeldBy);
+        Assert.Equal(Scene.TopRate, sim.Flight.PlayerRate);
     }
 
     [Fact]
@@ -153,7 +174,7 @@ public sealed class WarpGateTests(ITestOutputHelper output)
         Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
         Assert.Equal(new WarpDropped(WarpDrop.Air, WorldLog.Named(booster), Scene.PhysicsTopRate, flight.RealTime), flight.LastDrop);
         Assert.Equal($"WARP DROPPED to 8x: {WorldLog.Named(booster)} coming into the air",
-            Hud.TimeLine(null, flight.PlayerRate, flight.TimeScale, flight.TimeScale, WorldLog.Named(booster), flight.LastDrop, flight.RealTime)!.Value.Text);
+            Hud.TimeLine(null, flight.PlayerRate, flight.TimeScale, flight.TimeScale, flight.WarpHeld, flight.LastDrop, flight.RealTime)!.Value.Text);
         Press(flight, 5, watched: [booster]);
         Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
     }
@@ -231,8 +252,8 @@ public sealed class WarpGateTests(ITestOutputHelper output)
     [Fact]
     public void The_time_line_says_who_holds_the_warp_and_why_it_dropped()
     {
-        Assert.Equal(("WARP 8x  (held: Booster 1 flying in the air)   ( , and . )", false), Hud.TimeLine(null, 8f, 8f, 8f, "Booster 1", null, 0));
-        Assert.Equal(("WARP 8x  (held: Lander 2 flying low over the ground)   ( , and . )", false), Hud.TimeLine(null, 8f, 8f, 8f, "Lander 2", null, 0, airless: true));
+        Assert.Equal(("WARP 8x  (held: Booster 1 flying in the air)   ( , and . )", false), Hud.TimeLine(null, 8f, 8f, 8f, "Booster 1 flying in the air", null, 0));
+        Assert.Equal(("WARP 8x  (held: Lander 2 flying low over the ground)   ( , and . )", false), Hud.TimeLine(null, 8f, 8f, 8f, "Lander 2 flying low over the ground", null, 0));
         var dropped = new WarpDropped(WarpDrop.Air, "Upper stage", 8f, 10.0);
         Assert.Equal("WARP DROPPED to 8x: Upper stage coming into the air", Hud.TimeLine(null, 8f, 8f, 8f, null, dropped, 11.0)!.Value.Text);
         Assert.Equal(("WARP 8x   ( , and . )", true), Hud.TimeLine(null, 8f, 8f, 8f, null, dropped, 10.0 + Scene.WarpDropShownSeconds + 0.1));

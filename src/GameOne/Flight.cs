@@ -1634,6 +1634,11 @@ internal sealed partial class Flight : IDisposable
         var arriving = false;
         if (_warpTo is { } warp && warp.Time - WorldTime <= dt)
             (dt, arriving) = ((float)(warp.Time - WorldTime), true); // the warp ends below, once this frame's steps get there
+        // Taking a formula's rate with a drop due already: dropped now, the frame run in the physics
+        // (at the physics' top rate's length, as a drop as a frame begins is; the drop ends a warp
+        // to a point), nothing handed out.
+        if (ByFormula && AnyInPhysics() && DropDueNow(given))
+            (dt, arriving) = (realSeconds * TimeScale, false);
         var asked = dt;
         if (ByFormula)
         {
@@ -1648,6 +1653,7 @@ internal sealed partial class Flight : IDisposable
             // flown and the witnessed back in the physics before it steps.
             if (_underFormula)
                 LeaveFormula(given);
+            FormulaWindows = 0; // no window: the frame is the physics'
             if (TimeScale > 1f)
                 dt = Advance(dt, given, budgetSeconds);
             else
@@ -1757,6 +1763,8 @@ internal sealed partial class Flight : IDisposable
         // the flown vessel's place only at its own body.
         _worlds.Step(dt, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_controls), Controlled.Body, Controlled.Position, WorldTime);
         _bodiesAt = WorldTime;
+        if (!_worlds.SeaStepped)
+            RaftsAt(WorldTime); // no physics at the sea stepped them: the formula's landings on a deck or floe judged against it as it is now
         // Those under formula moved on to now too, so everything after (their rules, the target,
         // the look ahead) sees every vessel where it is at this time.
         Unwatched.Advance();
@@ -2085,6 +2093,8 @@ internal sealed partial class Flight : IDisposable
         Span<Vector3Double> placesLagged = stackalloc Vector3Double[bodies.Count];
         Span<double> clearNow = stackalloc double[bodies.Count];
         Span<double> clearLagged = stackalloc double[bodies.Count];
+        Span<Vector3Double> placesThen = stackalloc Vector3Double[bodies.Count];
+        Span<double> clearThen = stackalloc double[bodies.Count];
         var (madeNow, madeLagged) = (false, false);
         var asked = 0;
         for (var i = 0; i < _world.Count; i++)
@@ -2092,11 +2102,25 @@ internal sealed partial class Flight : IDisposable
             var v = _world[i];
             if (v.State == FlightState.Crashed)
                 continue;
+            // One shown at its crossing's moment within the window (FormulaMotion.Behind) is asked
+            // there, by the bodies' places then, and moved on to now once handed across (or not).
+            var behind = v.OnFormula && v.Motion.Behind;
+            if (behind)
+            {
+                v.Motion.Behind = false;
+                var then = v.Motion.Shown;
+                Bodies.PlacesIn(bodies, then, placesThen);
+                for (var b = 0; b < bodies.Count; b++)
+                    clearThen[b] = Bodies.ClearWithin(bodies, placesThen, b);
+                asked += CrossOne(v, then, placesThen, clearThen);
+                Formula.Advance(v, now);
+                continue;
+            }
             var lagged = v.Physics is not null;
-            var at = MotionTime(v, now);
             var places = lagged ? placesLagged : placesNow;
             var clear = lagged ? clearLagged : clearNow;
             ref var made = ref lagged ? ref madeLagged : ref madeNow;
+            var at = MotionTime(v, now);
             if (!made)
             {
                 Bodies.PlacesIn(bodies, at, places);
@@ -2104,21 +2128,33 @@ internal sealed partial class Flight : IDisposable
                     clear[b] = Bodies.ClearWithin(bodies, places, b);
                 made = true;
             }
-            if (((Vector3Double)v.CentreOfMass - v.Body.Centre).Length() < clear[v.Body.Index])
-                continue;
-            asked++;
-            var into = Bodies.Choose(bodies, places, v.Body, v.CentreOfMass, at);
-            if (into == v.Body)
-                continue;
-            var change = Bodies.Change(v.Body, into, at);
-            var underFormula = v.OnFormula;
-            v.CrossTo(into, change, at);
-            if (underFormula)
-                Unwatched.Crossed(v, at);
-            if (v == Controlled)
-                Rebase(change);
+            asked += CrossOne(v, at, places, clear);
         }
         CrossAsked = asked;
+    }
+
+    /// <summary>
+    /// Hands <paramref name="v"/> across a sphere's edge if it has crossed one by world time
+    /// <paramref name="at"/> (its motion's), the bodies' <paramref name="places"/> then and how near
+    /// each one's centre nothing is asked (<paramref name="clear"/>): see <see cref="Cross"/>.
+    /// 1 if it was asked, 0 if it was near enough its body's centre not to be.
+    /// </summary>
+    private int CrossOne(Vessel v, double at, ReadOnlySpan<Vector3Double> places, ReadOnlySpan<double> clear)
+    {
+        if (((Vector3Double)v.CentreOfMass - v.Body.Centre).Length() < clear[v.Body.Index])
+            return 0;
+        var bodies = Bodies.All;
+        var into = Bodies.Choose(bodies, places, v.Body, v.CentreOfMass, at);
+        if (into == v.Body)
+            return 1;
+        var change = Bodies.Change(v.Body, into, at);
+        var underFormula = v.OnFormula;
+        v.CrossTo(into, change, at);
+        if (underFormula)
+            Unwatched.Crossed(v, at);
+        if (v == Controlled)
+            Rebase(change);
+        return 1;
     }
 
     /// <summary>
@@ -2559,9 +2595,12 @@ internal sealed partial class Flight : IDisposable
     /// the waves have it now, moving as the deck there does. A body is its centre, flying (on its
     /// path round its parent). All of it in the flown vessel's body's frame, over that body's
     /// ground, whatever body the target is at (changed across: see <see cref="Across"/>), and
-    /// with the body it is at (a body's, itself).
+    /// with the body it is at (a body's, itself). A place (a ship's deck, a site, a point, a body's
+    /// centre) is located at world time <paramref name="time"/> if it is given (within a window at a
+    /// formula's rate: see <see cref="LocateTargetAt"/>), a ship's deck posed then without moving the
+    /// ship; a vessel always where it is now.
     /// </summary>
-    public TargetPlace? Locate(NavTarget target)
+    public TargetPlace? Locate(NavTarget target, double? time = null)
     {
         var (vessel, index, found) = Find(target, null);
         if (!found)
@@ -2569,22 +2608,34 @@ internal sealed partial class Flight : IDisposable
         if (vessel is not null)
             return Across(vessel.Body, vessel.CentreOfMass, vessel.Velocity, vessel.State == FlightState.Flying);
         if (target.Kind == TargetKind.Body)
-            return Across(Bodies.All[index], Bodies.All[index].Centre, Vector3.Zero, true);
+            return Across(Bodies.All[index], Bodies.All[index].Centre, Vector3.Zero, true, time);
         // A point's index is into the mission's points, not the sites: asked before the sites' rafts,
         // which would take a point's index 2 or more for a drone ship's site (or past the sites, none).
         if (target.Kind == TargetKind.Point)
         {
             var point = Mission.PointsOfInterest[index];
-            return Across(point.Body, point.Place, Vector3.Zero, false);
+            return Across(point.Body, point.Place, Vector3.Zero, false, time);
         }
         if (Sites.RaftOf(index) is { } raft)
         {
+            if (time is { } then)
+            {
+                // Its deck's middle then, moving as it does there (a central difference: the waves are smooth).
+                var (deckThen, before, after) = (DeckMiddle(raft, raft.Pose(then)), DeckMiddle(raft, raft.Pose(then - DeckStep)), DeckMiddle(raft, raft.Pose(then + DeckStep)));
+                return Across(Sites.Body, deckThen, (after - before) / (float)(2.0 * DeckStep), false, then);
+            }
             var ship = Rafts.Now(raft);
-            var deck = Vector3.Transform(new Vector3(0f, ship.Freeboard, 0f), ship.Current.Model);
+            var deck = DeckMiddle(ship, ship.Current);
             return Across(Sites.Body, deck, ship.VelocityAt(deck), false);
         }
-        return Across(Sites.Body, Sites.Top(index), Vector3.Zero, false);
+        return Across(Sites.Body, Sites.Top(index), Vector3.Zero, false, time);
     }
+
+    /// <summary>The middle of <paramref name="raft"/>'s deck as it lies at <paramref name="pose"/>.</summary>
+    private static Vector3 DeckMiddle(Raft raft, in DeckPose pose) => Vector3.Transform(new Vector3(0f, raft.Freeboard, 0f), pose.Model);
+
+    /// <summary>How far either side a ship's deck is posed for its velocity at a time (see <see cref="Locate"/>): far shorter than its waves.</summary>
+    private const double DeckStep = 0.05;
 
     /// <summary>
     /// A target's place and velocity over the ground of <paramref name="body"/> (the body it is at,

@@ -183,7 +183,7 @@ public sealed class BodiesInPlayTests(ITestOutputHelper output)
         while (now < from + 10 * lap)
         {
             now += Every;
-            Formula.Advance(v, Every, now);
+            Formula.Advance(v, now);
             var (a, p) = OrbitOf(v);
             (worstA, worstP) = (MathF.Max(worstA, MathF.Abs(a - apoapsis)), MathF.Max(worstP, MathF.Abs(p - periapsis)));
         }

@@ -51,12 +51,12 @@ public sealed class WarpDropTests(ITestOutputHelper output)
     }
 
     /// <summary>Runs frames until the warp drops (at most <paramref name="frames"/>), returning how many it took.</summary>
-    private static int UntilDropped(Simulation sim, int frames = 20, Func<FlightInput>? input = null)
+    private static int UntilDropped(Simulation sim, int frames = 20, Func<FlightInput>? input = null, WarpDrop? reason = null)
     {
         for (var i = 1; i <= frames; i++)
         {
             sim.Step(input?.Invoke() ?? default);
-            if (sim.Flight.LastDrop is not null)
+            if (sim.Flight.LastDrop is { } drop && (reason is null || drop.Reason == reason))
                 return i;
         }
         Assert.Fail($"the warp never dropped in {frames} frames");
@@ -290,6 +290,57 @@ public sealed class WarpDropTests(ITestOutputHelper output)
         Assert.True(sim.Run((_, _) => default, f => f.WorldTime > node + 60.0, maxSeconds: 1000));
         Assert.Equal(Scene.TopRate, flight.PlayerRate);
         Assert.Equal(dropped, flight.LastDrop);
+    }
+
+    [Fact]
+    public void A_node_s_drop_after_staging_is_timed_by_the_new_stage_s_burn()
+    {
+        // The upper stage with the satellite on it, so staging leaves it lighter, its burn shorter.
+        var alone = InOrbit.Round(Planet, 0, WarpScenes.LowOrbitHeight);
+        var offset = RocketGeometry.CentreOfMassOffset(alone.Vehicle, alone.First, alone.First + 1);
+        var (sim, flown) = WarpScenes.Flying(alone with
+        {
+            Last = alone.First + 1, CentreOfMassOffset = offset,
+            Position = alone.CentreOfMass.ToSingle() - Vector3.Transform(offset, alone.Rotation),
+        });
+        using var _ = sim;
+        var flight = sim.Flight;
+        var node = flight.WorldTime + 2000.0;
+        sim.Step(new FlightInput(Plan: ManoeuvreChain.AnchoredOn(flown, node, [new ManoeuvreNode(0.0, Prograde: 200f)], flight.WorldTime)));
+        var before = flight.Guide!.Value.BurnSeconds;
+        FormulaRateTests.ToTheTop(flight);
+        sim.Step(default); // a frame at the top rate: the node's drop moment worked out, by this stage's burn
+        sim.Step(new FlightInput(Stage: true)); // dropped, and staged in the physics: the fairing
+        for (var i = 0; i < 30; i++)
+            sim.Step(default);
+        sim.Step(new FlightInput(Stage: true)); // and the satellite
+        for (var i = 0; i < 30; i++)
+            sim.Step(default);
+        var chain = flight.Controlled.Chain;
+        Assert.NotNull(chain);
+        var burn = flight.Guide!.Value.BurnSeconds;
+        output.WriteLine($"its burn {before:0.00} s, then {burn:0.00} s on {WorldLog.Named(flight.Controlled)}");
+        Assert.True(MathF.Abs(burn - before) > 1f, "another stage, another burn");
+
+        sim.RealFrame = Simulation.TopRateFrame * 600f;
+        FormulaRateTests.ToTheTop(flight);
+        UntilDropped(sim, frames: 100, input: null, reason: WarpDrop.Node);
+        Assert.InRange(chain!.TimeOf(0) - flight.WorldTime, Scene.WarpDropLeadSeconds + burn / 2 - 0.01, Scene.WarpDropLeadSeconds + burn / 2 + 0.01);
+    }
+
+    [Fact]
+    public void Faster_with_a_node_within_its_lead_drops_back_without_handing_anything_to_the_formula()
+    {
+        var (sim, flown) = WarpScenes.LowOrbit();
+        using var _ = sim;
+        var flight = sim.Flight;
+        sim.Step(new FlightInput(Plan: ManoeuvreChain.AnchoredOn(flown, flight.WorldTime + 3.0, [new ManoeuvreNode(0.0, Prograde: 20f)], flight.WorldTime)));
+        ToThePhysicsTop(flight);
+        flight.RunFrame(Simulation.FrameSeconds, new FlightInput(Faster: true));
+        Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
+        Assert.Equal(WarpDrop.Node, flight.LastDrop!.Value.Reason);
+        Assert.Equal(0, flight.FormulaWindows); // dropped before any window: run in the physics
+        Assert.False(flown.OnFormula);
     }
 
     [Fact]

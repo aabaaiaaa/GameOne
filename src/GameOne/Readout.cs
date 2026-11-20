@@ -226,7 +226,7 @@ internal sealed class Readout
         if (flight.WarpHeldBy is { } heldBy)
             Show("Warp held", WorldLog.Named(heldBy)); // the witnessed vessel holding the warp to the physics' top rate
         if (flight.LastDrop is { } dropped && dropped.ShownAt(flight.RealTime, flight.PlayerRate)) // why the warp dropped to the physics' top rate, while the time line says it
-            Show("Warp dropped", dropped.Vessel.Length > 0 ? $"{dropped.Reason} {dropped.Vessel} to {dropped.Rate:0}x" : $"{dropped.Reason} to {dropped.Rate:0}x");
+            Show("Warp dropped", $"{dropped.Reason} {dropped.Vessel} to {dropped.Rate:0}x");
         if (flight.WarpingTo is { } warpTo) // a right click on the path: the world time it stops at (as "World seconds" counts), and how long to go
             Show("Warp to", $"{warpTo:0.00} in {warpTo - flight.WorldTime:0.0} s");
         Show("World seconds", $"{flight.WorldTime:0.00}"); // the world's clock in seconds, to read a warp's stop by

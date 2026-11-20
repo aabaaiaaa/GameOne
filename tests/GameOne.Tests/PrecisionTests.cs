@@ -211,11 +211,9 @@ public sealed class PrecisionTests(ITestOutputHelper output)
     /// </summary>
     private static void Coast(Simulation sim, Vessel v, double seconds, Vessel[] watched)
     {
-        var last = sim.Flight.WorldTime;
         sim.Run((_, _) => new FlightInput(Watched: watched), f =>
         {
-            Formula.Advance(v, (float)(f.WorldTime - last), f.WorldTime);
-            last = f.WorldTime;
+            Formula.Advance(v, f.WorldTime);
             return false;
         }, seconds);
     }
@@ -302,7 +300,7 @@ public sealed class PrecisionTests(ITestOutputHelper output)
             var (sum, lo, hi) = (0.0, double.MaxValue, double.MinValue);
             for (var i = 0; i < steps; i++)
             {
-                Formula.Advance(v, Scene.FormulaStepSeconds, t += Scene.FormulaStepSeconds);
+                Formula.Advance(v, t += Scene.FormulaStepSeconds);
                 Assert.True(v.Motion.Stepping, "low, it should be stepped all the way round");
                 var a = Size(v.Motion);
                 (sum, lo, hi) = (sum + a, Math.Min(lo, a), Math.Max(hi, a));

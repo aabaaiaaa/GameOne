@@ -124,7 +124,7 @@ public sealed class FormulaRateTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void The_drop_brings_the_flown_vessel_back_into_the_physics_first_where_the_formula_had_it()
+    public void The_drop_brings_the_flown_vessel_and_the_witnessed_back_into_the_physics_where_the_formula_had_it()
     {
         // Another round orbit 3 km behind it, in a small view.
         var other = InOrbit.Round(GroundBody.Planet, 1, WarpScenes.LowOrbitHeight);
@@ -144,6 +144,7 @@ public sealed class FormulaRateTests(ITestOutputHelper output)
         flight.RunFrame(0f, new FlightInput(Lean: flown.Right, Watched: watched));
         Assert.Equal(Scene.PhysicsTopRate, flight.PlayerRate);
         Assert.Equal(WarpDrop.Steering, flight.LastDrop!.Value.Reason);
+        Assert.Equal(0, flight.FormulaWindows); // the frame ran in the physics
         Assert.False(flown.OnFormula);
         Assert.False(viewed.OnFormula);
         Assert.Same(flight.PhysicsAt(flown.Body), flown.Physics);
@@ -458,6 +459,56 @@ public sealed class FormulaRateTests(ITestOutputHelper output)
         SolarEdgeTests.LeftAndLogged(flight, 0);
         Assert.Equal(Scene.TopRate, flight.PlayerRate);
         Assert.Equal(Scene.TopRate, flight.TimeScale);
+    }
+
+    [Fact]
+    public void A_place_target_is_located_at_a_time_ahead_where_it_will_be_then()
+    {
+        // What a hold in the target's frame steers by along a window's burn steps: a drone ship's
+        // deck riding the waves, and a body moving across the sky, each where it will be then.
+        var (sim, _) = WarpScenes.LowOrbit();
+        using var _s = sim;
+        var flight = sim.Flight;
+        var ship = Enumerable.Range(0, Sites.All.Length).First(i => Sites.RaftOf(i) is not null);
+        NavTarget[] targets = [new(TargetKind.Site, ship), new(TargetKind.Body, GroundBody.Moon.Index)];
+        var ahead = targets.Select(t => flight.Locate(t, flight.WorldTime + 1.0)!.Value).ToArray();
+        for (var i = 0; i < 60; i++)
+            flight.RunFrame(1f / 60f, default);
+        for (var k = 0; k < targets.Length; k++)
+        {
+            var now = flight.Locate(targets[k])!.Value;
+            var (off, moving) = (Vector3.Distance(now.Position, ahead[k].Position), Vector3.Distance(now.Velocity, ahead[k].Velocity));
+            output.WriteLine($"{targets[k].Kind}: {off:0.000} m and {moving:0.000} m/s from where it was located a second ahead");
+            Assert.True(off < 0.1f && moving < 0.1f, $"{targets[k].Kind} {off:0.000} m, {moving:0.000} m/s off");
+        }
+    }
+
+    [Fact]
+    public void A_vessel_reaching_the_solar_system_s_edge_in_a_top_rate_frame_is_lost_at_its_moment()
+    {
+        // 50 km short of the edge, going out at 2 km/s: there some 25 s on, within a window or so.
+        var world = new WorldState
+        {
+            Time = SolarEdgeTests.Now, Vessels = [InOrbit.Round(GroundBody.Planet, 1, WarpScenes.LowOrbitHeight), SolarEdgeTests.AtTheEdge(0, 50_000, 2000f)],
+            NextVesselId = 2, Flights = 2,
+        };
+        var (sim, _) = WarpScenes.Flying(world, 1);
+        using var _s = sim;
+        var flight = sim.Flight;
+        var far = flight.WorldVessels.Single(v => v.Id == 0);
+        Assert.True(far.OnFormula);
+        var legs = new List<PathLeg>();
+        Patched.Legs(far.Body, far.CentreOfMass, far.Body.AmongStars(far.CentreOfMass, far.Velocity), flight.WorldTime, legs);
+        Assert.True(legs[^1].LeavesSystem);
+        var edge = legs[^1].End;
+        ToTheTop(flight);
+        sim.Step(default);
+        SolarEdgeTests.LeftAndLogged(flight, 0);
+        var lost = flight.Log.Single(e => e.How == WorldLog.LeftTheSolarSystem).Time;
+        output.WriteLine($"at the edge {edge - SolarEdgeTests.Now:0.000} s on, lost {lost - SolarEdgeTests.Now:0.000} s on");
+        // The path here is from its float place, a kilometre a step out there: half a second at its
+        // speed, against a window's 12 s.
+        Assert.InRange(lost - edge, -1.0, 1.0);
     }
 
     [Fact]

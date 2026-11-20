@@ -379,12 +379,11 @@ internal static class Shaders
         // shows as fine grain, not bands, and on average is the same light. With dense, the steps are
         // short at the end where the air is thick (1: by the eye, as in a view from inside the air;
         // -1: at the far end, as looking down from orbit) and lengthen away from it, as the square of
-        // the way along; with 0, even.
-        vec3 airMarch(vec3 o, vec3 d, float from, float to, int steps, float dense, out vec3 through)
+        // the way along; with 0, even. With shadows false, the planet's shadow is left out (see airMarch).
+        vec3 airMarchLit(vec3 o, vec3 d, float from, float to, int steps, float dense, bool shadows, out vec3 through)
         {
             float a = from, b = to, enter, leave;
-            // (The averaged light, over half eased in, has its sun over every horizon: no shadow.)
-            if (frame.averaged.x < 0.5 && shadowStretch(o, d, enter, leave) && enter < to && leave > from)
+            if (shadows && shadowStretch(o, d, enter, leave) && enter < to && leave > from)
             {
                 if (enter <= from && leave >= to)
                 {
@@ -435,6 +434,25 @@ internal static class Shaders
             }
             through = exp(-(depth + after));
             return light;
+        }
+
+        // The averaged light has its sun over every horizon, so no shadow: as it eases in, the march
+        // with the planet's shadow and the one without are blended over the middle half of its ease
+        // (its weight 0.25 to 0.75), so the twilight's shadow fades rather than snapping off;
+        // both are marched only then, for the few frames the ease takes.
+        vec3 airMarch(vec3 o, vec3 d, float from, float to, int steps, float dense, out vec3 through)
+        {
+            float w = frame.averaged.x;
+            if (w <= 0.25)
+                return airMarchLit(o, d, from, to, steps, dense, true, through);
+            if (w >= 0.75)
+                return airMarchLit(o, d, from, to, steps, dense, false, through);
+            vec3 throughShadowed, throughLit;
+            vec3 shadowed = airMarchLit(o, d, from, to, steps, dense, true, throughShadowed);
+            vec3 lit = airMarchLit(o, d, from, to, steps, dense, false, throughLit);
+            float s = smoothstep(0.25, 0.75, w);
+            through = mix(throughShadowed, throughLit, s);
+            return mix(shadowed, lit, s);
         }
 
         // How many steps a march along this much of a ray in the air takes: one each AIR_STEP, from
