@@ -82,8 +82,13 @@ test covers.
   round the moon; `LanderMargin`, 40% of the lander's landed): if one falls short after a
   change, the lander's engine is made more efficient (`BurnSeconds` up), never more powerful, or
   the upper stage grown (its fuel up, its dry mass by a tenth of that). The whole trip, leg
-  after leg, is long. The warp on a long stretch runs the same steps (a frame of it is many), so it
-  saves no test time: the transfer, on its orbit with the engine off, is the time it takes.
+  after leg, is long. The pilots coast with their engines off as a player would, by a warp to
+  the moment they want (`Pilots.CoastTo`, a `FlightInput.WarpTo`: the formula's rates where the
+  gate lets them, stopping at normal speed on time), so a long coast (the transfer, the wait for a
+  periapsis or for the spot to come round) costs the test a few frames; the last seconds before
+  it are flown at the physics' rates, as before. A coast warped by formula is never stepped by
+  Jolt, so a test of the physics on the way (a crossing in the physics, say) coasts at
+  `Scene.PhysicsTopRate` at most instead.
 - **The very low orbit of the moon** (`LowPassTests`, `LowPass`): the round orbit whose track
   over a number of laps crosses the lowest highest ground, found by searching the moon's height
   map (any body with no air: `LowPass.Find` takes a `GroundBody`), flown `LowPass.Clearance`
@@ -117,16 +122,10 @@ test covers.
   A test whose check is itself the slow part (a whole lap, an approach and a hold) may stay over
   the limit in the normal suite, named in the record (the user's choice, 2026-11-04). Today:
   the merged satellites orbit test (`WorldTests`, about 23 s), the 49-booster field
-  (`TerrainTileTests`, 8 to 10 s), the target-frame rendezvous (`FrameFlightTests`, about
-  10 s) and the transfer from a low orbit into the moon's sphere (`MoonTripTests`, about 15 s:
-  some 400 s of flight that no start can shorten). Others go just over on a busy run: lying
-  across the ice edge (`IceTests`, up to 9 s), coming home by the surface frame 300 m north
-  (`FrameFlightTests`, up to 8 s), the capture into an orbit round the moon (`MoonTripTests`,
-  up to 8 s: its start, just inside the moon's sphere, is some 150 s from the periapsis; the
-  stack's, `LanderTripTests`, likewise up to 10 s), and the lander's landing from its orbit round
-  the moon (`LanderTripTests`, 7 s alone, up to 9 s: some 155 s of flight, its gentle engine
-  braking from high up). The
-  fast collisions are under it: the 8,000 m/s head-on collision is flown 2.5 km up, clear of the
+  (`TerrainTileTests`, 8 to 10 s) and the target-frame rendezvous (`FrameFlightTests`, about
+  10 s). Others go just over on a busy run: lying across the ice edge (`IceTests`, up to 9 s)
+  and coming home by the surface frame 300 m north (`FrameFlightTests`, up to 8 s). The fast
+  collisions are under it: the 8,000 m/s head-on collision is flown 2.5 km up, clear of the
   ground's tiles.
 - **The record:** `tests/GameOne.Tests/TestTimes.json` holds each machine's times (by hashed key),
   which balance the shards and show what got slower. Retake it on purpose, like

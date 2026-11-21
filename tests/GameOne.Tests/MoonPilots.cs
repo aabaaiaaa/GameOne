@@ -67,6 +67,9 @@ internal sealed class TransferPilot
     /// </summary>
     public double TrimAfter { get; init; } = 120;
 
+    /// <summary>How far past the crossing into the moon's sphere the last coast warps to (seconds), so it is over the edge when the warp stops.</summary>
+    private const double InsideTheSphere = 5;
+
     /// <summary>The trim is done once the moon leg's tilt from its poles (its sine) and its periapsis are this near.</summary>
     public (double Polar, double Height) Within { get; init; } = (0.004, 15);
 
@@ -142,9 +145,11 @@ internal sealed class TransferPilot
                 }
                 return default;
             case Phase.Out:
-                // On its orbit, the warp up, to where the trim is.
+                // On its orbit, warped to where the trim is.
+                if (Pilots.CoastTo(flight, _cutAt + TrimAfter) is { } coast)
+                    return coast;
                 if (flight.WorldTime < _cutAt + TrimAfter)
-                    return new FlightInput(Faster: flight.PlayerRate < Scene.PhysicsTopRate && flight.WorldTime < _cutAt + TrimAfter - 20);
+                    return default;
                 if (flight.PlayerRate > 1f)
                     return new FlightInput(Slower: true);
                 Now = Phase.Trim;
@@ -152,6 +157,10 @@ internal sealed class TransferPilot
             case Phase.Trim:
                 return Trim(flight, dt, stars);
             default:
+                // Warped to just inside the moon's sphere, where it is done.
+                MoonReadings.Legs(flight, _legs);
+                if (MoonReadings.MoonLeg(_legs) is { } arriving && Pilots.CoastTo(flight, arriving.Start + InsideTheSphere) is { } toMoon)
+                    return toMoon;
                 return new FlightInput(Faster: flight.PlayerRate < Scene.PhysicsTopRate, CutThrottle: flight.Throttle > 0f);
         }
     }
@@ -283,6 +292,9 @@ internal sealed class CapturePilot
                 var periapsisSpeed = orbit.VelocityAt(0).Length();
                 var burn = (periapsisSpeed - MathF.Sqrt(Moon.Mu / (float)orbit.PeriapsisDistance)) / flight.MaxAcceleration;
                 var lined = Vector3.Dot(flight.Controlled.Up, -Vector3.Normalize(flight.FrameVelocity)) > 0.995f;
+                // Warped to half a minute short of the periapsis, then the rest at normal speed.
+                if (toPeriapsis > 20 && Pilots.CoastTo(flight, flight.WorldTime + toPeriapsis - 30) is { } coast)
+                    return coast;
                 if (toPeriapsis > 20)
                     return new FlightInput(Faster: flight.PlayerRate < Scene.PhysicsTopRate && toPeriapsis > 40);
                 if (flight.PlayerRate > 1f)
@@ -359,6 +371,23 @@ internal sealed class MoonLandingPilot
     /// lap, its engine off.
     /// </summary>
     public float LineUpWhenAhead { get; init; } = 1.57f;
+
+    /// <summary>
+    /// About how long until the spot, <paramref name="ahead"/> round the moon now, is
+    /// <paramref name="wanted"/> ahead (a lap on, if it is nearer already): by the angle to go
+    /// over the orbit's rate round the moon's centre, short by a tenth, as the moon turns the spot
+    /// under the orbit meanwhile and the orbit isn't quite round; the rest is flown by the pilot's
+    /// own last stretch.
+    /// </summary>
+    private double SecondsUntil(Flight flight, Vector3 velocity, float ahead, float wanted)
+    {
+        var toGo = ahead - wanted;
+        if (toGo < 0f)
+            toGo += MathF.Tau;
+        var r = flight.CentreOfMass - Body.Centre;
+        var rate = Vector3.Cross(r, velocity).Length() / r.LengthSquared();
+        return 0.9 * toGo / rate;
+    }
 
     /// <summary>The track is lined up once it passes within this of the spot (metres).</summary>
     public float LinedWithin { get; init; } = 2f;
@@ -468,7 +497,8 @@ internal sealed class MoonLandingPilot
             // Waiting for the spot to come round (a lap, if it has passed: a line-up the pass was too
             // short for carries on at the next), with its engine off.
             if (ahead > LineUpWhenAhead + 0.3f || ahead < BurnWhenAhead + 0.1f && LineUpBegan is null)
-                return new FlightInput(Faster: flight.PlayerRate < Scene.PhysicsTopRate && flight.Throttle == 0f, CutThrottle: flight.Throttle > 0f);
+                return Pilots.CoastTo(flight, flight.WorldTime + SecondsUntil(flight, velocity, ahead, LineUpWhenAhead + 0.3f))
+                    ?? new FlightInput(Faster: flight.PlayerRate < Scene.PhysicsTopRate && flight.Throttle == 0f, CutThrottle: flight.Throttle > 0f);
             if (flight.PlayerRate > 1f)
                 return new FlightInput(Slower: true);
             if (ahead > LineUpWhenAhead)
@@ -491,7 +521,8 @@ internal sealed class MoonLandingPilot
         {
             var lined = Vector3.Dot(flight.Controlled.Up, -Vector3.Normalize(velocity)) > 0.995f;
             if (ahead > BurnWhenAhead + 0.3f)
-                return new FlightInput(Faster: flight.PlayerRate < Scene.PhysicsTopRate);
+                return Pilots.CoastTo(flight, flight.WorldTime + SecondsUntil(flight, velocity, ahead, BurnWhenAhead + 0.3f))
+                    ?? new FlightInput(Faster: flight.PlayerRate < Scene.PhysicsTopRate);
             if (flight.PlayerRate > 1f)
                 return new FlightInput(Slower: true);
             if (!(lined && ahead < BurnWhenAhead))

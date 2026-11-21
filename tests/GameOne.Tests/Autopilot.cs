@@ -555,6 +555,25 @@ internal sealed class SatellitePilot
 /// <summary>What the autopilots share: turning wanted settings into inputs.</summary>
 internal static class Pilots
 {
+    /// <summary>Within this of the moment coasted to (seconds), the pilot flies the last of the way itself: a warp to so near would end at once.</summary>
+    public const double WarpToWithin = 2;
+
+    /// <summary>
+    /// A coast with its engine off to <paramref name="until"/> (a world time), as a player would
+    /// by a right click on the path: a warp to that point (<see cref="FlightInput.WarpTo"/>: the
+    /// fastest rate the gate lets it, past the physics' top one by the formula, stopping at normal
+    /// speed on that moment), so a long coast costs the test a few frames. Nothing pressed while it
+    /// warps (a rate key would end the warp); asked again once something dropped it early. Null
+    /// within <see cref="WarpToWithin"/> of the moment, for the pilot's own last stretch.
+    /// </summary>
+    public static FlightInput? CoastTo(Flight flight, double until)
+    {
+        if (until - flight.WorldTime <= WarpToWithin)
+            return null;
+        var cut = flight.Throttle > 0f;
+        return flight.WarpingTo is null && !cut ? new FlightInput(WarpTo: until) : new FlightInput(CutThrottle: cut);
+    }
+
     /// <summary>The part of <paramref name="v"/> across the ground, without its part along <paramref name="up"/>.</summary>
     public static Vector3 Across(Vector3 v, Vector3 up) => v - up * Vector3.Dot(v, up);
 

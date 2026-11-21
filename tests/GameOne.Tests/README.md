@@ -1314,7 +1314,7 @@ GAMEONE_PERF=1 dotnet test GameOne.slnx -c Release --filter "FullyQualifiedName~
   (`MoonTrip`): from a low orbit round the planet (300 m over the air, the moon a transfer's lead
   ahead, with the fuel the satellite mission's ascent leaves the upper stage, `MoonTrip.AscentFuel`)
   into the moon's sphere within 1,200 s, fuel left, never faster than 1,000 m/s over the ground
-  (about 15 s: the transfer itself is the slow part); arriving 200 m inside the sphere, captured
+  (its coasts warped to, about a second); arriving 200 m inside the sphere, captured
   into a closed orbit round the moon, its periapsis over 100 m above its highest ground, Auto
   orbital; from a round orbit over the moon's poles, landed within the levelled plains round the
   landing spot (150 m) under 2 m/s, frozen within 10 s, the fuel it took reported; and a dive at
