@@ -259,6 +259,7 @@ GAMEONE_PERF=1 dotnet test GameOne.slnx -c Release --filter "FullyQualifiedName~
   still succeeding but scoring less (the on-the-zone flight it compares with is the first test's,
   flown once for both by a class fixture); releasing the satellite leaving the upper stage behind, with
   its legs.
+- **`FramePacerTests`:** the settings' 60 and 30 fps caps (`FramePacer`): thirty frames a period apart on average, never early; uncapped and at the screen's rate (the swapchain's vsync) no wait at all; and a frame late by more than a period, after a stall, starting the schedule again from there, so the next waits its whole period rather than following at once.
 - **`FrameFlightTests`:** whole flights flown by the frames' pilots: the orbit mission on Auto
   turning orbital once, as it climbs past the air's top and the margin (its periapsis still in the
   air), before its orbit step is ticked, and staying orbital through the burn and on in its low

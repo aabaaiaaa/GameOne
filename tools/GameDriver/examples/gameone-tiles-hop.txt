@@ -17,8 +17,8 @@
 0.5  move 0 71
 1    click 0 71          # ... Settings
 0    until Menu = Settings
-1.5  move -160 -16
-2    click -160 -16       # Show timings: on
+1.5  move -160 -70
+2    click -160 -70       # Show timings: on
 3    tap escape
 4    tap escape
 0    until Menu = None

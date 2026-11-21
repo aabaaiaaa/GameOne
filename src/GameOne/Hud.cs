@@ -361,6 +361,9 @@ internal sealed class Hud : IDisposable
     /// <summary>The player's settings (the game reads them from its <see cref="WorldStore"/>), as changed in the settings screen.</summary>
     public Settings Settings { get; set; } = new();
 
+    /// <summary>The screen's refresh rate in Hz, named on the settings' "The screen's rate" (0: not known, so none named).</summary>
+    public int ScreenHz { get; set; }
+
     /// <summary>Whether the settings were changed since the last call, for the game to save them.</summary>
     public bool TakeSettingsChanged()
     {
@@ -1426,7 +1429,7 @@ internal sealed class Hud : IDisposable
     /// <summary>
     /// The middle of the screen, from the game menu: the player's settings, the same in every
     /// world. So far, which markers show (all of them, or none, and each kind), the timings panel,
-    /// whether frames are capped at the screen's rate, and whether near misses are slowed.
+    /// how fast frames are drawn at most, and whether near misses are slowed.
     /// </summary>
     private void SettingsScreen(float2 display)
     {
@@ -1440,8 +1443,8 @@ internal sealed class Hud : IDisposable
             ImGui.PopFont();
             ImGui.Separator();
             var s = Settings;
-            var (all, bodies, thisFlight, earlier, debris, sites, timings, capped, nearMisses) =
-                (s.Markers, s.BodyMarkers, s.ThisFlightMarkers, s.EarlierFlightMarkers, s.DebrisMarkers, s.SiteMarkers, s.ShowTimings, s.CapFrameRate, s.SlowNearMisses);
+            var (all, bodies, thisFlight, earlier, debris, sites, timings, cap, nearMisses) =
+                (s.Markers, s.BodyMarkers, s.ThisFlightMarkers, s.EarlierFlightMarkers, s.DebrisMarkers, s.SiteMarkers, s.ShowTimings, (int)s.FrameCap, s.SlowNearMisses);
             var changed = ImGui.Checkbox("Markers"u8, ref all);
             ImGui.Indent();
             ImGui.BeginDisabled(!all);
@@ -1460,9 +1463,17 @@ internal sealed class Hud : IDisposable
             ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + width);
             ImGui.TextColored(Quiet, "Where each frame's time goes: the physics, the flight's rules, drawing and the GPU."u8);
             ImGui.PopTextWrapPos();
-            changed |= ImGui.Checkbox("Cap frames at the screen's rate"u8, ref capped);
+            ImGui.Text("Frame rate"u8);
+            ImGui.Indent();
+            changed |= ImGui.RadioButton("Uncapped"u8, ref cap, (int)FrameCap.Uncapped);
+            changed |= ScreenHz > 0
+                ? ImGui.RadioButton($"The screen's rate ({ScreenHz} Hz)###screen", ref cap, (int)FrameCap.ScreenRate)
+                : ImGui.RadioButton("The screen's rate###screen"u8, ref cap, (int)FrameCap.ScreenRate);
+            changed |= ImGui.RadioButton("60 fps"u8, ref cap, (int)FrameCap.Fps60);
+            changed |= ImGui.RadioButton("30 fps"u8, ref cap, (int)FrameCap.Fps30);
+            ImGui.Unindent();
             ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + width);
-            ImGui.TextColored(Quiet, "Waits for the display (vsync): cooler and no tearing. Off, it draws as fast as it can."u8);
+            ImGui.TextColored(Quiet, "Uncapped draws as fast as it can. The screen's rate waits for the display (vsync): no tearing. Capped is cooler and quieter; the flight is the same at any rate."u8);
             ImGui.PopTextWrapPos();
             changed |= ImGui.Checkbox("Slow motion for near misses"u8, ref nearMisses);
             ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + width);
@@ -1474,7 +1485,7 @@ internal sealed class Hud : IDisposable
                 {
                     Markers = all, BodyMarkers = bodies, ThisFlightMarkers = thisFlight,
                     EarlierFlightMarkers = earlier, DebrisMarkers = debris, SiteMarkers = sites,
-                    ShowTimings = timings, CapFrameRate = capped, SlowNearMisses = nearMisses,
+                    ShowTimings = timings, FrameCap = (FrameCap)cap, SlowNearMisses = nearMisses,
                 };
                 _settingsChanged = true;
             }

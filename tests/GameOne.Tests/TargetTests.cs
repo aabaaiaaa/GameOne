@@ -79,12 +79,12 @@ public sealed class TargetTests : IDisposable
         Assert.Equal(new Settings(), store.LoadSettings()); // none saved: the defaults, every marker on
         Assert.True(new Settings().Shows(MarkerKind.Debris));
         Assert.False(new Settings().ShowTimings); // off by default
-        Assert.False(new Settings().CapFrameRate); // uncapped by default: how high it goes shows
+        Assert.Equal(FrameCap.Uncapped, new Settings().FrameCap); // uncapped by default: how high it goes shows
         Assert.False(new Settings().SlowNearMisses); // off by default: some playthroughs want it off
 
         var changed = new Settings
         {
-            DebrisMarkers = false, EarlierFlightMarkers = false, LaunchSite = "Polar", ShowTimings = true, CapFrameRate = true, SlowNearMisses = true,
+            DebrisMarkers = false, EarlierFlightMarkers = false, LaunchSite = "Polar", ShowTimings = true, FrameCap = FrameCap.Fps30, SlowNearMisses = true,
         };
         store.SaveSettings(changed);
         Assert.Equal(changed, new WorldStore(_directory).LoadSettings());

@@ -165,10 +165,10 @@ centred on the smaller height):
   world list's rows do.
 - **The world log** (`Menu = Log`): its entries from the top, newest first, one a line; Close at
   its foot, `0 170` (within a few pixels: 168 with an entry, 177 with none).
-- **The settings screen:** the "Show timings" checkbox `-160 -16`, "Cap frames at the screen's
-  rate" `-160 43` and "Slow motion for near misses" `-160 102` (`gameone-timings.txt` turns timings on, `gameone-timings-crowded.txt` shows the
-  panel beside a long mission list, and `gameone-frame-cap.txt` reads the frame rate capped and
-  not).
+- **The settings screen:** the "Show timings" checkbox `-160 -70`; the "Frame rate" choices
+  Uncapped `-138 8`, the screen's rate `-138 33`, 60 fps `-138 58` and 30 fps `-138 83`; and "Slow
+  motion for near misses" `-160 157` (`gameone-timings.txt` turns timings on, `gameone-timings-crowded.txt` shows the
+  panel beside a long mission list, and `gameone-frame-cap.txt` reads the frame rate under each choice).
 - **Flying:** the folded controls list's "Controls (H)" `-580 329`; the frame selector's buttons
   (top left of the instruments, under the clocks), Auto `-598 -267`, Surface `-551 -267`, Orbit
   `-503 -267` and Target `-458 -267` (about 19 px lower for each line over them under the

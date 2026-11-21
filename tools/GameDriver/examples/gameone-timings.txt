@@ -18,8 +18,8 @@
 1    click 0 71          # ... Settings
 0    until Menu = Settings
 1    shot settings
-1.5  move -160 -16
-2    click -160 -16       # Show timings: on
+1.5  move -160 -70
+2    click -160 -70       # Show timings: on
 3    shot settings-on
 3.5  tap escape          # back to the game menu ...
 4.5  tap escape          # ... and to flying
@@ -43,8 +43,8 @@
 0.5  move 0 71
 1    click 0 71          # ... Settings
 0    until Menu = Settings
-0.5  move -160 -16
-1    click -160 -16       # Show timings: off
+0.5  move -160 -70
+1    click -160 -70       # Show timings: off
 2    tap escape
 3    tap escape
 0    until Menu = None

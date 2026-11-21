@@ -14,8 +14,9 @@ var store = WorldStore.Default();
 
 // The settings first: the view is made with the frame cap they ask for.
 var settings = store.LoadSettings();
-using (var view = new GameView(window, vsync: settings.CapFrameRate))
+using (var view = new GameView(window, vsync: settings.FrameCap == FrameCap.ScreenRate))
 using (var worlds = new Worlds()) // each body's physics, made as a vessel there needs one
+using (var pacer = new FramePacer { Cap = settings.FrameCap }) // the 60 and 30 fps caps
 {
     // Until a world is picked from the list, an empty one that isn't saved sits behind it, at the
     // launch site the player last picked.
@@ -24,6 +25,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
     var hud = view.Hud;
     hud.Worlds = store.List();
     hud.Settings = settings;
+    hud.ScreenHz = GameView.ScreenHz();
     Timings.Enabled = settings.ShowTimings;
     // What the HUD shows, written out for the GameDriver, when it asks.
     var readout = Readout.On ? new Readout() : null;
@@ -110,6 +112,7 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
     var watched = new List<Vessel>(); // the small views' vessels, refilled each frame rather than made anew
     while (!window.ShouldClose && !hud.QuitAsked)
     {
+        pacer.Wait(); // before the input is read, so what it reads is as fresh as it can be
         Glfw.PollEvents();
 
         var now = Glfw.Time;
@@ -140,7 +143,8 @@ using (var worlds = new Worlds()) // each body's physics, made as a vessel there
         if (hud.TakeSettingsChanged())
         {
             Timings.Enabled = hud.Settings.ShowTimings; // the same as before restarts nothing
-            view.VSync = hud.Settings.CapFrameRate;     // nor makes the swapchain again
+            view.VSync = hud.Settings.FrameCap == FrameCap.ScreenRate; // nor makes the swapchain again
+            pacer.Cap = hud.Settings.FrameCap;
             try
             {
                 store.SaveSettings(hud.Settings);

@@ -15,10 +15,23 @@ internal enum MarkerKind
     Site,
 }
 
+/// <summary>How fast frames are drawn at most: the settings' "Frame rate".</summary>
+internal enum FrameCap
+{
+    /// <summary>As fast as it can draw, each frame shown at once.</summary>
+    Uncapped,
+    /// <summary>Waiting for the display's refresh (vsync), whatever its rate: 60, 144 and so on.</summary>
+    ScreenRate,
+    /// <summary>At most 60 frames a second, by the game's own pacing (<see cref="FramePacer"/>).</summary>
+    Fps60,
+    /// <summary>At most 30 frames a second, likewise.</summary>
+    Fps30,
+}
+
 /// <summary>
 /// The player's settings: the same in every world, saved beside them (see <see cref="WorldStore.SaveSettings"/>).
-/// So far, which markers show, the launch site last picked, whether the timings panel shows, whether
-/// frames are capped, and whether near misses are slowed.
+/// So far, which markers show, the launch site last picked, whether the timings panel shows, how
+/// fast frames are drawn at most, and whether near misses are slowed.
 /// </summary>
 internal sealed record Settings
 {
@@ -38,12 +51,15 @@ internal sealed record Settings
     public bool ShowTimings { get; init; }
 
     /// <summary>
-    /// Whether frames wait for the display's refresh (vsync), so the game runs at the screen's
-    /// rate at most. Off (the default) draws as fast as it can: in
-    /// development, how high the rate goes and where it dips is worth seeing, and a cap would hide it.
-    /// On, the GPU idles between frames (cooler, quieter, a laptop's battery) and nothing tears.
+    /// How fast frames are drawn at most. Uncapped (the default) draws as fast as it can: in
+    /// development, how high the rate goes and where it dips is worth seeing, and a cap would hide
+    /// it. The screen's rate waits for the display's refresh (vsync), so nothing tears; 60 or 30
+    /// fps waits out the rest of each frame itself (<see cref="FramePacer"/>). Capped, the GPU
+    /// idles between frames (cooler, quieter, a laptop's battery). The flight is the same at any
+    /// rate: a frame's game time is run in steps no longer than the physics' own
+    /// (<see cref="Flight.RunFrame"/>), so at 30 fps a frame runs two.
     /// </summary>
-    public bool CapFrameRate { get; init; }
+    public FrameCap FrameCap { get; init; }
 
     /// <summary>
     /// "Slow motion for near misses": whether the game slows as another vessel passes the flown one

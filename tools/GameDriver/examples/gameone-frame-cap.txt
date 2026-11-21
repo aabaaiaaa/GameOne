@@ -1,7 +1,8 @@
-# GameOne: the frame cap. In an empty world's free play, turn "Show timings" on in the settings and
-# save the readings uncapped (as fast as it can draw: "Timings fps" well over the screen's rate),
-# then turn "Cap frames at the screen's rate" on and save them again (the screen's rate, 60 on a
-# 60 Hz screen, "waiting for the GPU" taking up the rest of each frame), then turn both off again.
+# GameOne: the frame rate. In an empty world's free play, turn "Show timings" on in the settings and
+# save the readings under each "Frame rate" choice: Uncapped (as fast as it can draw: "Timings fps"
+# well over the screen's rate), the screen's rate (vsync: 60 on a 60 Hz screen, "waiting for the
+# GPU" taking up the rest of each frame), 60 fps and 30 fps (the game's own pacing: about 60 and
+# 30), then put it back to Uncapped and timings off again.
 # Run with GAMEONE_WORLDS set to a new, empty folder, so the world made has its preset's name (a
 # new world's is made unique among those saved) and the driver's worlds stay out of yours. The
 # world list's buttons are clicked by their markers, wherever they are.
@@ -16,8 +17,8 @@
 0.5  move 0 71
 1    click 0 71          # ... Settings
 0    until Menu = Settings
-0.5  move -160 -16
-1    click -160 -16       # Show timings: on
+0.5  move -160 -70
+1    click -160 -70      # Show timings: on
 1.5  tap escape          # back to the game menu ...
 2.5  tap escape          # ... and to flying
 0    until Menu = None
@@ -28,23 +29,46 @@
 0.5  move 0 71
 1    click 0 71          # Settings
 0    until Menu = Settings
-0.5  move -160 43
-1    click -160 43       # Cap frames at the screen's rate: on
-1.5  shot settings-capped
+0.5  move -138 33
+1    click -138 33       # Frame rate: the screen's rate
+1.5  shot settings-screen-rate
 2    tap escape
 3    tap escape
 0    until Menu = None
-4    shot capped
-4    readings capped
+4    shot screen-rate
+4    readings screen-rate
 4.5  tap escape
 0    until Menu = Game
 0.5  move 0 71
 1    click 0 71          # Settings
 0    until Menu = Settings
-0.5  move -160 43
-1    click -160 43       # Cap: off again
-1.5  move -160 -16
-2    click -160 -16       # Show timings: off
+0.5  move -138 58
+1    click -138 58       # Frame rate: 60 fps
+1.5  tap escape
+2.5  tap escape
+0    until Menu = None
+4    readings fps60
+4.5  tap escape
+0    until Menu = Game
+0.5  move 0 71
+1    click 0 71          # Settings
+0    until Menu = Settings
+0.5  move -138 83
+1    click -138 83       # Frame rate: 30 fps
+1.5  tap escape
+2.5  tap escape
+0    until Menu = None
+4    shot fps30
+4    readings fps30
+4.5  tap escape
+0    until Menu = Game
+0.5  move 0 71
+1    click 0 71          # Settings
+0    until Menu = Settings
+0.5  move -138 8
+1    click -138 8        # Frame rate: Uncapped again
+1.5  move -160 -70
+2    click -160 -70      # Show timings: off
 2.5  tap escape
 3.5  tap escape
 0    until Menu = None

@@ -65,7 +65,14 @@ internal sealed class GameView : IDisposable
     /// <summary>How frames are presented (vsync or not), for reports.</summary>
     public string PresentMode => _renderer.ActivePresentMode.ToString();
 
-    /// <summary>Whether frames wait for the display's refresh: changed, from the next frame (see <see cref="Settings.CapFrameRate"/>).</summary>
+    /// <summary>The primary screen's refresh rate in Hz (what <see cref="FrameCap.ScreenRate"/> runs at), or 0 if GLFW can't tell.</summary>
+    public static int ScreenHz()
+    {
+        var monitor = Glfw.PrimaryMonitor;
+        return monitor.IsNull() ? 0 : monitor.VideoMode.RefreshRate; // (a mode it can't read is all zeroes)
+    }
+
+    /// <summary>Whether frames wait for the display's refresh: changed, from the next frame (see <see cref="Settings.FrameCap"/>).</summary>
     public bool VSync
     {
         get => _renderer.VSync;
