@@ -26,7 +26,11 @@ stars on a body; targets picked by a double click; each path's legs drawn round 
 among the stars, smooth at every zoom; warping to a point on the path), and the solar system's edge
 and double state (a vessel past 1e10 m from the sun leaves it, logged; each craft's place and
 velocity kept in double; no speed cap in open space, 4,000 m/s held low over the ground; Auto's
-frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
+frame by height; the vessel's delta-v on the HUD), merged 2026-11-19; the fast warp (a doubling
+ladder of rates to x16,384, the formula's rates past the physics' top rate behind a gate, burns, holds
+and the rings in warp, what drops it, the light averaged; with a frame-rate setting: uncapped, the
+screen's rate, 60 or 30 fps; and the moon trips' tests coasting by a warp to the point), merged
+2026-11-23.)
 
 - **Current issues, to look at first** (the user, 2026-11-23, playing the fast warp's build; not
   fixed yet, to look into before anything below). Seen once a vessel gets far from the planet, and
