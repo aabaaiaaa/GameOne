@@ -28,6 +28,31 @@ and double state (a vessel past 1e10 m from the sun leaves it, logged; each craf
 velocity kept in double; no speed cap in open space, 4,000 m/s held low over the ground; Auto's
 frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
 
+- **Current issues, to look at first** (the user, 2026-11-23, playing the fast warp's build; not
+  fixed yet, to look into before anything below). Seen once a vessel gets far from the planet, and
+  most on a path out of the solar system:
+  - **Rendering far from the planet:** quite a few things are drawn wrongly as the vessel gets
+    further from the planet, and on a way out towards the solar system's edge.
+  - **The steering rings in the chase view:** they don't render correctly when travelling very
+    fast out towards the edge of the solar system.
+  - **Vessels jump:** far out, vessels appear to jump instead of moving smoothly.
+  - **The map's camera turns with the vessel:** in the map view the camera turns round with the
+    vessel; it should stay fixed, so that in warp the vessel is seen moving along its path. With
+    the view spinning fast in warp, the map can't be used.
+  Where to look first (a guess, not yet checked): floats far from a body's origin (see "Precision
+  for bodies further out", next, and "The star box flickers in space"), and how the map's camera is
+  held as the vessel goes round.
+- **Precision for bodies further out** (a future feature, from the solar system's edge, 2026-11-18;
+  to discuss before building). Once systems sit millions of km out, anything kept or drawn in
+  floats there loses precision: a float's step is about 64 m at 1 million km, about 1 km at 10
+  million km (where paths now end).
+  - **What it would gain:** a body far from the sun flown and drawn as the planet is. What must
+    be in double or relative to a nearby body: a vessel's place in its body's frame (helped by
+    each body having its own frame, and by the double copy), the map's and paths' points, and any
+    float walk along a line (as the glows' walk was made safe).
+  - **What it would cost or risk:** conversions at the boundaries, checked one by one; links to
+    the double copy and to "Double precision in Jolt, as a trial" (below), which it may make unnecessary or needed.
+  - **Which case it would help:** a body millions of km out, and the map's furthest zoom.
 - **Using Jolt fully** (the user, 2026-11-02, after BRUTAL v2026.10.1: every Jolt call now works;
   see CLAUDE.md's Jolt notes). The user hopes it also helps performance: measure each against
   main with the performance and flight tests. Done: the ground's tiles as Jolt's own height
@@ -885,17 +910,6 @@ frame by height; the vessel's delta-v on the HUD), merged 2026-11-19.)
   - **Which case it would help:** vessels and contacts far from any body's origin (a body's frame
     has its origin on its ground, so the moon's and further bodies' vessels), and any long
     flight resting on contacts rather than free flight.
-- **Precision for bodies further out** (a future feature, from the solar system's edge, 2026-11-18;
-  to discuss before building). Once systems sit millions of km out, anything kept or drawn in
-  floats there loses precision: a float's step is about 64 m at 1 million km, about 1 km at 10
-  million km (where paths now end).
-  - **What it would gain:** a body far from the sun flown and drawn as the planet is. What must
-    be in double or relative to a nearby body: a vessel's place in its body's frame (helped by
-    each body having its own frame, and by the double copy), the map's and paths' points, and any
-    float walk along a line (as the glows' walk was made safe).
-  - **What it would cost or risk:** conversions at the boundaries, checked one by one; links to
-    the double copy and to Jolt in double (above), which it may make unnecessary or needed.
-  - **Which case it would help:** a body millions of km out, and the map's furthest zoom.
 - **Local physics, as an experiment** (a performance idea, from the user, 2026-11-18; the user:
   "this experiment to move all physics to a local spatial version as I agree that collisions can
   only happen locally and if the rest of the unwitnessed world can run on formula cheaply then
